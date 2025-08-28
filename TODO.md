@@ -1,0 +1,4 @@
+- [ ] Shifts should load in from the last set data
+- [ ] There are penalty rates for Saturday night and Sunday night (look into this and correct it.)
+  - [ ] Maybe there is a custom interface where you can mark certain penalty types?
+- [ ] Theming seems to be inconsitent with a few white elements.

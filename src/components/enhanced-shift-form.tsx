@@ -167,6 +167,8 @@ export default function EnhancedShiftForm({
       appliedPenalties.push(dayOfWeek === 0 ? 'Sunday' : 'Saturday');
     }
     
+    //FIXME, this only uses the start time, in reality, it should split up the penalty to be ordinary
+    // hours and night hours
     if (hour >= 18 && hour < 22) {
       autoPenalties.evening = true;
       appliedPenalties.push('Evening');
