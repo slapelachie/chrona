@@ -1,366 +1,384 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { shiftSchema, type ShiftFormData, type PayRate } from '@/types'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { CalendarIcon, ClockIcon, DollarSignIcon } from 'lucide-react'
-import { isLikelyPublicHoliday } from '@/lib/shift-calculations'
+import { useState } from 'react';
+import { Form, Button, Modal, Alert, InputGroup, Badge } from 'react-bootstrap';
+import { Calendar, Clock, MapPin, FileText, AlertCircle, DollarSign } from 'lucide-react';
+
+interface ShiftFormData {
+  date: string;
+  startTime: string;
+  endTime: string;
+  breakMinutes: number;
+  location: string;
+  notes: string;
+  shiftType: 'regular' | 'overtime' | 'weekend' | 'public_holiday';
+}
 
 interface ShiftFormProps {
-  initialData?: Partial<ShiftFormData>
-  payRates: PayRate[]
-  onSubmit: (data: ShiftFormData) => Promise<void>
-  onCancel?: () => void
-  isLoading?: boolean
+  show: boolean;
+  onHide: () => void;
+  onSubmit: (data: ShiftFormData) => void;
+  initialData?: Partial<ShiftFormData>;
+  isEdit?: boolean;
+  loading?: boolean;
 }
 
-interface PayEstimate {
-  hourlyRate: number
-  hoursWorked: number
-  estimatedPay: number
-  rateType: string
+interface ShiftPreview {
+  duration: number;
+  estimatedPay: number;
+  hasWarnings: boolean;
+  warnings: string[];
 }
 
-export default function ShiftForm({
-  initialData,
-  payRates,
-  onSubmit,
-  onCancel,
-  isLoading = false
+export default function ShiftForm({ 
+  show, 
+  onHide, 
+  onSubmit, 
+  initialData, 
+  isEdit = false,
+  loading = false 
 }: ShiftFormProps) {
-  const [payEstimate, setPayEstimate] = useState<PayEstimate | null>(null)
-  const [estimateLoading, setEstimateLoading] = useState(false)
+  const [formData, setFormData] = useState<ShiftFormData>({
+    date: initialData?.date || new Date().toISOString().split('T')[0],
+    startTime: initialData?.startTime || '09:00',
+    endTime: initialData?.endTime || '17:00',
+    breakMinutes: initialData?.breakMinutes || 30,
+    location: initialData?.location || '',
+    notes: initialData?.notes || '',
+    shiftType: initialData?.shiftType || 'regular'
+  });
 
-  const form = useForm<ShiftFormData>({
-    resolver: zodResolver(shiftSchema),
-    defaultValues: {
-      date: initialData?.date || new Date(),
-      startTime: initialData?.startTime || new Date(),
-      endTime: initialData?.endTime || new Date(),
-      breakTime: initialData?.breakTime || 0,
-      payRateId: initialData?.payRateId || '',
-      isPublicHoliday: initialData?.isPublicHoliday || false,
-      notes: initialData?.notes || '',
-    },
-  })
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [preview, setPreview] = useState<ShiftPreview | null>(null);
 
-  const watchedValues = form.watch()
-
-  // Auto-detect public holiday
-  useEffect(() => {
-    if (watchedValues.date && !initialData) {
-      const isHoliday = isLikelyPublicHoliday(watchedValues.date)
-      if (isHoliday && !watchedValues.isPublicHoliday) {
-        form.setValue('isPublicHoliday', true)
-      }
+  // Calculate shift preview when form changes
+  const calculateShiftPreview = (data: ShiftFormData): ShiftPreview => {
+    const startDateTime = new Date(`${data.date}T${data.startTime}`);
+    const endDateTime = new Date(`${data.date}T${data.endTime}`);
+    
+    // Handle overnight shifts
+    if (endDateTime <= startDateTime) {
+      endDateTime.setDate(endDateTime.getDate() + 1);
     }
-  }, [watchedValues.date, form, initialData])
 
-  // Calculate pay estimate when values change
-  useEffect(() => {
-    const calculateEstimate = async () => {
-      if (!watchedValues.startTime || !watchedValues.endTime || !watchedValues.payRateId) {
-        setPayEstimate(null)
-        return
-      }
+    const totalMinutes = (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60);
+    const workingMinutes = Math.max(0, totalMinutes - data.breakMinutes);
+    const duration = workingMinutes / 60;
 
-      setEstimateLoading(true)
-
-      try {
-        const response = await fetch('/api/shifts/estimate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            date: watchedValues.date,
-            startTime: watchedValues.startTime,
-            endTime: watchedValues.endTime,
-            breakTime: watchedValues.breakTime,
-            payRateId: watchedValues.payRateId,
-            isPublicHoliday: watchedValues.isPublicHoliday,
-          }),
-        })
-
-        if (response.ok) {
-          const estimate = await response.json()
-          setPayEstimate(estimate)
+    // Basic pay estimation (would use actual PayCalculator in real app)
+    const baseRate = 25.00; // Mock base rate
+    let estimatedPay = duration * baseRate;
+    
+    // Apply casual loading
+    estimatedPay *= 1.25;
+    
+    // Apply penalty rates based on shift type
+    switch (data.shiftType) {
+      case 'weekend':
+        estimatedPay *= 1.25; // Saturday/Sunday penalty
+        break;
+      case 'public_holiday':
+        estimatedPay *= 2.5; // Public holiday rate
+        break;
+      case 'overtime':
+        // Apply overtime after 8 hours
+        if (duration > 8) {
+          const regularPay = 8 * baseRate * 1.25;
+          const overtimePay = (duration - 8) * baseRate * 1.5 * 1.25;
+          estimatedPay = regularPay + overtimePay;
         }
-      } catch (error) {
-        console.error('Error calculating estimate:', error)
-      } finally {
-        setEstimateLoading(false)
+        break;
+    }
+
+    // Generate warnings
+    const warnings: string[] = [];
+    
+    if (duration < 3) {
+      warnings.push('Very short shift (less than 3 hours)');
+    }
+    
+    if (duration > 12) {
+      warnings.push('Very long shift (more than 12 hours)');
+    }
+    
+    if (duration > 5 && data.breakMinutes < 30) {
+      warnings.push('Shifts over 5 hours should have at least 30 minutes break');
+    }
+    
+    if (duration > 10 && data.breakMinutes < 60) {
+      warnings.push('Shifts over 10 hours should have at least 60 minutes break');
+    }
+
+    // Check if it's actually a weekend
+    const dayOfWeek = startDateTime.getDay();
+    if ((dayOfWeek === 0 || dayOfWeek === 6) && data.shiftType === 'regular') {
+      warnings.push('This appears to be a weekend - consider changing shift type');
+    }
+
+    return {
+      duration: Math.round(duration * 100) / 100,
+      estimatedPay: Math.round(estimatedPay * 100) / 100,
+      hasWarnings: warnings.length > 0,
+      warnings
+    };
+  };
+
+  const handleInputChange = (field: keyof ShiftFormData, value: string | number) => {
+    const newData = { ...formData, [field]: value };
+    setFormData(newData);
+    
+    // Clear related errors
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: '' });
+    }
+    
+    // Update preview
+    setPreview(calculateShiftPreview(newData));
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.date) {
+      newErrors.date = 'Date is required';
+    }
+
+    if (!formData.startTime) {
+      newErrors.startTime = 'Start time is required';
+    }
+
+    if (!formData.endTime) {
+      newErrors.endTime = 'End time is required';
+    }
+
+    if (formData.startTime && formData.endTime) {
+      const startDateTime = new Date(`${formData.date}T${formData.startTime}`);
+      const endDateTime = new Date(`${formData.date}T${formData.endTime}`);
+      
+      // Handle overnight check
+      if (endDateTime <= startDateTime && formData.endTime <= formData.startTime) {
+        // This is likely an error, not an overnight shift
+        if (formData.endTime <= formData.startTime && 
+            parseInt(formData.endTime.split(':')[0]) > parseInt(formData.startTime.split(':')[0]) - 12) {
+          newErrors.endTime = 'End time must be after start time';
+        }
       }
     }
 
-    const debounceTimer = setTimeout(calculateEstimate, 500)
-    return () => clearTimeout(debounceTimer)
-  }, [watchedValues.startTime, watchedValues.endTime, watchedValues.breakTime, watchedValues.payRateId, watchedValues.isPublicHoliday, watchedValues.date])
+    if (formData.breakMinutes < 0) {
+      newErrors.breakMinutes = 'Break time cannot be negative';
+    }
 
-  const selectedPayRate = payRates.find(rate => rate.id === watchedValues.payRateId)
+    if (formData.breakMinutes > 8 * 60) {
+      newErrors.breakMinutes = 'Break time seems too long';
+    }
 
-  const formatDateTime = (date: Date): string => {
-    return date.toISOString().slice(0, 16) // YYYY-MM-DDTHH:MM format for datetime-local
-  }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-  const parseDateTime = (dateTimeString: string): Date => {
-    return new Date(dateTimeString)
-  }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (validateForm()) {
+      onSubmit(formData);
+    }
+  };
+
+  const handleClose = () => {
+    setErrors({});
+    setPreview(null);
+    onHide();
+  };
+
+  // Initialize preview on first render
+  useState(() => {
+    setPreview(calculateShiftPreview(formData));
+  });
 
   return (
-    <div className="space-y-6">
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+    <Modal show={show} onHide={handleClose} size="lg" centered>
+      <Modal.Header closeButton>
+        <Modal.Title className="d-flex align-items-center">
+          <Calendar size={20} className="me-2 text-primary" />
+          {isEdit ? 'Edit Shift' : 'Add New Shift'}
+        </Modal.Title>
+      </Modal.Header>
+
+      <Form onSubmit={handleSubmit}>
+        <Modal.Body>
           {/* Date and Time Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5" />
-                Date & Time
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Date</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="date"
-                          value={field.value.toISOString().split('T')[0]}
-                          onChange={(e) => field.onChange(new Date(e.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+          <div className="row mb-3">
+            <div className="col-md-4">
+              <Form.Group>
+                <Form.Label>Date</Form.Label>
+                <Form.Control
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => handleInputChange('date', e.target.value)}
+                  isInvalid={!!errors.date}
                 />
+                <Form.Control.Feedback type="invalid">
+                  {errors.date}
+                </Form.Control.Feedback>
+              </Form.Group>
+            </div>
 
-                <FormField
-                  control={form.control}
-                  name="startTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start Time</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="datetime-local"
-                          value={formatDateTime(field.value)}
-                          onChange={(e) => field.onChange(parseDateTime(e.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <div className="col-md-4">
+              <Form.Group>
+                <Form.Label>Start Time</Form.Label>
+                <InputGroup>
+                  <InputGroup.Text><Clock size={16} /></InputGroup.Text>
+                  <Form.Control
+                    type="time"
+                    value={formData.startTime}
+                    onChange={(e) => handleInputChange('startTime', e.target.value)}
+                    isInvalid={!!errors.startTime}
+                  />
+                  <Form.Control.Feedback type="invalid">
+                    {errors.startTime}
+                  </Form.Control.Feedback>
+                </InputGroup>
+              </Form.Group>
+            </div>
 
-                <FormField
-                  control={form.control}
-                  name="endTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End Time</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="datetime-local"
-                          value={formatDateTime(field.value)}
-                          onChange={(e) => field.onChange(parseDateTime(e.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="breakTime"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Break Time (hours)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.25"
-                        min="0"
-                        max="8"
-                        placeholder="0"
-                        value={field.value}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Pay Rate Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSignIcon className="h-5 w-5" />
-                Pay Rate & Conditions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <FormField
-                control={form.control}
-                name="payRateId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Pay Rate</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a pay rate" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {payRates.map((rate) => (
-                          <SelectItem key={rate.id} value={rate.id}>
-                            <div className="flex items-center justify-between w-full">
-                              <span>{rate.name}</span>
-                              <Badge variant="secondary" className="ml-2">
-                                ${Number(rate.baseRate).toFixed(2)}/hr
-                              </Badge>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {selectedPayRate && (
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-sm font-medium">{selectedPayRate.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Base rate: ${Number(selectedPayRate.baseRate).toFixed(2)}/hr
-                    {Number(selectedPayRate.multiplier) !== 1 && (
-                      <span> × {Number(selectedPayRate.multiplier)}x</span>
-                    )}
-                  </p>
-                  {selectedPayRate.description && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {selectedPayRate.description}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div className="flex items-center space-x-2">
-                <FormField
-                  control={form.control}
-                  name="isPublicHoliday"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center space-x-2">
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <Label>Public Holiday</Label>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Pay Estimate */}
-          {payEstimate && (
-            <Card className="border-green-200 bg-green-50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-green-800">
-                  <ClockIcon className="h-5 w-5" />
-                  Pay Estimate
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <p className="font-medium">Hours Worked</p>
-                    <p className="text-lg font-bold text-green-800">
-                      {payEstimate.hoursWorked.toFixed(2)}h
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-medium">Hourly Rate</p>
-                    <p className="text-lg font-bold text-green-800">
-                      ${payEstimate.hourlyRate.toFixed(2)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-medium">Rate Type</p>
-                    <Badge variant="secondary">{payEstimate.rateType}</Badge>
-                  </div>
-                  <div>
-                    <p className="font-medium">Estimated Pay</p>
-                    <p className="text-xl font-bold text-green-800">
-                      ${payEstimate.estimatedPay.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-                {estimateLoading && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Recalculating...
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Notes Section */}
-          <Card>
-            <CardContent className="pt-6">
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes (optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Add any notes about this shift..."
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Submit Buttons */}
-          <div className="flex justify-end space-x-2">
-            {onCancel && (
-              <Button type="button" variant="outline" onClick={onCancel}>
-                Cancel
-              </Button>
-            )}
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? 'Saving...' : initialData ? 'Update Shift' : 'Create Shift'}
-            </Button>
+            <div className="col-md-4">
+              <Form.Group>
+                <Form.Label>End Time</Form.Label>
+                <InputGroup>
+                  <InputGroup.Text><Clock size={16} /></InputGroup.Text>
+                  <Form.Control
+                    type="time"
+                    value={formData.endTime}
+                    onChange={(e) => handleInputChange('endTime', e.target.value)}
+                    isInvalid={!!errors.endTime}
+                  />
+                  <Form.Control.Feedback type="invalid">
+                    {errors.endTime}
+                  </Form.Control.Feedback>
+                </InputGroup>
+              </Form.Group>
+            </div>
           </div>
-        </form>
+
+          {/* Break and Shift Type */}
+          <div className="row mb-3">
+            <div className="col-md-6">
+              <Form.Group>
+                <Form.Label>Break Time (minutes)</Form.Label>
+                <Form.Control
+                  type="number"
+                  min="0"
+                  max="480"
+                  step="15"
+                  value={formData.breakMinutes}
+                  onChange={(e) => handleInputChange('breakMinutes', parseInt(e.target.value) || 0)}
+                  isInvalid={!!errors.breakMinutes}
+                />
+                <Form.Control.Feedback type="invalid">
+                  {errors.breakMinutes}
+                </Form.Control.Feedback>
+              </Form.Group>
+            </div>
+
+            <div className="col-md-6">
+              <Form.Group>
+                <Form.Label>Shift Type</Form.Label>
+                <Form.Select
+                  value={formData.shiftType}
+                  onChange={(e) => handleInputChange('shiftType', e.target.value as any)}
+                >
+                  <option value="regular">Regular</option>
+                  <option value="overtime">Overtime</option>
+                  <option value="weekend">Weekend</option>
+                  <option value="public_holiday">Public Holiday</option>
+                </Form.Select>
+              </Form.Group>
+            </div>
+          </div>
+
+          {/* Location */}
+          <Form.Group className="mb-3">
+            <Form.Label>Location (Optional)</Form.Label>
+            <InputGroup>
+              <InputGroup.Text><MapPin size={16} /></InputGroup.Text>
+              <Form.Control
+                type="text"
+                placeholder="e.g., Main Store, Warehouse, Remote"
+                value={formData.location}
+                onChange={(e) => handleInputChange('location', e.target.value)}
+              />
+            </InputGroup>
+          </Form.Group>
+
+          {/* Notes */}
+          <Form.Group className="mb-4">
+            <Form.Label>Notes (Optional)</Form.Label>
+            <InputGroup>
+              <InputGroup.Text><FileText size={16} /></InputGroup.Text>
+              <Form.Control
+                as="textarea"
+                rows={2}
+                placeholder="Any additional notes about this shift..."
+                value={formData.notes}
+                onChange={(e) => handleInputChange('notes', e.target.value)}
+              />
+            </InputGroup>
+          </Form.Group>
+
+          {/* Shift Preview */}
+          {preview && (
+            <div className="p-3 bg-light rounded mb-3">
+              <h6 className="mb-2 d-flex align-items-center">
+                <DollarSign size={16} className="me-1 text-success" />
+                Shift Preview
+              </h6>
+              
+              <div className="row">
+                <div className="col-6">
+                  <small className="text-muted">Duration</small>
+                  <div className="fw-bold">{preview.duration}h</div>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted">Estimated Pay</small>
+                  <div className="fw-bold text-success">
+                    ${preview.estimatedPay.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+
+              {preview.hasWarnings && (
+                <Alert variant="warning" className="mt-2 mb-0 py-2">
+                  <div className="d-flex align-items-start">
+                    <AlertCircle size={16} className="me-2 mt-1 flex-shrink-0" />
+                    <div>
+                      {preview.warnings.map((warning, index) => (
+                        <div key={index} className="small">{warning}</div>
+                      ))}
+                    </div>
+                  </div>
+                </Alert>
+              )}
+            </div>
+          )}
+        </Modal.Body>
+
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button 
+            variant="primary" 
+            type="submit" 
+            disabled={loading}
+          >
+            {loading && (
+              <span className="spinner-border spinner-border-sm me-2" role="status" />
+            )}
+            {isEdit ? 'Update Shift' : 'Add Shift'}
+          </Button>
+        </Modal.Footer>
       </Form>
-    </div>
-  )
+    </Modal>
+  );
 }

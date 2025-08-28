@@ -1,317 +1,261 @@
-'use client'
+'use client';
 
-import { useMemo } from 'react'
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths } from 'date-fns'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { Badge } from '@/components/ui/badge'
-import { 
-  Clock, 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign,
-  Target,
-  Calendar,
-  BarChart3
-} from 'lucide-react'
-import { type Shift, type PayRate } from '@/types'
+import { useState, useEffect } from 'react';
+import { Card, ProgressBar } from 'react-bootstrap';
+import { Clock, Zap, Moon, Calendar } from 'lucide-react';
 
-interface HoursSummaryProps {
-  shifts: Array<Shift & { payRate: PayRate }>
-  weeklyTarget?: number // Target hours per week
-  monthlyTarget?: number // Target hours per month
+interface HoursBreakdown {
+  regular: {
+    hours: number;
+    percentage: number;
+    color: string;
+  };
+  overtime: {
+    hours: number;
+    percentage: number;
+    color: string;
+  };
+  penalty: {
+    hours: number;
+    percentage: number;
+    color: string;
+  };
+  total: number;
 }
 
-interface PeriodStats {
-  hours: number
-  earnings: number
-  shifts: number
-  averageShiftLength: number
-  regularHours: number
-  overtimeHours: number
-  penaltyHours: number
+interface WeeklyComparison {
+  currentWeek: number;
+  previousWeek: number;
+  change: number;
+  trend: 'up' | 'down' | 'stable';
 }
 
-export default function HoursSummary({ 
-  shifts, 
-  weeklyTarget = 38, 
-  monthlyTarget = 152 
-}: HoursSummaryProps) {
-  const now = new Date()
-  
-  const periodStats = useMemo(() => {
-    const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 })
-    const currentWeekEnd = endOfWeek(now, { weekStartsOn: 1 })
-    const lastWeekStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 })
-    const lastWeekEnd = endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 })
+export default function HoursSummary() {
+  const [hoursData, setHoursData] = useState<HoursBreakdown | null>(null);
+  const [weeklyComparison, setWeeklyComparison] = useState<WeeklyComparison | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchHoursData();
+  }, []);
+
+  const fetchHoursData = async () => {
+    try {
+      setLoading(true);
+      
+      // TODO: Replace with actual API call
+      // Simulate API response
+      setTimeout(() => {
+        const mockHoursData: HoursBreakdown = {
+          regular: {
+            hours: 28.5,
+            percentage: 72,
+            color: 'primary'
+          },
+          overtime: {
+            hours: 6.5,
+            percentage: 16,
+            color: 'warning'
+          },
+          penalty: {
+            hours: 4.75,
+            percentage: 12,
+            color: 'info'
+          },
+          total: 39.75
+        };
+
+        const mockWeeklyComparison: WeeklyComparison = {
+          currentWeek: 19.25,
+          previousWeek: 16.5,
+          change: 2.75,
+          trend: 'up'
+        };
+
+        setHoursData(mockHoursData);
+        setWeeklyComparison(mockWeeklyComparison);
+        setLoading(false);
+      }, 600);
+    } catch (error) {
+      console.error('Error fetching hours data:', error);
+      setLoading(false);
+    }
+  };
+
+  const formatHours = (hours: number) => {
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
     
-    const currentMonthStart = startOfMonth(now)
-    const currentMonthEnd = endOfMonth(now)
-    const lastMonthStart = startOfMonth(subMonths(now, 1))
-    const lastMonthEnd = endOfMonth(subMonths(now, 1))
-
-    const calculatePeriodStats = (start: Date, end: Date): PeriodStats => {
-      const periodShifts = shifts.filter(shift => {
-        const shiftDate = new Date(shift.date)
-        return shiftDate >= start && shiftDate <= end
-      })
-
-      const hours = periodShifts.reduce((sum, shift) => sum + Number(shift.hoursWorked), 0)
-      const earnings = periodShifts.reduce((sum, shift) => sum + Number(shift.grossPay), 0)
-      const regularHours = periodShifts.reduce((sum, shift) => sum + Number(shift.regularHours), 0)
-      const overtimeHours = periodShifts.reduce((sum, shift) => sum + Number(shift.overtimeHours), 0)
-      const penaltyHours = periodShifts.reduce((sum, shift) => sum + Number(shift.penaltyHours), 0)
-
-      return {
-        hours,
-        earnings,
-        shifts: periodShifts.length,
-        averageShiftLength: periodShifts.length > 0 ? hours / periodShifts.length : 0,
-        regularHours,
-        overtimeHours,
-        penaltyHours,
-      }
+    if (minutes === 0) {
+      return `${wholeHours}h`;
+    } else if (wholeHours === 0) {
+      return `${minutes}m`;
+    } else {
+      return `${wholeHours}h ${minutes}m`;
     }
+  };
 
-    return {
-      thisWeek: calculatePeriodStats(currentWeekStart, currentWeekEnd),
-      lastWeek: calculatePeriodStats(lastWeekStart, lastWeekEnd),
-      thisMonth: calculatePeriodStats(currentMonthStart, currentMonthEnd),
-      lastMonth: calculatePeriodStats(lastMonthStart, lastMonthEnd),
+  const getIconForType = (type: 'regular' | 'overtime' | 'penalty') => {
+    switch (type) {
+      case 'regular':
+        return <Clock size={16} />;
+      case 'overtime':
+        return <Zap size={16} />;
+      case 'penalty':
+        return <Moon size={16} />;
+      default:
+        return <Clock size={16} />;
     }
-  }, [shifts, now])
+  };
 
-  const weekProgress = (periodStats.thisWeek.hours / weeklyTarget) * 100
-  const monthProgress = (periodStats.thisMonth.hours / monthlyTarget) * 100
+  const getTrendIcon = (trend: string) => {
+    switch (trend) {
+      case 'up':
+        return <span className="text-success">↗</span>;
+      case 'down':
+        return <span className="text-danger">↘</span>;
+      case 'stable':
+        return <span className="text-muted">→</span>;
+      default:
+        return null;
+    }
+  };
 
-  const weekChange = periodStats.thisWeek.hours - periodStats.lastWeek.hours
-  const monthChange = periodStats.thisMonth.hours - periodStats.lastMonth.hours
+  if (loading) {
+    return (
+      <Card className="shadow-sm h-100">
+        <Card.Body className="d-flex justify-content-center align-items-center" style={{ minHeight: '250px' }}>
+          <div className="spinner-border spinner-border-sm text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </Card.Body>
+      </Card>
+    );
+  }
 
-  const formatChange = (change: number, suffix: string = 'h') => {
-    const sign = change > 0 ? '+' : ''
-    return `${sign}${change.toFixed(1)}${suffix}`
+  if (!hoursData || !weeklyComparison) {
+    return (
+      <Card className="shadow-sm h-100">
+        <Card.Body className="d-flex justify-content-center align-items-center text-muted">
+          Unable to load hours summary
+        </Card.Body>
+      </Card>
+    );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Current Period Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Hours Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* This Week */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">This Week</span>
-                <Badge variant={weekProgress >= 100 ? 'default' : 'secondary'}>
-                  {weekProgress.toFixed(0)}%
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-bold">
-                  {periodStats.thisWeek.hours.toFixed(1)}h
-                </span>
-                <span className="text-muted-foreground">
-                  / {weeklyTarget}h
-                </span>
-                {weekChange !== 0 && (
-                  <div className={`flex items-center gap-1 ${
-                    weekChange > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {weekChange > 0 ? (
-                      <TrendingUp className="h-3 w-3" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3" />
-                    )}
-                    <span className="text-xs">
-                      {formatChange(weekChange)}
-                    </span>
-                  </div>
-                )}
-              </div>
+    <Card className="shadow-sm h-100">
+      <Card.Body>
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h5 className="card-title mb-0 d-flex align-items-center">
+            <Clock size={20} className="me-2 text-primary" />
+            Hours Breakdown
+          </h5>
+          <div className="text-end">
+            <div className="fw-bold text-primary">{formatHours(hoursData.total)}</div>
+            <small className="text-muted">Total hours</small>
+          </div>
+        </div>
+
+        {/* Hours Breakdown with Progress Bars */}
+        <div className="mb-4">
+          {/* Regular Hours */}
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <div className="d-flex align-items-center">
+              <span className="text-primary me-2">{getIconForType('regular')}</span>
+              <span>Regular</span>
             </div>
-            <Progress value={Math.min(weekProgress, 100)} className="h-2" />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{periodStats.thisWeek.shifts} shifts</span>
-              <span>${periodStats.thisWeek.earnings.toFixed(2)}</span>
+            <div className="text-end">
+              <span className="fw-bold">{formatHours(hoursData.regular.hours)}</span>
+              <small className="text-muted ms-1">({hoursData.regular.percentage}%)</small>
             </div>
           </div>
+          <ProgressBar 
+            variant={hoursData.regular.color} 
+            now={hoursData.regular.percentage} 
+            className="mb-3"
+            style={{ height: '6px' }}
+          />
 
-          {/* This Month */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">This Month</span>
-                <Badge variant={monthProgress >= 100 ? 'default' : 'secondary'}>
-                  {monthProgress.toFixed(0)}%
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-bold">
-                  {periodStats.thisMonth.hours.toFixed(1)}h
-                </span>
-                <span className="text-muted-foreground">
-                  / {monthlyTarget}h
-                </span>
-                {monthChange !== 0 && (
-                  <div className={`flex items-center gap-1 ${
-                    monthChange > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {monthChange > 0 ? (
-                      <TrendingUp className="h-3 w-3" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3" />
-                    )}
-                    <span className="text-xs">
-                      {formatChange(monthChange)}
-                    </span>
-                  </div>
-                )}
-              </div>
+          {/* Overtime Hours */}
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <div className="d-flex align-items-center">
+              <span className="text-warning me-2">{getIconForType('overtime')}</span>
+              <span>Overtime</span>
             </div>
-            <Progress value={Math.min(monthProgress, 100)} className="h-2" />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{periodStats.thisMonth.shifts} shifts</span>
-              <span>${periodStats.thisMonth.earnings.toFixed(2)}</span>
+            <div className="text-end">
+              <span className="fw-bold">{formatHours(hoursData.overtime.hours)}</span>
+              <small className="text-muted ms-1">({hoursData.overtime.percentage}%)</small>
             </div>
           </div>
-        </CardContent>
-      </Card>
+          <ProgressBar 
+            variant={hoursData.overtime.color} 
+            now={hoursData.overtime.percentage} 
+            className="mb-3"
+            style={{ height: '6px' }}
+          />
 
-      {/* Detailed Breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Weekly Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Weekly Breakdown
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Regular Hours</p>
-                <p className="font-semibold">
-                  {periodStats.thisWeek.regularHours.toFixed(1)}h
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Overtime Hours</p>
-                <p className="font-semibold">
-                  {periodStats.thisWeek.overtimeHours.toFixed(1)}h
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Penalty Hours</p>
-                <p className="font-semibold">
-                  {periodStats.thisWeek.penaltyHours.toFixed(1)}h
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Avg Shift</p>
-                <p className="font-semibold">
-                  {periodStats.thisWeek.averageShiftLength.toFixed(1)}h
-                </p>
-              </div>
+          {/* Penalty Hours */}
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <div className="d-flex align-items-center">
+              <span className="text-info me-2">{getIconForType('penalty')}</span>
+              <span>Penalty</span>
             </div>
-          </CardContent>
-        </Card>
+            <div className="text-end">
+              <span className="fw-bold">{formatHours(hoursData.penalty.hours)}</span>
+              <small className="text-muted ms-1">({hoursData.penalty.percentage}%)</small>
+            </div>
+          </div>
+          <ProgressBar 
+            variant={hoursData.penalty.color} 
+            now={hoursData.penalty.percentage} 
+            className="mb-3"
+            style={{ height: '6px' }}
+          />
+        </div>
 
-        {/* Monthly Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Monthly Breakdown
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Regular Hours</p>
-                <p className="font-semibold">
-                  {periodStats.thisMonth.regularHours.toFixed(1)}h
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Overtime Hours</p>
-                <p className="font-semibold">
-                  {periodStats.thisMonth.overtimeHours.toFixed(1)}h
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Penalty Hours</p>
-                <p className="font-semibold">
-                  {periodStats.thisMonth.penaltyHours.toFixed(1)}h
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Avg Shift</p>
-                <p className="font-semibold">
-                  {periodStats.thisMonth.averageShiftLength.toFixed(1)}h
-                </p>
-              </div>
+        {/* Weekly Comparison */}
+        <div className="p-3 bg-light rounded">
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <div className="d-flex align-items-center">
+              <Calendar size={16} className="me-2 text-muted" />
+              <small className="text-muted">This Week vs Last Week</small>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            {getTrendIcon(weeklyComparison.trend)}
+          </div>
+          
+          <div className="d-flex justify-content-between">
+            <div>
+              <div className="fw-bold text-primary">{formatHours(weeklyComparison.currentWeek)}</div>
+              <small className="text-muted">Current</small>
+            </div>
+            <div className="text-center">
+              <div className={`fw-bold ${
+                weeklyComparison.change > 0 ? 'text-success' : 
+                weeklyComparison.change < 0 ? 'text-danger' : 'text-muted'
+              }`}>
+                {weeklyComparison.change > 0 ? '+' : ''}
+                {formatHours(Math.abs(weeklyComparison.change))}
+              </div>
+              <small className="text-muted">Change</small>
+            </div>
+            <div className="text-end">
+              <div className="fw-bold text-secondary">{formatHours(weeklyComparison.previousWeek)}</div>
+              <small className="text-muted">Previous</small>
+            </div>
+          </div>
+        </div>
 
-      {/* Target Progress Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className={weekProgress >= 100 ? 'border-green-200 bg-green-50' : ''}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Weekly Target</span>
-              </div>
-              <Badge variant={weekProgress >= 100 ? 'default' : 'secondary'}>
-                {weekProgress >= 100 ? '✓ Complete' : `${weekProgress.toFixed(0)}%`}
-              </Badge>
-            </div>
-            <div className="mt-2">
-              <p className="text-2xl font-bold">
-                {periodStats.thisWeek.hours.toFixed(1)} / {weeklyTarget}h
-              </p>
-              {weekProgress < 100 && (
-                <p className="text-sm text-muted-foreground">
-                  {(weeklyTarget - periodStats.thisWeek.hours).toFixed(1)}h remaining
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className={monthProgress >= 100 ? 'border-green-200 bg-green-50' : ''}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Monthly Target</span>
-              </div>
-              <Badge variant={monthProgress >= 100 ? 'default' : 'secondary'}>
-                {monthProgress >= 100 ? '✓ Complete' : `${monthProgress.toFixed(0)}%`}
-              </Badge>
-            </div>
-            <div className="mt-2">
-              <p className="text-2xl font-bold">
-                {periodStats.thisMonth.hours.toFixed(1)} / {monthlyTarget}h
-              </p>
-              {monthProgress < 100 && (
-                <p className="text-sm text-muted-foreground">
-                  {(monthlyTarget - periodStats.thisMonth.hours).toFixed(1)}h remaining
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
+        {/* Additional Insights */}
+        <div className="mt-3">
+          <small className="text-muted">
+            {hoursData.overtime.percentage > 20 && "High overtime this period. "}
+            {hoursData.penalty.percentage > 15 && "Good penalty rate coverage. "}
+            {weeklyComparison.trend === 'up' && weeklyComparison.change > 5 && "Significant increase from last week."}
+            {weeklyComparison.trend === 'stable' && "Consistent with previous week."}
+          </small>
+        </div>
+      </Card.Body>
+    </Card>
+  );
 }

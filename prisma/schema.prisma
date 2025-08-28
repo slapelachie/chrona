@@ -10,210 +10,234 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Personal configuration settings
-model Settings {
-  id              String   @id @default(cuid())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+// User model (single user application)
+model User {
+  id                 String   @id @default(cuid())
+  name              String
+  email             String?  @unique
+  taxFileNumber     String?
+  tfnDeclared       Boolean  @default(false)
+  dateOfBirth       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  // Personal tax settings
-  taxFreeThreshold    Boolean @default(true)
-  medicareExemption   Boolean @default(false)
-  hecsDebtAmount     Decimal?
-  hecsThreshold      Decimal?
-  hecsRate           Decimal?
-  extraTaxWithheld   Decimal @default(0)
+  // Tax settings
+  claimsTaxFreeThreshold Boolean @default(true)
+  hasHECSDebt           Boolean @default(false)
+  hasStudentFinancialSupplement Boolean @default(false)
+  medicareLevyExemption Boolean @default(false)
   
-  // Superannuation settings
-  superRate          Decimal @default(11)
+  // Relationships
+  shifts            Shift[]
+  payPeriods        PayPeriod[]
+  payVerifications  PayVerification[]
+  payGuides         PayGuide[]
   
-  // Pay period settings
-  payPeriodType      PayPeriodType @default(FORTNIGHTLY)
-  payPeriodStartDay  Int @default(1) // Day of week (1=Monday, 7=Sunday)
-  
-  @@map("settings")
+  @@map("users")
 }
 
-// Pay rate configurations
-model PayRate {
+// Pay guide model for award rates and penalties
+model PayGuide {
   id          String   @id @default(cuid())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  name        String   // e.g., "Casual Level 1", "Weekend", etc.
-  description String?
-  baseRate    Decimal
+  name        String   // e.g., "General Retail Industry Award MA000004"
   effectiveFrom DateTime
   effectiveTo   DateTime?
-  
-  // Rate type and multipliers
-  rateType    RateType @default(BASE)
-  multiplier  Decimal @default(1.0)
-  
-  // When this rate applies
-  isDefault   Boolean @default(false)
-  applyWeekend Boolean @default(false)
-  applyPublicHoliday Boolean @default(false)
-  applyNight  Boolean @default(false)
-  nightStart  String? // HH:mm format
-  nightEnd    String? // HH:mm format
-  
-  // Overtime settings
-  overtimeThreshold Decimal? // hours per day/week
-  overtimeMultiplier Decimal?
-  
-  // Relationships
-  shifts      Shift[]
-  
-  @@map("pay_rates")
-}
-
-// Roster/shift entries
-model Shift {
-  id          String   @id @default(cuid())
+  isActive    Boolean  @default(true)
+  userId      String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  // Pay rates
+  baseHourlyRate    Decimal // Base hourly rate
+  casualLoading     Decimal @default(0.25) // 25% casual loading
+  overtimeRate1_5x  Decimal @default(1.5)  // 1.5x overtime
+  overtimeRate2x    Decimal @default(2.0)  // 2x overtime
+  
+  // Penalty rates (as multipliers)
+  eveningPenalty    Decimal @default(1.15) // 15% evening penalty
+  nightPenalty      Decimal @default(1.30) // 30% night penalty
+  saturdayPenalty   Decimal @default(1.25) // 25% Saturday penalty
+  sundayPenalty     Decimal @default(1.75) // 75% Sunday penalty
+  publicHolidayPenalty Decimal @default(2.50) // 150% public holiday penalty
+  
+  // Shift boundaries (times)
+  eveningStart      String   @default("18:00") // 6 PM
+  eveningEnd        String   @default("22:00") // 10 PM
+  nightStart        String   @default("22:00") // 10 PM
+  nightEnd          String   @default("06:00") // 6 AM
+  
+  // Overtime thresholds
+  dailyOvertimeHours    Decimal @default(8.0)  // Daily OT after 8 hours
+  weeklyOvertimeHours   Decimal @default(38.0) // Weekly OT after 38 hours
+  
+  shifts        Shift[]
+  
+  @@map("pay_guides")
+}
+
+// Tax bracket model for Australian tax system
+model TaxBracket {
+  id        String   @id @default(cuid())
+  year      String   // Financial year e.g., "2024-25"
+  minIncome Decimal
+  maxIncome Decimal? // null for highest bracket
+  taxRate   Decimal  // Tax rate as decimal (0.19 for 19%)
+  baseTax   Decimal @default(0) // Base tax for this bracket
+  createdAt DateTime @default(now())
+  
+  @@unique([year, minIncome])
+  @@map("tax_brackets")
+}
+
+// HECS-HELP repayment thresholds
+model HECSThreshold {
+  id              String   @id @default(cuid())
+  year            String   // Financial year
+  minIncome       Decimal
+  maxIncome       Decimal?
+  repaymentRate   Decimal // Repayment rate as decimal
+  createdAt       DateTime @default(now())
+  
+  @@unique([year, minIncome])
+  @@map("hecs_thresholds")
+}
+
+// Public holidays model
+model PublicHoliday {
+  id          String   @id @default(cuid())
+  name        String
   date        DateTime
+  state       String?  // State-specific holidays (NSW, VIC, etc.), null for national
+  createdAt   DateTime @default(now())
+  
+  @@unique([date, state])
+  @@map("public_holidays")
+}
+
+// Shift model for individual work shifts
+model Shift {
+  id          String    @id @default(cuid())
+  userId      String
+  payGuideId  String
   startTime   DateTime
-  endTime     DateTime
-  breakTime   Decimal @default(0) // Break time in hours
+  endTime     DateTime?
+  breakMinutes Int      @default(0)
+  shiftType   ShiftType @default(REGULAR)
+  status      ShiftStatus @default(SCHEDULED)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   
-  // Rate information
-  payRateId   String
-  payRate     PayRate @relation(fields: [payRateId], references: [id])
-  hourlyRate  Decimal // Snapshot of rate at time of shift
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payGuide    PayGuide  @relation(fields: [payGuideId], references: [id])
   
-  // Calculated values
-  hoursWorked    Decimal
-  regularHours   Decimal
-  overtimeHours  Decimal @default(0)
-  penaltyHours   Decimal @default(0)
+  // Calculated fields (updated on save)
+  totalMinutes     Int?
+  regularHours     Decimal?
+  overtimeHours    Decimal?
+  penaltyHours     Decimal?
+  grossPay         Decimal?
+  superannuation   Decimal?
   
-  grossPay       Decimal
-  
-  // Flags
-  isPublicHoliday Boolean @default(false)
-  isNightShift    Boolean @default(false)
-  
-  // Optional notes
-  notes          String?
-  
-  // Relationships
-  payPeriodId    String?
-  payPeriod      PayPeriod? @relation(fields: [payPeriodId], references: [id])
+  payPeriodShifts PayPeriodShift[]
   
   @@map("shifts")
 }
 
-// Pay period calculations
+// Pay period model
 model PayPeriod {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String    @id @default(cuid())
+  userId          String
+  startDate       DateTime
+  endDate         DateTime
+  payDate         DateTime?
+  status          PayPeriodStatus @default(OPEN)
+  weeklyHours     Decimal?
+  totalGrossPay   Decimal?
+  totalTax        Decimal?
+  hecsRepayment   Decimal?
+  medicareLevy    Decimal?
+  superannuation  Decimal?
+  totalNetPay     Decimal?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   
-  startDate   DateTime
-  endDate     DateTime
-  payDate     DateTime?
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shifts          PayPeriodShift[]
+  payVerifications PayVerification[]
   
-  // Calculated totals
-  totalHours     Decimal
-  regularHours   Decimal
-  overtimeHours  Decimal
-  penaltyHours   Decimal
-  
-  // Pay breakdown
-  grossPay       Decimal
-  taxWithheld    Decimal
-  medicareLevy   Decimal
-  hecsDeduction  Decimal @default(0)
-  superContrib   Decimal
-  netPay         Decimal
-  
-  // Status
-  status         PayPeriodStatus @default(FORECAST)
-  
-  // Relationships
-  shifts         Shift[]
-  verification   PayVerification?
-  
+  @@unique([userId, startDate])
   @@map("pay_periods")
 }
 
-// Pay verification against actual payments
+// Junction table for shifts in pay periods
+model PayPeriodShift {
+  id           String    @id @default(cuid())
+  payPeriodId  String
+  shiftId      String
+  
+  payPeriod    PayPeriod @relation(fields: [payPeriodId], references: [id], onDelete: Cascade)
+  shift        Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  
+  @@unique([payPeriodId, shiftId])
+  @@map("pay_period_shifts")
+}
+
+// Pay verification model for comparing actual vs calculated pay
 model PayVerification {
-  id              String   @id @default(cuid())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id              String    @id @default(cuid())
+  userId          String
+  payPeriodId     String
+  actualGrossPay  Decimal
+  actualTax       Decimal
+  actualNetPay    Decimal
+  actualSuper     Decimal?
+  actualHECS      Decimal?
+  paySlipReference String?  // Reference number from pay slip
+  verificationDate DateTime @default(now())
+  status          VerificationStatus @default(PENDING)
+  notes           String?
   
-  payPeriodId     String   @unique
-  payPeriod       PayPeriod @relation(fields: [payPeriodId], references: [id])
+  // Calculated discrepancies
+  grossPayDifference Decimal?
+  taxDifference      Decimal?
+  netPayDifference   Decimal?
   
-  // Actual values from payslip
-  actualGrossPay     Decimal
-  actualTaxWithheld  Decimal
-  actualMedicareLevy Decimal
-  actualHecsDeduction Decimal @default(0)
-  actualSuperContrib Decimal
-  actualNetPay       Decimal
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payPeriod   PayPeriod @relation(fields: [payPeriodId], references: [id], onDelete: Cascade)
   
-  // Comparison results
-  grossPayDiff       Decimal
-  taxWithheldDiff    Decimal
-  medicareLevyDiff   Decimal
-  hecsDeductionDiff  Decimal @default(0)
-  superContribDiff   Decimal
-  netPayDiff         Decimal
-  
-  // Verification status
-  isVerified         Boolean @default(false)
-  hasDiscrepancies   Boolean @default(false)
-  
-  // Notes about discrepancies
-  notes              String?
-  
+  @@unique([userId, payPeriodId])
   @@map("pay_verifications")
 }
 
-// Australian tax brackets and HECS thresholds (seed data)
-model TaxBracket {
-  id          String   @id @default(cuid())
-  taxYear     String   // e.g., "2024-25"
-  minIncome   Decimal
-  maxIncome   Decimal? // null for highest bracket
-  taxRate     Decimal  // as percentage
-  baseAmount  Decimal
-  
-  @@map("tax_brackets")
-}
-
-model HecsThreshold {
-  id          String   @id @default(cuid())
-  taxYear     String   // e.g., "2024-25"
-  minIncome   Decimal
-  maxIncome   Decimal?
-  repaymentRate Decimal // as percentage
-  
-  @@map("hecs_thresholds")
-}
-
 // Enums
-enum PayPeriodType {
-  WEEKLY
-  FORTNIGHTLY
-  MONTHLY
+enum ShiftType {
+  REGULAR
+  OVERTIME
+  DOUBLE_TIME
+  PUBLIC_HOLIDAY
+  WEEKEND
 }
 
-enum RateType {
-  BASE
-  OVERTIME
-  PENALTY
-  ALLOWANCE
+enum ShiftStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
 }
 
 enum PayPeriodStatus {
-  FORECAST
-  CALCULATED
+  OPEN
+  CLOSED
   PAID
   VERIFIED
+}
+
+enum VerificationStatus {
+  PENDING
+  MATCHED
+  DISCREPANCY
+  RESOLVED
 }
