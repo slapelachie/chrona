@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Badge, Alert, Dropdown } from 'react-bootstrap';
 import { CalendarPlus, Clock, DollarSign, MoreVertical, Edit, Trash, Calendar } from 'lucide-react';
-import ShiftForm from '@/components/shift-form';
+import EnhancedShiftForm from '@/components/enhanced-shift-form';
 
 interface Shift {
   id: string;
@@ -14,6 +14,8 @@ interface Shift {
   status: string;
   notes: string | null;
   location: string | null;
+  penaltyOverrides: string | null;
+  autoCalculatePenalties: boolean;
   totalMinutes: number | null;
   regularHours: number | null;
   overtimeHours: number | null;
@@ -25,6 +27,14 @@ interface Shift {
   };
 }
 
+interface PenaltyOverride {
+  evening?: boolean | null;
+  night?: boolean | null;
+  weekend?: boolean | null;
+  publicHoliday?: boolean | null;
+  overrideReason?: string;
+}
+
 interface ShiftFormData {
   date: string;
   startTime: string;
@@ -33,6 +43,9 @@ interface ShiftFormData {
   notes: string;
   location: string;
   shiftType: 'REGULAR' | 'OVERTIME' | 'WEEKEND' | 'PUBLIC_HOLIDAY';
+  payGuideId?: string;
+  penaltyOverrides?: PenaltyOverride;
+  autoCalculatePenalties: boolean;
 }
 
 export default function ShiftsPage() {
@@ -82,7 +95,10 @@ export default function ShiftsPage() {
         breakMinutes: formData.breakMinutes,
         shiftType: formData.shiftType,
         notes: formData.notes || undefined,
-        location: formData.location || undefined
+        location: formData.location || undefined,
+        payGuideId: formData.payGuideId,
+        penaltyOverrides: formData.penaltyOverrides,
+        autoCalculatePenalties: formData.autoCalculatePenalties ?? true
       };
 
       const response = editingShift
@@ -343,8 +359,8 @@ export default function ShiftsPage() {
         </Col>
       </Row>
 
-      {/* Shift Form Modal */}
-      <ShiftForm
+      {/* Enhanced Shift Form Modal */}
+      <EnhancedShiftForm
         show={showForm}
         onHide={() => {
           setShowForm(false);
@@ -358,7 +374,9 @@ export default function ShiftsPage() {
           breakMinutes: editingShift.breakMinutes,
           notes: editingShift.notes || '',
           location: editingShift.location || '',
-          shiftType: editingShift.shiftType as 'REGULAR' | 'OVERTIME' | 'WEEKEND' | 'PUBLIC_HOLIDAY'
+          shiftType: editingShift.shiftType as 'REGULAR' | 'OVERTIME' | 'WEEKEND' | 'PUBLIC_HOLIDAY',
+          penaltyOverrides: editingShift.penaltyOverrides ? JSON.parse(editingShift.penaltyOverrides) : {},
+          autoCalculatePenalties: editingShift.autoCalculatePenalties ?? true
         } : undefined}
         isEdit={!!editingShift}
         loading={formLoading}

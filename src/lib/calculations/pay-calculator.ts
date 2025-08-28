@@ -115,13 +115,12 @@ export class PayCalculator {
 
   private analyzeTimeSegments(startTime: Date, endTime: Date, breakMinutes: number): TimeSegment[] {
     const segments: TimeSegment[] = [];
-    const workingEndTime = new Date(endTime.getTime() - (breakMinutes * 60 * 1000));
     
     let currentTime = new Date(startTime);
     
-    while (currentTime < workingEndTime) {
+    while (currentTime < endTime) {
       const segmentStart = new Date(currentTime);
-      const segmentEnd = this.getNextSegmentBoundary(currentTime, workingEndTime);
+      const segmentEnd = this.getNextSegmentBoundary(currentTime, endTime);
       
       if (segmentStart >= segmentEnd) break;
       
@@ -138,6 +137,19 @@ export class PayCalculator {
       }
       
       currentTime = segmentEnd;
+    }
+    
+    // Now adjust the total segment durations proportionally to account for break time
+    if (breakMinutes > 0 && segments.length > 0) {
+      const totalSegmentMinutes = segments.reduce((sum, segment) => sum + segment.durationMinutes, 0);
+      if (totalSegmentMinutes > breakMinutes) {
+        const workingMinutes = totalSegmentMinutes - breakMinutes;
+        const adjustmentFactor = workingMinutes / totalSegmentMinutes;
+        
+        segments.forEach(segment => {
+          segment.durationMinutes = Math.floor(segment.durationMinutes * adjustmentFactor);
+        });
+      }
     }
     
     return segments;

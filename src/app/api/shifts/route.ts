@@ -64,7 +64,10 @@ export async function POST(request: NextRequest) {
       breakMinutes = 0,
       shiftType = 'REGULAR',
       notes,
-      location
+      location,
+      payGuideId,
+      penaltyOverrides,
+      autoCalculatePenalties = true
     } = body;
 
     // Validation
@@ -80,20 +83,55 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the first user (single-user application)
-    const user = await prisma.user.findFirst({
-      include: {
-        payGuides: {
-          where: { isActive: true },
-          take: 1
+    const user = await prisma.user.findFirst();
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Determine which pay guide to use
+    let selectedPayGuideId = payGuideId;
+    
+    if (!selectedPayGuideId) {
+      // Try to use last used or default pay guide from user preferences
+      selectedPayGuideId = user.lastUsedPayGuideId || user.defaultPayGuideId;
+      
+      if (!selectedPayGuideId) {
+        // Fall back to first active pay guide
+        const activePayGuide = await prisma.payGuide.findFirst({
+          where: { 
+            userId: user.id,
+            isActive: true 
+          }
+        });
+        
+        if (!activePayGuide) {
+          return NextResponse.json({ error: 'No active pay guide found' }, { status: 404 });
         }
+        
+        selectedPayGuideId = activePayGuide.id;
+      }
+    }
+
+    // Get the selected pay guide
+    const payGuide = await prisma.payGuide.findFirst({
+      where: { 
+        id: selectedPayGuideId,
+        userId: user.id,
+        isActive: true
       }
     });
 
-    if (!user || !user.payGuides[0]) {
-      return NextResponse.json({ error: 'User or active pay guide not found' }, { status: 404 });
+    if (!payGuide) {
+      return NextResponse.json({ error: 'Selected pay guide not found or inactive' }, { status: 404 });
     }
 
-    const payGuide = user.payGuides[0];
+    // Update user's last used pay guide
+    if (selectedPayGuideId !== user.lastUsedPayGuideId) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastUsedPayGuideId: selectedPayGuideId }
+      });
+    }
 
     // Get public holidays for calculation
     const publicHolidays = await prisma.publicHoliday.findMany({
@@ -125,6 +163,8 @@ export async function POST(request: NextRequest) {
         status: 'COMPLETED', // Assume completed shifts for now
         notes,
         location,
+        penaltyOverrides: penaltyOverrides ? JSON.stringify(penaltyOverrides) : null,
+        autoCalculatePenalties,
         totalMinutes: calculation.totalMinutes,
         regularHours: calculation.regularHours,
         overtimeHours: calculation.overtimeHours,

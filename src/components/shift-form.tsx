@@ -4,6 +4,14 @@ import { useState } from 'react';
 import { Form, Button, Modal, Alert, InputGroup } from 'react-bootstrap';
 import { Calendar, Clock, FileText, AlertCircle, DollarSign } from 'lucide-react';
 
+interface PenaltyOverride {
+  evening?: boolean | null;
+  night?: boolean | null;
+  weekend?: boolean | null;
+  publicHoliday?: boolean | null;
+  overrideReason?: string;
+}
+
 interface ShiftFormData {
   date: string;
   startTime: string;
@@ -12,6 +20,9 @@ interface ShiftFormData {
   notes: string;
   location: string;
   shiftType: 'REGULAR' | 'OVERTIME' | 'WEEKEND' | 'PUBLIC_HOLIDAY';
+  payGuideId?: string;
+  penaltyOverrides?: PenaltyOverride;
+  autoCalculatePenalties: boolean;
 }
 
 interface ShiftFormProps {
@@ -28,6 +39,13 @@ interface ShiftPreview {
   estimatedPay: number;
   hasWarnings: boolean;
   warnings: string[];
+  appliedPenalties: string[];
+  breakdown?: {
+    regularPay: number;
+    overtimePay: number;
+    penaltyPay: number;
+    casualLoading: number;
+  };
 }
 
 export default function ShiftForm({ 
@@ -45,7 +63,10 @@ export default function ShiftForm({
     breakMinutes: initialData?.breakMinutes || 30,
     notes: initialData?.notes || '',
     location: initialData?.location || '',
-    shiftType: initialData?.shiftType || 'REGULAR'
+    shiftType: initialData?.shiftType || 'REGULAR',
+    payGuideId: initialData?.payGuideId,
+    penaltyOverrides: initialData?.penaltyOverrides || {},
+    autoCalculatePenalties: initialData?.autoCalculatePenalties ?? true
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -53,15 +74,16 @@ export default function ShiftForm({
 
   // Calculate shift preview when form changes
   const calculateShiftPreview = (data: ShiftFormData): ShiftPreview => {
-    const startDateTime = new Date(`${data.date}T${data.startTime}`);
-    const endDateTime = new Date(`${data.date}T${data.endTime}`);
+    // Create dates with explicit timezone handling to match backend
+    const startDateTime = new Date(`${data.date}T${data.startTime}:00`);
+    const endDateTime = new Date(`${data.date}T${data.endTime}:00`);
     
     // Handle overnight shifts
     if (endDateTime <= startDateTime) {
       endDateTime.setDate(endDateTime.getDate() + 1);
     }
 
-    const totalMinutes = (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60);
+    const totalMinutes = Math.floor((endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60));
     const workingMinutes = Math.max(0, totalMinutes - data.breakMinutes);
     const duration = workingMinutes / 60;
 
@@ -119,7 +141,8 @@ export default function ShiftForm({
       duration: Math.round(duration * 100) / 100,
       estimatedPay: Math.round(estimatedPay * 100) / 100,
       hasWarnings: warnings.length > 0,
-      warnings
+      warnings,
+      appliedPenalties: [] // For compatibility
     };
   };
 
