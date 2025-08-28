@@ -21,18 +21,16 @@ interface HoursBreakdown {
     color: string;
   };
   total: number;
-}
-
-interface WeeklyComparison {
-  currentWeek: number;
-  previousWeek: number;
-  change: number;
-  trend: 'up' | 'down' | 'stable';
+  weeklyComparison: {
+    currentWeek: number;
+    previousWeek: number;
+    change: number;
+    trend: 'up' | 'down' | 'stable';
+  };
 }
 
 export default function HoursSummary() {
   const [hoursData, setHoursData] = useState<HoursBreakdown | null>(null);
-  const [weeklyComparison, setWeeklyComparison] = useState<WeeklyComparison | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,39 +41,15 @@ export default function HoursSummary() {
     try {
       setLoading(true);
       
-      // TODO: Replace with actual API call
-      // Simulate API response
-      setTimeout(() => {
-        const mockHoursData: HoursBreakdown = {
-          regular: {
-            hours: 28.5,
-            percentage: 72,
-            color: 'primary'
-          },
-          overtime: {
-            hours: 6.5,
-            percentage: 16,
-            color: 'warning'
-          },
-          penalty: {
-            hours: 4.75,
-            percentage: 12,
-            color: 'info'
-          },
-          total: 39.75
-        };
-
-        const mockWeeklyComparison: WeeklyComparison = {
-          currentWeek: 19.25,
-          previousWeek: 16.5,
-          change: 2.75,
-          trend: 'up'
-        };
-
-        setHoursData(mockHoursData);
-        setWeeklyComparison(mockWeeklyComparison);
-        setLoading(false);
-      }, 600);
+      const response = await fetch('/api/hours-summary');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch hours summary data');
+      }
+      
+      const data = await response.json();
+      setHoursData(data);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching hours data:', error);
       setLoading(false);
@@ -133,7 +107,7 @@ export default function HoursSummary() {
     );
   }
 
-  if (!hoursData || !weeklyComparison) {
+  if (!hoursData) {
     return (
       <Card className="shadow-sm h-100">
         <Card.Body className="d-flex justify-content-center align-items-center text-muted">
@@ -221,26 +195,26 @@ export default function HoursSummary() {
               <Calendar size={16} className="me-2 text-muted" />
               <small className="text-muted">This Week vs Last Week</small>
             </div>
-            {getTrendIcon(weeklyComparison.trend)}
+            {getTrendIcon(hoursData.weeklyComparison.trend)}
           </div>
           
           <div className="d-flex justify-content-between">
             <div>
-              <div className="fw-bold text-primary">{formatHours(weeklyComparison.currentWeek)}</div>
+              <div className="fw-bold text-primary">{formatHours(hoursData.weeklyComparison.currentWeek)}</div>
               <small className="text-muted">Current</small>
             </div>
             <div className="text-center">
               <div className={`fw-bold ${
-                weeklyComparison.change > 0 ? 'text-success' : 
-                weeklyComparison.change < 0 ? 'text-danger' : 'text-muted'
+                hoursData.weeklyComparison.change > 0 ? 'text-success' : 
+                hoursData.weeklyComparison.change < 0 ? 'text-danger' : 'text-muted'
               }`}>
-                {weeklyComparison.change > 0 ? '+' : ''}
-                {formatHours(Math.abs(weeklyComparison.change))}
+                {hoursData.weeklyComparison.change > 0 ? '+' : ''}
+                {formatHours(Math.abs(hoursData.weeklyComparison.change))}
               </div>
               <small className="text-muted">Change</small>
             </div>
             <div className="text-end">
-              <div className="fw-bold text-secondary">{formatHours(weeklyComparison.previousWeek)}</div>
+              <div className="fw-bold text-secondary">{formatHours(hoursData.weeklyComparison.previousWeek)}</div>
               <small className="text-muted">Previous</small>
             </div>
           </div>
@@ -251,8 +225,8 @@ export default function HoursSummary() {
           <small className="text-muted">
             {hoursData.overtime.percentage > 20 && "High overtime this period. "}
             {hoursData.penalty.percentage > 15 && "Good penalty rate coverage. "}
-            {weeklyComparison.trend === 'up' && weeklyComparison.change > 5 && "Significant increase from last week."}
-            {weeklyComparison.trend === 'stable' && "Consistent with previous week."}
+            {hoursData.weeklyComparison.trend === 'up' && hoursData.weeklyComparison.change > 5 && "Significant increase from last week."}
+            {hoursData.weeklyComparison.trend === 'stable' && "Consistent with previous week."}
           </small>
         </div>
       </Card.Body>

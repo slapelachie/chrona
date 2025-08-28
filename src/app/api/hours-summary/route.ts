@@ -1,0 +1,248 @@
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { PayCalculator } from '@/lib/calculations/pay-calculator';
+
+export async function GET() {
+  try {
+    // Get the first user (single-user application)
+    const user = await prisma.user.findFirst({
+      include: {
+        payGuides: {
+          where: { isActive: true },
+          take: 1
+        }
+      }
+    });
+
+    if (!user || !user.payGuides[0]) {
+      return NextResponse.json({ error: 'User or active pay guide not found' }, { status: 404 });
+    }
+
+    // Get current pay period
+    const currentPayPeriod = await getCurrentPayPeriod(user.id);
+    
+    if (!currentPayPeriod) {
+      return NextResponse.json({ error: 'No current pay period found' }, { status: 404 });
+    }
+
+    // Get completed shifts for current pay period
+    const completedShifts = await prisma.shift.findMany({
+      where: {
+        userId: user.id,
+        status: 'COMPLETED',
+        startTime: {
+          gte: currentPayPeriod.startDate,
+          lte: currentPayPeriod.endDate
+        }
+      },
+      include: {
+        payGuide: true
+      },
+      orderBy: { startTime: 'asc' }
+    });
+
+    // Get public holidays for calculations
+    const publicHolidays = await prisma.publicHoliday.findMany({
+      where: {
+        date: {
+          gte: currentPayPeriod.startDate,
+          lte: currentPayPeriod.endDate
+        }
+      }
+    });
+
+    // Calculate hours breakdown
+    let totalRegularMinutes = 0;
+    let totalOvertimeMinutes = 0;
+    let totalPenaltyMinutes = 0;
+    let totalMinutes = 0;
+
+    for (const shift of completedShifts) {
+      if (shift.endTime) {
+        const calculator = new PayCalculator(shift.payGuide, publicHolidays);
+        const calculation = calculator.calculateShift(
+          shift.startTime,
+          shift.endTime,
+          shift.breakMinutes
+        );
+        
+        // Add to totals (convert hours to minutes)
+        totalRegularMinutes += calculation.regularHours.toNumber() * 60;
+        totalOvertimeMinutes += calculation.overtimeHours.toNumber() * 60;
+        totalPenaltyMinutes += calculation.penaltyHours.toNumber() * 60;
+        totalMinutes += calculation.totalMinutes;
+      }
+    }
+
+    // Convert to hours
+    const totalHours = totalMinutes / 60;
+    const regularHours = totalRegularMinutes / 60;
+    const overtimeHours = totalOvertimeMinutes / 60;
+    const penaltyHours = totalPenaltyMinutes / 60;
+
+    // Calculate percentages
+    const regularPercentage = totalHours > 0 ? Math.round((regularHours / totalHours) * 100) : 0;
+    const overtimePercentage = totalHours > 0 ? Math.round((overtimeHours / totalHours) * 100) : 0;
+    const penaltyPercentage = totalHours > 0 ? Math.round((penaltyHours / totalHours) * 100) : 0;
+
+    // Get current week's hours for comparison
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    const dayOfWeek = now.getDay();
+    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    startOfWeek.setDate(now.getDate() - mondayOffset);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    // Get this week's shifts
+    const thisWeekShifts = await prisma.shift.findMany({
+      where: {
+        userId: user.id,
+        status: 'COMPLETED',
+        startTime: {
+          gte: startOfWeek,
+          lte: endOfWeek
+        }
+      },
+      include: {
+        payGuide: true
+      }
+    });
+
+    let currentWeekMinutes = 0;
+    for (const shift of thisWeekShifts) {
+      if (shift.endTime) {
+        const calculator = new PayCalculator(shift.payGuide, publicHolidays);
+        const calculation = calculator.calculateShift(
+          shift.startTime,
+          shift.endTime,
+          shift.breakMinutes
+        );
+        currentWeekMinutes += calculation.totalMinutes;
+      }
+    }
+
+    // Get previous week for comparison
+    const prevWeekStart = new Date(startOfWeek);
+    prevWeekStart.setDate(startOfWeek.getDate() - 7);
+    
+    const prevWeekEnd = new Date(endOfWeek);
+    prevWeekEnd.setDate(endOfWeek.getDate() - 7);
+
+    const prevWeekShifts = await prisma.shift.findMany({
+      where: {
+        userId: user.id,
+        status: 'COMPLETED',
+        startTime: {
+          gte: prevWeekStart,
+          lte: prevWeekEnd
+        }
+      },
+      include: {
+        payGuide: true
+      }
+    });
+
+    let previousWeekMinutes = 0;
+    for (const shift of prevWeekShifts) {
+      if (shift.endTime) {
+        const calculator = new PayCalculator(shift.payGuide, publicHolidays);
+        const calculation = calculator.calculateShift(
+          shift.startTime,
+          shift.endTime,
+          shift.breakMinutes
+        );
+        previousWeekMinutes += calculation.totalMinutes;
+      }
+    }
+
+    const currentWeekHours = currentWeekMinutes / 60;
+    const previousWeekHours = previousWeekMinutes / 60;
+    const weeklyChange = currentWeekHours - previousWeekHours;
+    
+    let trend: 'up' | 'down' | 'stable';
+    if (weeklyChange > 2) {
+      trend = 'up';
+    } else if (weeklyChange < -2) {
+      trend = 'down';
+    } else {
+      trend = 'stable';
+    }
+
+    const response = {
+      regular: {
+        hours: Math.round(regularHours * 100) / 100,
+        percentage: regularPercentage,
+        color: 'primary'
+      },
+      overtime: {
+        hours: Math.round(overtimeHours * 100) / 100,
+        percentage: overtimePercentage,
+        color: 'warning'
+      },
+      penalty: {
+        hours: Math.round(penaltyHours * 100) / 100,
+        percentage: penaltyPercentage,
+        color: 'info'
+      },
+      total: Math.round(totalHours * 100) / 100,
+      weeklyComparison: {
+        currentWeek: Math.round(currentWeekHours * 100) / 100,
+        previousWeek: Math.round(previousWeekHours * 100) / 100,
+        change: Math.round(weeklyChange * 100) / 100,
+        trend
+      }
+    };
+
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error('Hours summary API error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+async function getCurrentPayPeriod(userId: string) {
+  const now = new Date();
+  
+  // Look for existing pay period that includes today
+  const existing = await prisma.payPeriod.findFirst({
+    where: {
+      userId,
+      startDate: { lte: now },
+      endDate: { gte: now }
+    }
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  // Create a new fortnightly pay period starting from the most recent Monday
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday = 0, so offset by 6
+  
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - mondayOffset);
+  startDate.setHours(0, 0, 0, 0);
+
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + 13); // 14 days total (fortnightly)
+  endDate.setHours(23, 59, 59, 999);
+
+  const payDate = new Date(endDate);
+  payDate.setDate(endDate.getDate() + 7); // Pay date 1 week after period ends
+
+  return await prisma.payPeriod.create({
+    data: {
+      userId,
+      startDate,
+      endDate,
+      payDate,
+      status: 'OPEN'
+    }
+  });
+}

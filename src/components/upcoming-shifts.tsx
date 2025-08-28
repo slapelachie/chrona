@@ -28,56 +28,22 @@ export default function UpcomingShifts() {
     try {
       setLoading(true);
       
-      // TODO: Replace with actual API call
-      // Simulate API response
-      setTimeout(() => {
-        const mockShifts: UpcomingShift[] = [
-          {
-            id: '1',
-            date: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
-            startTime: '09:00',
-            endTime: '17:30',
-            duration: 8,
-            estimatedPay: 236.50,
-            shiftType: 'regular',
-            location: 'Main Store',
-            notes: 'Training new staff member'
-          },
-          {
-            id: '2',
-            date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // Day after tomorrow
-            startTime: '14:00',
-            endTime: '22:00',
-            duration: 7.5,
-            estimatedPay: 245.75,
-            shiftType: 'penalty',
-            location: 'Main Store'
-          },
-          {
-            id: '3',
-            date: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000), // In 4 days (Saturday)
-            startTime: '10:00',
-            endTime: '18:30',
-            duration: 8,
-            estimatedPay: 298.20,
-            shiftType: 'weekend',
-            location: 'Main Store'
-          },
-          {
-            id: '4',
-            date: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000), // In 6 days
-            startTime: '06:00',
-            endTime: '14:30',
-            duration: 8,
-            estimatedPay: 236.50,
-            shiftType: 'regular',
-            location: 'Warehouse'
-          }
-        ];
-
-        setUpcomingShifts(mockShifts);
-        setLoading(false);
-      }, 700);
+      const response = await fetch('/api/upcoming-shifts');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch upcoming shifts data');
+      }
+      
+      const data = await response.json();
+      
+      // Convert date strings back to Date objects
+      const shiftsWithDates = data.map((shift: UpcomingShift) => ({
+        ...shift,
+        date: new Date(shift.date)
+      }));
+      
+      setUpcomingShifts(shiftsWithDates);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching upcoming shifts:', error);
       setLoading(false);
@@ -216,7 +182,7 @@ export default function UpcomingShifts() {
 
                 {shift.notes && (
                   <div className="small text-muted">
-                    <em>"{shift.notes}"</em>
+                    <em>&quot;{shift.notes}&quot;</em>
                   </div>
                 )}
 

@@ -30,26 +30,15 @@ export default function EarningsForecast() {
     try {
       setLoading(true);
       
-      // TODO: Replace with actual API call
-      // Simulate API response
-      setTimeout(() => {
-        const mockData: ForecastData = {
-          currentEarnings: 847.50,
-          projectedTotal: 1345.80,
-          remainingEarnings: 498.30,
-          progressPercentage: 63,
-          averageDailyRate: 142.25,
-          remainingDays: 3.5,
-          confidence: 'high',
-          trends: {
-            vsLastPeriod: 85.40,
-            trend: 'up'
-          }
-        };
-
-        setForecastData(mockData);
-        setLoading(false);
-      }, 800);
+      const response = await fetch('/api/earnings-forecast');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch earnings forecast data');
+      }
+      
+      const data = await response.json();
+      setForecastData(data);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching forecast data:', error);
       setLoading(false);

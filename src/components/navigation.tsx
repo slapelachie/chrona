@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { 
   BarChart3, 
   Calendar, 
-  DollarSign, 
   Settings, 
   Home, 
   Menu,
@@ -162,13 +161,13 @@ export default function Navigation() {
           {/* Additional Mobile Menu Items */}
           <div className="mt-4 pt-3 border-top border-secondary">
             <Nav className="flex-column">
-              <Nav.Link href="/profile" className="text-light py-2">
+              <Nav.Link as={Link} href="/profile" className="text-light py-2">
                 <div className="d-flex align-items-center">
                   <User size={18} className="me-3" />
                   Profile Settings
                 </div>
               </Nav.Link>
-              <Nav.Link href="/help" className="text-light py-2">
+              <Nav.Link as={Link} href="/help" className="text-light py-2">
                 <div className="d-flex align-items-center">
                   <span className="me-3">?</span>
                   Help & Support
@@ -194,7 +193,7 @@ export default function Navigation() {
             {navigationItems.slice(0, 5).map((item) => (
               <div key={item.href} className="col">
                 <Link
-                  href={item.href}
+                  href={item.href as any}
                   className={`d-block py-2 text-decoration-none ${
                     isActive(item.href) ? 'text-primary' : 'text-light'
                   }`}

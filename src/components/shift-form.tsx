@@ -1,17 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Form, Button, Modal, Alert, InputGroup, Badge } from 'react-bootstrap';
-import { Calendar, Clock, MapPin, FileText, AlertCircle, DollarSign } from 'lucide-react';
+import { Form, Button, Modal, Alert, InputGroup } from 'react-bootstrap';
+import { Calendar, Clock, FileText, AlertCircle, DollarSign } from 'lucide-react';
 
 interface ShiftFormData {
   date: string;
   startTime: string;
   endTime: string;
   breakMinutes: number;
-  location: string;
   notes: string;
-  shiftType: 'regular' | 'overtime' | 'weekend' | 'public_holiday';
+  shiftType: 'REGULAR' | 'OVERTIME' | 'WEEKEND' | 'PUBLIC_HOLIDAY';
 }
 
 interface ShiftFormProps {
@@ -43,9 +42,8 @@ export default function ShiftForm({
     startTime: initialData?.startTime || '09:00',
     endTime: initialData?.endTime || '17:00',
     breakMinutes: initialData?.breakMinutes || 30,
-    location: initialData?.location || '',
     notes: initialData?.notes || '',
-    shiftType: initialData?.shiftType || 'regular'
+    shiftType: initialData?.shiftType || 'REGULAR'
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -74,13 +72,13 @@ export default function ShiftForm({
     
     // Apply penalty rates based on shift type
     switch (data.shiftType) {
-      case 'weekend':
+      case 'WEEKEND':
         estimatedPay *= 1.25; // Saturday/Sunday penalty
         break;
-      case 'public_holiday':
+      case 'PUBLIC_HOLIDAY':
         estimatedPay *= 2.5; // Public holiday rate
         break;
-      case 'overtime':
+      case 'OVERTIME':
         // Apply overtime after 8 hours
         if (duration > 8) {
           const regularPay = 8 * baseRate * 1.25;
@@ -111,7 +109,7 @@ export default function ShiftForm({
 
     // Check if it's actually a weekend
     const dayOfWeek = startDateTime.getDay();
-    if ((dayOfWeek === 0 || dayOfWeek === 6) && data.shiftType === 'regular') {
+    if ((dayOfWeek === 0 || dayOfWeek === 6) && data.shiftType === 'REGULAR') {
       warnings.push('This appears to be a weekend - consider changing shift type');
     }
 
@@ -286,30 +284,17 @@ export default function ShiftForm({
                 <Form.Label>Shift Type</Form.Label>
                 <Form.Select
                   value={formData.shiftType}
-                  onChange={(e) => handleInputChange('shiftType', e.target.value as any)}
+                  onChange={(e) => handleInputChange('shiftType', e.target.value as ShiftFormData['shiftType'])}
                 >
-                  <option value="regular">Regular</option>
-                  <option value="overtime">Overtime</option>
-                  <option value="weekend">Weekend</option>
-                  <option value="public_holiday">Public Holiday</option>
+                  <option value="REGULAR">Regular</option>
+                  <option value="OVERTIME">Overtime</option>
+                  <option value="WEEKEND">Weekend</option>
+                  <option value="PUBLIC_HOLIDAY">Public Holiday</option>
                 </Form.Select>
               </Form.Group>
             </div>
           </div>
 
-          {/* Location */}
-          <Form.Group className="mb-3">
-            <Form.Label>Location (Optional)</Form.Label>
-            <InputGroup>
-              <InputGroup.Text><MapPin size={16} /></InputGroup.Text>
-              <Form.Control
-                type="text"
-                placeholder="e.g., Main Store, Warehouse, Remote"
-                value={formData.location}
-                onChange={(e) => handleInputChange('location', e.target.value)}
-              />
-            </InputGroup>
-          </Form.Group>
 
           {/* Notes */}
           <Form.Group className="mb-4">
