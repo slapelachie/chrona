@@ -233,9 +233,11 @@ export default function DashboardPage() {
                       View All Shifts
                     </Button>
                   </Link>
-                  <Button variant="outline-info">
-                    Pay Verification
-                  </Button>
+                  <Link href="/verification" passHref legacyBehavior>
+                    <Button variant="outline-info">
+                      Pay Verification
+                    </Button>
+                  </Link>
                 </div>
               </Card.Body>
             </Card>
