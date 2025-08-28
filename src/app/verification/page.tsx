@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Container, Row, Col, Card, Button, Badge, Table, Alert, Spinner } from 'react-bootstrap';
 import { CheckCircle, AlertTriangle, Clock, Plus, FileText, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
@@ -46,11 +46,7 @@ export default function PayVerificationPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('');
 
-  useEffect(() => {
-    fetchVerifications();
-  }, [filter]); // fetchVerifications is recreated on each render, which is fine for this use case
-
-  const fetchVerifications = async () => {
+  const fetchVerifications = useCallback(async () => {
     try {
       setLoading(true);
       const queryParams = filter ? `?status=${filter}` : '';
@@ -68,7 +64,11 @@ export default function PayVerificationPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    fetchVerifications();
+  }, [fetchVerifications]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-AU', {

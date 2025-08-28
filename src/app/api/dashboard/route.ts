@@ -20,8 +20,6 @@ export async function GET() {
       return NextResponse.json({ error: 'User or active pay guide not found' }, { status: 404 });
     }
 
-    const payGuide = user.payGuides[0];
-
     // Get current pay period
     const currentPayPeriod = await getCurrentPayPeriod(user.id);
     

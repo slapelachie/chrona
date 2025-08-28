@@ -112,7 +112,7 @@ export default function SettingsPage() {
     }
   };
 
-  const updateSettings = (section: keyof SettingsData, field: string, value: any) => {
+  const updateSettings = (section: keyof SettingsData, field: string, value: string | boolean) => {
     if (!settingsData) return;
     
     setSettingsData({
@@ -121,7 +121,7 @@ export default function SettingsPage() {
         ...settingsData[section],
         [field]: value
       }
-    });
+    } as SettingsData);
   };
 
   if (loading) {

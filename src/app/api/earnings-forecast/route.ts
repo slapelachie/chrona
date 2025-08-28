@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { PayCalculator } from '@/lib/calculations/pay-calculator';
-import { TaxCalculator } from '@/lib/calculations/tax-calculator';
-import Decimal from 'decimal.js';
 
 export async function GET() {
   try {
@@ -19,8 +17,6 @@ export async function GET() {
     if (!user || !user.payGuides[0]) {
       return NextResponse.json({ error: 'User or active pay guide not found' }, { status: 404 });
     }
-
-    const payGuide = user.payGuides[0];
 
     // Get current pay period
     const currentPayPeriod = await getCurrentPayPeriod(user.id);

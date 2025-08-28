@@ -118,7 +118,6 @@ export default function Navigation() {
           </div>
         </Container>
       </Navbar>
-
       {/* Mobile Sidebar Navigation */}
       <Offcanvas 
         show={showOffcanvas} 
@@ -185,7 +184,6 @@ export default function Navigation() {
           </div>
         </Offcanvas.Body>
       </Offcanvas>
-
       {/* Bottom Navigation (Mobile Only) */}
       <div className="d-lg-none fixed-bottom bg-dark border-top border-secondary">
         <div className="container-fluid">
@@ -193,11 +191,10 @@ export default function Navigation() {
             {navigationItems.slice(0, 5).map((item) => (
               <div key={item.href} className="col">
                 <Link
-                  href={item.href as any}
+                  href={item.href as `/dashboard` | `/shifts` | `/analytics` | `/verification` | `/settings`}
                   className={`d-block py-2 text-decoration-none ${
                     isActive(item.href) ? 'text-primary' : 'text-light'
-                  }`}
-                >
+                  }`}>
                   <div className="d-flex flex-column align-items-center">
                     {item.icon}
                     <small className="mt-1" style={{ fontSize: '0.7rem' }}>
@@ -210,7 +207,6 @@ export default function Navigation() {
           </div>
         </div>
       </div>
-
       {/* Add padding to body to account for fixed navigation */}
       <style jsx global>{`
         body {

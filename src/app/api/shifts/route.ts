@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { PayCalculator } from '@/lib/calculations/pay-calculator';
+import { Prisma, ShiftStatus } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,10 +17,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const whereCondition: any = { userId: user.id };
+    const whereCondition: Prisma.ShiftWhereInput = { userId: user.id };
 
-    if (status) {
-      whereCondition.status = status;
+    if (status && Object.values(ShiftStatus).includes(status as ShiftStatus)) {
+      whereCondition.status = status as ShiftStatus;
     }
 
     if (startDate || endDate) {
@@ -37,7 +38,17 @@ export async function GET(request: NextRequest) {
       take: limit ? parseInt(limit) : undefined
     });
 
-    return NextResponse.json({ shifts });
+    // Convert Decimal fields to numbers for frontend
+    const shiftsWithNumbers = shifts.map(shift => ({
+      ...shift,
+      regularHours: shift.regularHours?.toNumber() || null,
+      overtimeHours: shift.overtimeHours?.toNumber() || null,
+      penaltyHours: shift.penaltyHours?.toNumber() || null,
+      grossPay: shift.grossPay?.toNumber() || null,
+      superannuation: shift.superannuation?.toNumber() || null
+    }));
+
+    return NextResponse.json({ shifts: shiftsWithNumbers });
   } catch (error) {
     console.error('Get shifts error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -52,7 +63,8 @@ export async function POST(request: NextRequest) {
       endTime,
       breakMinutes = 0,
       shiftType = 'REGULAR',
-      notes
+      notes,
+      location
     } = body;
 
     // Validation
@@ -112,6 +124,7 @@ export async function POST(request: NextRequest) {
         shiftType,
         status: 'COMPLETED', // Assume completed shifts for now
         notes,
+        location,
         totalMinutes: calculation.totalMinutes,
         regularHours: calculation.regularHours,
         overtimeHours: calculation.overtimeHours,
@@ -127,8 +140,18 @@ export async function POST(request: NextRequest) {
     // Add shift to current pay period
     await addShiftToPayPeriod(shift.id, user.id, startTimeDate);
 
+    // Convert Decimal fields to numbers for frontend
+    const shiftWithNumbers = {
+      ...shift,
+      regularHours: shift.regularHours?.toNumber() || null,
+      overtimeHours: shift.overtimeHours?.toNumber() || null,
+      penaltyHours: shift.penaltyHours?.toNumber() || null,
+      grossPay: shift.grossPay?.toNumber() || null,
+      superannuation: shift.superannuation?.toNumber() || null
+    };
+
     return NextResponse.json({ 
-      shift, 
+      shift: shiftWithNumbers, 
       calculation: {
         ...calculation,
         breakdown: {

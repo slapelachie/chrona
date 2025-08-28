@@ -174,13 +174,13 @@ export default function ProfilePage() {
     }
   };
 
-  const updateProfile = (field: string, value: any) => {
+  const updateProfile = (field: keyof UserProfile, value: string | number) => {
     if (!profile) return;
     
     setProfile({
       ...profile,
       [field]: value
-    });
+    } as UserProfile);
   };
 
   const formatCurrency = (amount: number) => {
