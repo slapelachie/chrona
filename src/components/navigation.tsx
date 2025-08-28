@@ -12,7 +12,8 @@ import {
   Menu,
   CheckSquare,
   TrendingUp,
-  User
+  User,
+  DollarSign
 } from 'lucide-react';
 
 interface NavigationItem {
@@ -44,6 +45,12 @@ export default function Navigation() {
       label: 'Analytics',
       icon: <BarChart3 size={20} />,
       description: 'Earnings and hours analysis'
+    },
+    {
+      href: '/pay-rates',
+      label: 'Pay Rates',
+      icon: <DollarSign size={20} />,
+      description: 'Manage award rates and penalties'
     },
     {
       href: '/verification',

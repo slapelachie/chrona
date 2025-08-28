@@ -312,6 +312,8 @@ export class ShiftUtils {
       status: ShiftStatus.SCHEDULED,
       notes: `Created from template: ${template.name}`,
       location: null,
+      penaltyOverrides: null,
+      autoCalculatePenalties: true,
       // Calculated fields will be updated when saved
       totalMinutes: null,
       regularHours: null,

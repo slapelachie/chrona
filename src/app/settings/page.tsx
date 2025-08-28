@@ -2,7 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, Nav } from 'react-bootstrap';
-import { Settings, User, DollarSign, Bell } from 'lucide-react';
+import { Settings, User, DollarSign, Bell, ExternalLink, Plus } from 'lucide-react';
+
+interface PayGuide {
+  id: string;
+  name: string;
+  baseHourlyRate: string;
+  isActive: boolean;
+  effectiveFrom: string;
+  effectiveTo?: string;
+}
 
 interface SettingsData {
   personal: {
@@ -13,7 +22,8 @@ interface SettingsData {
     dateOfBirth: string;
   };
   paySettings: {
-    payGuideId: string;
+    defaultPayGuideId: string;
+    lastUsedPayGuideId: string;
     tfnProvided: boolean;
     hecsDebt: boolean;
     superFund: string;
@@ -35,6 +45,7 @@ interface SettingsData {
 
 export default function SettingsPage() {
   const [settingsData, setSettingsData] = useState<SettingsData | null>(null);
+  const [payGuides, setPayGuides] = useState<PayGuide[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('personal');
@@ -49,10 +60,20 @@ export default function SettingsPage() {
     try {
       setLoading(true);
       
-      // Simulate API call - in real implementation, this would fetch from /api/settings
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock data for demonstration
+      // Fetch user preferences and pay guides
+      const [preferencesResponse, payGuidesResponse] = await Promise.all([
+        fetch('/api/user/preferences'),
+        fetch('/api/pay-rates')
+      ]);
+
+      if (!preferencesResponse.ok || !payGuidesResponse.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const preferences = await preferencesResponse.json();
+      const payGuidesData = await payGuidesResponse.json();
+
+      // Transform the data to match the interface
       const mockData: SettingsData = {
         personal: {
           firstName: 'John',
@@ -62,9 +83,10 @@ export default function SettingsPage() {
           dateOfBirth: '1995-06-15'
         },
         paySettings: {
-          payGuideId: 'general-retail-2024',
-          tfnProvided: true,
-          hecsDebt: false,
+          defaultPayGuideId: preferences.defaultPayGuideId || '',
+          lastUsedPayGuideId: preferences.lastUsedPayGuideId || '',
+          tfnProvided: preferences.taxSettings?.claimsTaxFreeThreshold || false,
+          hecsDebt: preferences.taxSettings?.hasHECSDebt || false,
           superFund: 'Australian Super',
           superMemberNumber: 'AS123456789'
         },
@@ -83,6 +105,7 @@ export default function SettingsPage() {
       };
       
       setSettingsData(mockData);
+      setPayGuides(payGuidesData);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching settings data:', error);
@@ -99,8 +122,25 @@ export default function SettingsPage() {
       setSuccessMessage('');
       setErrorMessage('');
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Save user preferences
+      const preferencesData = {
+        defaultPayGuideId: settingsData.paySettings.defaultPayGuideId,
+        lastUsedPayGuideId: settingsData.paySettings.lastUsedPayGuideId,
+        taxSettings: {
+          claimsTaxFreeThreshold: settingsData.paySettings.tfnProvided,
+          hasHECSDebt: settingsData.paySettings.hecsDebt
+        }
+      };
+
+      const response = await fetch('/api/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferencesData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save settings');
+      }
       
       setSuccessMessage('Settings saved successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -308,21 +348,98 @@ export default function SettingsPage() {
               </Card.Header>
               <Card.Body>
                 <Form>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Pay Guide</Form.Label>
-                    <Form.Select
-                      value={settingsData.paySettings.payGuideId}
-                      onChange={(e) => updateSettings('paySettings', 'payGuideId', e.target.value)}
+                  <Row>
+                    <Col md={6}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Default Pay Guide</Form.Label>
+                        <Form.Select
+                          value={settingsData.paySettings.defaultPayGuideId}
+                          onChange={(e) => updateSettings('paySettings', 'defaultPayGuideId', e.target.value)}
+                        >
+                          <option value="">Select a default pay guide...</option>
+                          {payGuides.map(guide => (
+                            <option key={guide.id} value={guide.id}>
+                              {guide.name} - ${parseFloat(guide.baseHourlyRate).toFixed(2)}/hr
+                            </option>
+                          ))}
+                        </Form.Select>
+                        <Form.Text className="text-muted">
+                          Default pay guide for new shifts when none is specified
+                        </Form.Text>
+                      </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Last Used Pay Guide</Form.Label>
+                        <Form.Control
+                          type="text"
+                          value={payGuides.find(g => g.id === settingsData.paySettings.lastUsedPayGuideId)?.name || 'None'}
+                          disabled
+                        />
+                        <Form.Text className="text-muted">
+                          Automatically updated when creating shifts
+                        </Form.Text>
+                      </Form.Group>
+                    </Col>
+                  </Row>
+                  
+                  <div className="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                      <h6 className="mb-0">Pay Guide Management</h6>
+                      <small className="text-muted">Manage your pay guides and award rates</small>
+                    </div>
+                    <Button 
+                      variant="primary" 
+                      size="sm"
+                      onClick={() => window.open('/pay-rates', '_blank')}
                     >
-                      <option value="general-retail-2024">General Retail Industry Award 2024</option>
-                      <option value="hospitality-2024">Hospitality Industry Award 2024</option>
-                      <option value="fast-food-2024">Fast Food Industry Award 2024</option>
-                      <option value="custom">Custom Pay Rates</option>
-                    </Form.Select>
-                    <Form.Text className="text-muted">
-                      Select the award or industry that applies to your employment
-                    </Form.Text>
-                  </Form.Group>
+                      <Plus size={16} className="me-1" />
+                      Manage Pay Guides
+                      <ExternalLink size={14} className="ms-1" />
+                    </Button>
+                  </div>
+                  
+                  {payGuides.length > 0 ? (
+                    <div className="p-3 bg-light rounded mb-3">
+                      <div className="row">
+                        <div className="col-12">
+                          <small className="text-muted fw-bold">Your Pay Guides ({payGuides.length})</small>
+                        </div>
+                      </div>
+                      <div className="row mt-2">
+                        {payGuides.slice(0, 3).map((guide) => (
+                          <div key={guide.id} className="col-md-4">
+                            <div className="small">
+                              <div className="fw-bold">{guide.name}</div>
+                              <div className="text-success">${parseFloat(guide.baseHourlyRate).toFixed(2)}/hr</div>
+                              <div className="text-muted">
+                                {guide.isActive ? 'Active' : 'Inactive'}
+                                {guide.id === settingsData.paySettings.defaultPayGuideId && ' (Default)'}
+                                {guide.id === settingsData.paySettings.lastUsedPayGuideId && ' (Last Used)'}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {payGuides.length > 3 && (
+                        <div className="text-center mt-2">
+                          <small className="text-muted">
+                            +{payGuides.length - 3} more pay guides
+                          </small>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <Alert variant="info" className="mb-3">
+                      <div className="d-flex align-items-center">
+                        <DollarSign size={20} className="me-2" />
+                        <div>
+                          <strong>No pay guides found</strong>
+                          <div className="small">Create your first pay guide to get started with accurate pay calculations.</div>
+                        </div>
+                      </div>
+                    </Alert>
+                  )}
                   
                   <Row>
                     <Col md={6}>

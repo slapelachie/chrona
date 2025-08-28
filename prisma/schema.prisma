@@ -76,6 +76,10 @@ model PayGuide {
   dailyOvertimeHours    Decimal @default(8.0)  // Daily OT after 8 hours
   weeklyOvertimeHours   Decimal @default(38.0) // Weekly OT after 38 hours
   
+  // Penalty combination settings
+  allowPenaltyCombination Boolean @default(true)
+  penaltyCombinationRules String?  // JSON field for penalty combination rules
+  
   shifts        Shift[]
   
   @@map("pay_guides")
@@ -137,6 +141,10 @@ model Shift {
   
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   payGuide    PayGuide  @relation(fields: [payGuideId], references: [id])
+  
+  // Penalty override settings
+  penaltyOverrides      String?  // JSON field for manual penalty overrides
+  autoCalculatePenalties Boolean @default(true)
   
   // Calculated fields (updated on save)
   totalMinutes     Int?
