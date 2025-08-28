@@ -18,8 +18,6 @@ export async function GET() {
       return NextResponse.json({ error: 'User or active pay guide not found' }, { status: 404 });
     }
 
-    const payGuide = user.payGuides[0];
-
     // Get current pay period
     const currentPayPeriod = await getCurrentPayPeriod(user.id);
     
@@ -108,7 +106,7 @@ export async function GET() {
         duration: Math.round(duration * 100) / 100,
         estimatedPay: Math.round(estimatedPay * 100) / 100,
         shiftType,
-        location: null, // TODO: Add location field to Shift model if needed
+        location: shift.location,
         notes: shift.notes || null
       };
     });

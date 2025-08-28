@@ -10,6 +10,7 @@ interface ShiftFormData {
   endTime: string;
   breakMinutes: number;
   notes: string;
+  location: string;
   shiftType: 'REGULAR' | 'OVERTIME' | 'WEEKEND' | 'PUBLIC_HOLIDAY';
 }
 
@@ -43,6 +44,7 @@ export default function ShiftForm({
     endTime: initialData?.endTime || '17:00',
     breakMinutes: initialData?.breakMinutes || 30,
     notes: initialData?.notes || '',
+    location: initialData?.location || '',
     shiftType: initialData?.shiftType || 'REGULAR'
   });
 
@@ -295,6 +297,17 @@ export default function ShiftForm({
             </div>
           </div>
 
+
+          {/* Location */}
+          <Form.Group className="mb-4">
+            <Form.Label>Location (Optional)</Form.Label>
+            <Form.Control
+              type="text"
+              placeholder="e.g., Main Store, North Branch, Office..."
+              value={formData.location}
+              onChange={(e) => handleInputChange('location', e.target.value)}
+            />
+          </Form.Group>
 
           {/* Notes */}
           <Form.Group className="mb-4">

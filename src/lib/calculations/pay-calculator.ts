@@ -26,6 +26,32 @@ export interface PayBreakdown {
   casualLoading: { rate: Decimal; amount: Decimal };
 }
 
+export interface HoursBreakdown {
+  regular: Decimal;
+  overtime1_5x: Decimal;
+  overtime2x: Decimal;
+  evening: Decimal;
+  night: Decimal;
+  weekend: Decimal;
+  publicHoliday: Decimal;
+  penalty: Decimal;
+}
+
+export interface IntermediatePayBreakdown {
+  regularPay: Decimal;
+  overtimePay: Decimal;
+  penaltyPay: Decimal;
+  breakdown: {
+    regular: { hours: Decimal; pay: Decimal };
+    overtime1_5x: { hours: Decimal; pay: Decimal };
+    overtime2x: { hours: Decimal; pay: Decimal };
+    evening: { hours: Decimal; pay: Decimal };
+    night: { hours: Decimal; pay: Decimal };
+    weekend: { hours: Decimal; pay: Decimal };
+    publicHoliday: { hours: Decimal; pay: Decimal };
+  };
+}
+
 export interface TimeSegment {
   startTime: Date;
   endTime: Date;
@@ -263,7 +289,7 @@ export class PayCalculator {
     };
   }
 
-  private calculatePayBreakdown(hoursBreakdown: any) {
+  private calculatePayBreakdown(hoursBreakdown: HoursBreakdown) {
     const baseRate = this.payGuide.baseHourlyRate;
     
     const regularPay = new Decimal(hoursBreakdown.regular).mul(baseRate);
@@ -286,7 +312,7 @@ export class PayCalculator {
       
     const weekendPay = new Decimal(hoursBreakdown.weekend)
       .mul(baseRate)
-      .mul(hoursBreakdown.weekend > 0 ? 
+      .mul(hoursBreakdown.weekend.greaterThan(0) ? 
         (new Date().getDay() === 0 ? this.payGuide.sundayPenalty : this.payGuide.saturdayPenalty) : 
         new Decimal(1));
         
@@ -310,7 +336,7 @@ export class PayCalculator {
     };
   }
 
-  private createDetailedBreakdown(hoursBreakdown: any, payBreakdown: any, casualLoading: Decimal): PayBreakdown {
+  private createDetailedBreakdown(hoursBreakdown: HoursBreakdown, payBreakdown: IntermediatePayBreakdown, casualLoading: Decimal): PayBreakdown {
     const baseRate = this.payGuide.baseHourlyRate;
     
     return {

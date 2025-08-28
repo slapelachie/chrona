@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Nav } from 'react-bootstrap';
+import { Container, Row, Col, Card, Nav } from 'react-bootstrap';
 import { BarChart3, TrendingUp, Clock, DollarSign, Calendar } from 'lucide-react';
 
 interface AnalyticsData {
@@ -46,39 +46,14 @@ export default function AnalyticsPage() {
     try {
       setLoading(true);
       
-      // Simulate API call - in real implementation, this would fetch from /api/analytics
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await fetch('/api/analytics');
       
-      // Mock data for demonstration
-      const mockData: AnalyticsData = {
-        weeklyTrends: [
-          { week: 'Week 1', hours: 32, earnings: 856, shifts: 4 },
-          { week: 'Week 2', hours: 28, earnings: 748, shifts: 3 },
-          { week: 'Week 3', hours: 35, earnings: 935, shifts: 4 },
-          { week: 'Week 4', hours: 30, earnings: 802, shifts: 4 },
-        ],
-        monthlyTotals: [
-          { month: 'July', totalHours: 125, totalEarnings: 3341, averageHourlyRate: 26.73 },
-          { month: 'August', totalHours: 118, totalEarnings: 3156, averageHourlyRate: 26.75 },
-          { month: 'September', totalHours: 132, totalEarnings: 3528, averageHourlyRate: 26.73 },
-        ],
-        payTypeBreakdown: {
-          regular: { hours: 95, earnings: 2375, percentage: 67.5 },
-          overtime: { hours: 28, earnings: 1120, percentage: 20.0 },
-          penalty: { hours: 18, earnings: 702, percentage: 12.5 }
-        },
-        yearToDate: {
-          totalEarnings: 28450,
-          totalHours: 1065,
-          totalTax: 5690,
-          totalSuper: 3129,
-          shiftsWorked: 132,
-          averageWeeklyHours: 28.5,
-          averageHourlyRate: 26.72
-        }
-      };
+      if (!response.ok) {
+        throw new Error('Failed to fetch analytics data');
+      }
       
-      setAnalyticsData(mockData);
+      const data = await response.json();
+      setAnalyticsData(data);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching analytics data:', error);

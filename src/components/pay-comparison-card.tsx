@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Spinner, Badge, Alert } from 'react-bootstrap';
 import { Calculator, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import DiscrepancyAlert from './discrepancy-alert';
@@ -80,11 +80,7 @@ export default function PayComparisonCard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
-  useEffect(() => {
-    fetchComparison();
-  }, [payPeriodId]); // fetchComparison is recreated on each render, which is fine for this use case
-
-  const fetchComparison = async () => {
+  const fetchComparison = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -103,7 +99,11 @@ export default function PayComparisonCard({
     } finally {
       setLoading(false);
     }
-  };
+  }, [payPeriodId]);
+
+  useEffect(() => {
+    fetchComparison();
+  }, [fetchComparison]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-AU', {

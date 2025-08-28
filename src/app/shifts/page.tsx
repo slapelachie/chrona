@@ -13,6 +13,7 @@ interface Shift {
   shiftType: string;
   status: string;
   notes: string | null;
+  location: string | null;
   totalMinutes: number | null;
   regularHours: number | null;
   overtimeHours: number | null;
@@ -30,6 +31,7 @@ interface ShiftFormData {
   endTime: string;
   breakMinutes: number;
   notes: string;
+  location: string;
   shiftType: 'REGULAR' | 'OVERTIME' | 'WEEKEND' | 'PUBLIC_HOLIDAY';
 }
 
@@ -79,7 +81,8 @@ export default function ShiftsPage() {
         endTime,
         breakMinutes: formData.breakMinutes,
         shiftType: formData.shiftType,
-        notes: formData.notes || undefined
+        notes: formData.notes || undefined,
+        location: formData.location || undefined
       };
 
       const response = editingShift
@@ -112,18 +115,6 @@ export default function ShiftsPage() {
   };
 
   const handleEditShift = (shift: Shift) => {
-    const startTime = new Date(shift.startTime);
-    const endTime = shift.endTime ? new Date(shift.endTime) : startTime;
-    
-    const formData: Partial<ShiftFormData> = {
-      date: startTime.toISOString().split('T')[0],
-      startTime: startTime.toTimeString().slice(0, 5),
-      endTime: endTime.toTimeString().slice(0, 5),
-      breakMinutes: shift.breakMinutes,
-      notes: shift.notes || '',
-      shiftType: shift.shiftType as any
-    };
-
     setEditingShift(shift);
     setShowForm(true);
   };
@@ -333,9 +324,14 @@ export default function ShiftsPage() {
                         </div>
                       )}
 
-                      {shift.notes && (
+                      {(shift.location || shift.notes) && (
                         <div className="mt-2 pt-2 border-top">
-                          <small className="text-muted">{shift.notes}</small>
+                          {shift.location && (
+                            <div className="small text-muted mb-1">📍 {shift.location}</div>
+                          )}
+                          {shift.notes && (
+                            <small className="text-muted">{shift.notes}</small>
+                          )}
                         </div>
                       )}
                     </Card.Body>
@@ -361,7 +357,8 @@ export default function ShiftsPage() {
           endTime: editingShift.endTime ? new Date(editingShift.endTime).toTimeString().slice(0, 5) : '',
           breakMinutes: editingShift.breakMinutes,
           notes: editingShift.notes || '',
-          shiftType: editingShift.shiftType as any
+          location: editingShift.location || '',
+          shiftType: editingShift.shiftType as 'REGULAR' | 'OVERTIME' | 'WEEKEND' | 'PUBLIC_HOLIDAY'
         } : undefined}
         isEdit={!!editingShift}
         loading={formLoading}

@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { PayCalculator } from '@/lib/calculations/pay-calculator';
+import { ShiftType, ShiftStatus } from '@prisma/client';
+import { Decimal } from 'decimal.js';
+
+interface ShiftUpdateData {
+  startTime?: Date;
+  endTime?: Date;
+  breakMinutes?: number;
+  shiftType?: ShiftType;
+  notes?: string;
+  location?: string;
+  status?: ShiftStatus;
+  totalMinutes?: number;
+  regularHours?: Decimal;
+  overtimeHours?: Decimal;
+  penaltyHours?: Decimal;
+  grossPay?: Decimal;
+  superannuation?: Decimal;
+}
 
 export async function GET(
   request: NextRequest,
@@ -20,7 +38,17 @@ export async function GET(
       return NextResponse.json({ error: 'Shift not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ shift });
+    // Convert Decimal fields to numbers for frontend
+    const shiftWithNumbers = {
+      ...shift,
+      regularHours: shift.regularHours?.toNumber() || null,
+      overtimeHours: shift.overtimeHours?.toNumber() || null,
+      penaltyHours: shift.penaltyHours?.toNumber() || null,
+      grossPay: shift.grossPay?.toNumber() || null,
+      superannuation: shift.superannuation?.toNumber() || null
+    };
+
+    return NextResponse.json({ shift: shiftWithNumbers });
   } catch (error) {
     console.error('Get shift error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -33,7 +61,7 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-    const { startTime, endTime, breakMinutes, shiftType, notes, status } = body;
+    const { startTime, endTime, breakMinutes, shiftType, notes, status, location } = body;
 
     // Get existing shift
     const { id } = await params;
@@ -47,13 +75,14 @@ export async function PUT(
     }
 
     // Prepare update data
-    const updateData: any = {};
+    const updateData: ShiftUpdateData = {};
     
     if (startTime) updateData.startTime = new Date(startTime);
     if (endTime) updateData.endTime = new Date(endTime);
     if (breakMinutes !== undefined) updateData.breakMinutes = breakMinutes;
     if (shiftType) updateData.shiftType = shiftType;
     if (notes !== undefined) updateData.notes = notes;
+    if (location !== undefined) updateData.location = location;
     if (status) updateData.status = status;
 
     // If time-related fields are being updated, recalculate pay
@@ -103,7 +132,17 @@ export async function PUT(
       }
     });
 
-    return NextResponse.json({ shift: updatedShift });
+    // Convert Decimal fields to numbers for frontend
+    const updatedShiftWithNumbers = {
+      ...updatedShift,
+      regularHours: updatedShift.regularHours?.toNumber() || null,
+      overtimeHours: updatedShift.overtimeHours?.toNumber() || null,
+      penaltyHours: updatedShift.penaltyHours?.toNumber() || null,
+      grossPay: updatedShift.grossPay?.toNumber() || null,
+      superannuation: updatedShift.superannuation?.toNumber() || null
+    };
+
+    return NextResponse.json({ shift: updatedShiftWithNumbers });
   } catch (error) {
     console.error('Update shift error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
