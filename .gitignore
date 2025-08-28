@@ -78,3 +78,5 @@ pids
 # Temporary folders
 tmp/
 temp/
+
+/generated/prisma

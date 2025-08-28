@@ -19,136 +19,140 @@ While implementing and as you work, keep the plan updated. After you complete a 
 - **Write tests for all new features** unless explicitly told not to
 - **Run tests before commiting** to ensure code quality and functionality
 
+## Project: Chrona - Australian Casual Pay Tracker
 
-## Project Overview
-Chrona is a single-user Next.js application for tracking Australian casual pay with customizable rates, tax calculations, and pay verification. The application focuses on Australian tax compliance including HECS debt, Medicare levy, and complex penalty rate structures.
+### Project Overview
+Chrona is a mobile-first Next.js application designed to track Australian casual pay, forecast future earnings through roster data, and verify actual payments against calculated amounts. This is a single-user application focusing on accurate Australian pay and tax calculations.
 
+**Key Features:**
+- Roster management and shift tracking
+- Australian pay calculation engine (overtime, penalties, casual loading)
+- Australian tax calculations (including HECS-HELP)
+- Pay forecasting and verification
+- Modern, sleek mobile-first interface
+- Pay slip verification against calculated amounts
 
-## Common Development Commands
+**Technology Stack:**
+- Next.js 14+ with App Router and TypeScript
+- Bootstrap 5 with React Bootstrap components
+- Prisma ORM with SQLite (dev) / PostgreSQL (production)
+- React Hook Form for form handling
+- Chart.js/React-Chartjs-2 for data visualization
 
-### Development Server
-```bash
-npm run dev          # Start development server on localhost:3000
-npm run build        # Build for production
-npm run start        # Start production server
-npm run lint         # Run ESLint
-npm run type-check   # Run TypeScript compiler without emitting files
+### Development Environment
+
+**Database Setup:**
+- Development: SQLite with Prisma
+- Production: PostgreSQL support
+- Run migrations: `npx prisma migrate dev`
+- Seed database: `npx prisma db seed`
+
+**Required Commands:**
+- Development server: `npm run dev`
+- Build: `npm run build`
+- Type checking: `npm run type-check`
+- Linting: `npm run lint`
+- Database operations: `npx prisma studio`
+
+### Project Structure Guidelines
+
+**Directory Organization:**
+```
+src/
+├── app/              # Next.js App Router pages
+├── components/       # Reusable UI components
+├── lib/             # Utility functions and configurations
+├── types/           # TypeScript type definitions
+├── hooks/           # Custom React hooks
+└── styles/          # Global styles and Tailwind config
+prisma/
+├── schema.prisma    # Database schema
+├── migrations/      # Database migrations
+└── seed.ts         # Database seeding
 ```
 
-### Database Operations
-```bash
-npx prisma migrate dev          # Create and apply new migration
-npx prisma migrate dev --name   # Create migration with specific name
-npx prisma generate            # Generate Prisma client
-npx prisma studio             # Open Prisma Studio database browser
-npx prisma db seed           # Run seed script (when implemented)
-```
+**Component Naming:**
+- Use kebab-case for component files: `pay-calculator.tsx`
+- Use PascalCase for component names: `PayCalculator`
+- Group related components in subdirectories
+- Wrap React Bootstrap components for consistency: `<Button>` instead of `<BSButton>`
 
-### Key Build Commands
-- Always run `npm run type-check` before committing
-- Run `npm run build` to ensure production build works
-- Database migrations are required when changing `prisma/schema.prisma`
+### Australian Pay Calculation Guidelines
 
-## Architecture Overview
+**Pay Rate Implementation:**
+- All rates must be configurable and updatable
+- Support for multiple award types
+- Accurate overtime calculations (1.5x, 2x)
+- Penalty rates (evening, night, weekend, public holidays)
+- Casual loading (typically 25%)
 
-### Database Architecture (Prisma + SQLite)
-The application uses a comprehensive database schema designed for Australian casual pay tracking:
+**Tax Calculations:**
+- Australian tax brackets with current rates
+- HECS-HELP repayment calculations
+- Medicare levy and surcharge
+- Tax-free threshold handling
+- Accurate net pay calculations
 
-**Core Models:**
-- `Settings` - Single-row configuration for tax settings, HECS debt, superannuation rates
-- `PayRate` - Flexible pay rate system supporting base rates, overtime, penalties, night rates
-- `Shift` - Individual work shifts with calculated hours and pay breakdowns
-- `PayPeriod` - Aggregated pay calculations for fortnightly/weekly periods
-- `PayVerification` - Comparison between calculated and actual pay received
-- `TaxBracket` & `HecsThreshold` - Australian tax tables (seed data)
+**Data Accuracy Requirements:**
+- All calculations must be precise to the cent
+- Use Decimal.js for financial calculations
+- Validate all inputs before processing
+- Store calculated vs actual pay for verification
 
-**Key Design Decisions:**
-- SQLite for development, configurable for production databases
-- Decimal fields for precise financial calculations
-- Effective date tracking for pay rate changes
-- Audit trail with `createdAt`/`updatedAt` on all models
+### Mobile-First Design Guidelines
 
-### Frontend Architecture (Next.js 14 App Router)
+**Responsive Design:**
+- Use Bootstrap's responsive grid system (xs, sm, md, lg, xl breakpoints)
+- Start with mobile design (320px+)
+- Progressive enhancement using Bootstrap utility classes
+- Touch-friendly interfaces with minimum 44px tap targets
+- Optimize for thumb navigation with bottom-aligned primary actions
 
-**Page Structure:**
-- `/` - Landing page with project overview
-- `/dashboard` - Main overview with key metrics and forecasts
-- `/roster` - Shift management and calendar view
-- `/settings` - Tax configuration and pay rate management
-- `/verification` - Pay comparison and accuracy tracking
+**Component Standards:**
+- Use React Bootstrap form components optimized for mobile
+- Implement proper input types for mobile keyboards (tel, email, number)
+- Add loading states using Bootstrap spinners
+- Ensure WCAG compliance using Bootstrap's accessibility features
+- Use Bootstrap's form validation classes for user feedback
 
-**Component Architecture:**
-- `src/components/ui/` - shadcn/ui base components (Button, Card, Form, Input)
-- `src/components/navigation.tsx` - Main navigation with active state handling
-- Form validation using React Hook Form + Zod schemas
-- Responsive design with Tailwind CSS and CSS variables for theming
+**Bootstrap Best Practices:**
+- Use Bootstrap's container-fluid with custom mobile-container class
+- Leverage Bootstrap's spacing utilities (p-*, m-*, g-*)
+- Implement consistent button sizes and variants
+- Use Bootstrap's card components for content organization
+- Apply proper semantic HTML with Bootstrap's utility classes
 
-### Type System (`src/types/index.ts`)
-- Re-exports Prisma-generated types
-- Zod schemas for form validation (`settingsSchema`, `payRateSchema`, etc.)
-- Utility types for calculations and API responses
-- Strong typing for Australian tax calculations
+### Database Migration Guidelines
 
-### Key Technical Patterns
+**Prisma Best Practices:**
+- Always create migrations for schema changes: `npx prisma migrate dev --name descriptive-name`
+- Test migrations with seed data
+- Never modify existing migrations
+- Keep migrations atomic and reversible
 
-**Form Handling:**
-- React Hook Form with Zod resolvers for validation
-- Form components follow shadcn/ui patterns
-- Type-safe form data with inferred Zod types
+**Schema Changes:**
+- Add proper indexes for query optimization
+- Use appropriate data types for Australian currency (Decimal)
+- Include proper constraints and validations
+- Document complex schema relationships
 
-**Database Access:**
-- Centralized Prisma client in `src/lib/db.ts`
-- Development logging enabled for query debugging
-- Global instance management for Next.js hot reloading
+**Data Seeding:**
+- Seed with realistic Australian pay guide data
+- Include current tax brackets and rates
+- Provide sample shifts and pay periods for testing
+- Ensure seed data is regularly updated
 
-**Styling System:**
-- Tailwind CSS with design system tokens
-- shadcn/ui components with variant-based styling
-- CSS variables for consistent theming (light/dark support planned)
+### Pay Verification Standards
 
-## Australian Tax Compliance Features
+**Accuracy Requirements:**
+- Calculate pay to the exact cent
+- Account for rounding rules in Australian payroll
+- Verify calculations against multiple scenarios
+- Log discrepancies for audit purposes
 
-The application is specifically designed for Australian casual workers:
-- Configurable tax-free threshold election
-- HECS/HELP debt tracking and repayment calculations
-- Medicare levy with exemption support
-- Complex penalty rates (weekends, public holidays, night shifts)
-- Fortnightly/weekly pay period support
-- Superannuation guarantee calculation (11%)
+**Testing Standards:**
+- Unit tests for all calculation functions
+- Integration tests for pay period processing
+- E2E tests for critical user workflows
+- Test with edge cases (public holidays, leap years, etc.)
 
-## Development Workflow
-
-### Implementation Planning
-Before major features, create detailed plans in `.claude/tasks/TASK_NAME.md` with:
-- Step-by-step implementation approach
-- Database schema changes required
-- Component and API design
-- Testing strategy
-
-### Database Changes
-1. Modify `prisma/schema.prisma`
-2. Run `npx prisma migrate dev --name descriptive-name`
-3. Update TypeScript types in `src/types/index.ts` if needed
-4. Regenerate Prisma client with `npx prisma generate`
-
-### Component Development
-- Use shadcn/ui patterns for consistency
-- Implement responsive design with Tailwind
-- Create Zod schemas for form validation
-- Follow Next.js App Router conventions
-
-### Financial Calculations
-- Use Decimal fields in database for precision
-- Implement calculation engines in `src/lib/` utilities
-- Create comprehensive test coverage for tax calculations
-- Validate against Australian tax rules and rates
-
-## Current Implementation Status
-Phase 1 (Infrastructure) is complete. The application has:
-- Full database schema with migrations
-- Complete page routing and navigation
-- Component system with shadcn/ui
-- Type system with Zod validation
-- Responsive UI foundation
-
-Next phases focus on implementing the core pay calculation engine, settings management, and shift tracking functionality.
