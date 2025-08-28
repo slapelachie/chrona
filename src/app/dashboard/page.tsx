@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import { CalendarPlus, Clock, DollarSign, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
 import EarningsForecast from '@/components/earnings-forecast';
 import HoursSummary from '@/components/hours-summary';
 import UpcomingShifts from '@/components/upcoming-shifts';
@@ -14,8 +15,15 @@ interface PayPeriodSummary {
   hoursWorked: number;
   estimatedGross: number;
   estimatedNet: number;
+  estimatedTax: number;
+  estimatedSuper: number;
   shiftsRemaining: number;
   daysUntilPay: number;
+  taxBreakdown: {
+    incomeTax: number;
+    medicareLevy: number;
+    hecsRepayment: number;
+  };
 }
 
 interface KeyMetrics {
@@ -38,31 +46,25 @@ export default function DashboardPage() {
     try {
       setLoading(true);
       
-      // TODO: Replace with actual API calls
-      // Simulate API data for now
-      setTimeout(() => {
-        const mockPayPeriod: PayPeriodSummary = {
-          startDate: new Date('2024-11-04'),
-          endDate: new Date('2024-11-17'),
-          payDate: new Date('2024-11-21'),
-          hoursWorked: 32.5,
-          estimatedGross: 1247.50,
-          estimatedNet: 1021.35,
-          shiftsRemaining: 4,
-          daysUntilPay: 8
-        };
-
-        const mockMetrics: KeyMetrics = {
-          weeklyHoursTrend: 2.5,
-          averageHourlyEarnings: 28.45,
-          upcomingPenaltyShifts: 2,
-          verificationStatus: 'pending'
-        };
-
-        setPayPeriodSummary(mockPayPeriod);
-        setKeyMetrics(mockMetrics);
-        setLoading(false);
-      }, 1000);
+      const response = await fetch('/api/dashboard');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch dashboard data');
+      }
+      
+      const data = await response.json();
+      
+      // Convert date strings back to Date objects
+      const payPeriod: PayPeriodSummary = {
+        ...data.payPeriodSummary,
+        startDate: new Date(data.payPeriodSummary.startDate),
+        endDate: new Date(data.payPeriodSummary.endDate),
+        payDate: data.payPeriodSummary.payDate ? new Date(data.payPeriodSummary.payDate) : new Date()
+      };
+      
+      setPayPeriodSummary(payPeriod);
+      setKeyMetrics(data.keyMetrics);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       setLoading(false);
@@ -108,10 +110,12 @@ export default function DashboardPage() {
                 Current pay period: {payPeriodSummary && formatDate(payPeriodSummary.startDate)} - {payPeriodSummary && formatDate(payPeriodSummary.endDate)}
               </p>
             </div>
-            <Button variant="primary" size="sm">
-              <CalendarPlus size={16} className="me-1" />
-              Add Shift
-            </Button>
+            <Link href="/shifts" passHref legacyBehavior>
+              <Button variant="primary" size="sm">
+                <CalendarPlus size={16} className="me-1" />
+                Add Shift
+              </Button>
+            </Link>
           </div>
         </Col>
       </Row>
@@ -178,6 +182,37 @@ export default function DashboardPage() {
                     </div>
                   </Col>
                 </Row>
+                
+                {/* Tax and Super Breakdown */}
+                <div className="mt-4 pt-3 border-top">
+                  <h6 className="text-muted mb-3">Deductions Breakdown</h6>
+                  <Row className="g-3">
+                    <Col sm={6} md={3}>
+                      <div className="text-center p-2 bg-light rounded">
+                        <div className="fw-bold text-danger">{formatCurrency(payPeriodSummary.estimatedTax)}</div>
+                        <small className="text-muted">Total Tax</small>
+                      </div>
+                    </Col>
+                    <Col sm={6} md={3}>
+                      <div className="text-center p-2 bg-light rounded">
+                        <div className="fw-bold text-primary">{formatCurrency(payPeriodSummary.estimatedSuper)}</div>
+                        <small className="text-muted">Superannuation</small>
+                      </div>
+                    </Col>
+                    <Col sm={6} md={3}>
+                      <div className="text-center p-2 bg-light rounded">
+                        <div className="fw-bold text-info">{formatCurrency(payPeriodSummary.taxBreakdown.incomeTax)}</div>
+                        <small className="text-muted">Income Tax</small>
+                      </div>
+                    </Col>
+                    <Col sm={6} md={3}>
+                      <div className="text-center p-2 bg-light rounded">
+                        <div className="fw-bold text-secondary">{formatCurrency(payPeriodSummary.taxBreakdown.medicareLevy + payPeriodSummary.taxBreakdown.hecsRepayment)}</div>
+                        <small className="text-muted">Medicare + HECS</small>
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
               </Card.Body>
             </Card>
           </Col>
@@ -187,13 +222,17 @@ export default function DashboardPage() {
               <Card.Body className="d-flex flex-column">
                 <h5 className="card-title mb-3">Quick Actions</h5>
                 <div className="d-grid gap-2 flex-grow-1">
-                  <Button variant="outline-primary" size="lg">
-                    <CalendarPlus size={18} className="me-2" />
-                    Add New Shift
-                  </Button>
-                  <Button variant="outline-secondary">
-                    View All Shifts
-                  </Button>
+                  <Link href="/shifts" passHref legacyBehavior>
+                    <Button variant="outline-primary" size="lg">
+                      <CalendarPlus size={18} className="me-2" />
+                      Add New Shift
+                    </Button>
+                  </Link>
+                  <Link href="/shifts" passHref legacyBehavior>
+                    <Button variant="outline-secondary">
+                      View All Shifts
+                    </Button>
+                  </Link>
                   <Button variant="outline-info">
                     Pay Verification
                   </Button>
@@ -286,10 +325,12 @@ export default function DashboardPage() {
       <div className="d-lg-none fixed-bottom bg-body border-top p-3">
         <Row>
           <Col>
-            <Button variant="primary" className="w-100" size="lg">
-              <CalendarPlus size={20} className="me-2" />
-              Add Shift
-            </Button>
+            <Link href="/shifts" passHref legacyBehavior>
+              <Button variant="primary" className="w-100" size="lg">
+                <CalendarPlus size={20} className="me-2" />
+                Add Shift
+              </Button>
+            </Link>
           </Col>
         </Row>
       </div>

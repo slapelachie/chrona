@@ -18,7 +18,6 @@ export interface ShiftAnalysis {
   duration: {
     totalMinutes: number;
     workingMinutes: number;
-    breakMinutes: number;
     hours: number;
     workingHours: number;
   };
@@ -111,7 +110,7 @@ export class ShiftUtils {
         errors.push('End time must be after start time');
       }
 
-      const duration = this.dateUtils.calculateDuration(shift.startTime, shift.endTime);
+      const duration = this.dateUtils.calculateDuration(shift.startTime, shift.endTime, shift.breakMinutes);
       
       // Duration checks
       if (duration.totalMinutes < 30) {
