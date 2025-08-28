@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, VerificationStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -60,7 +60,7 @@ export async function GET(
       taxDifference: verification.actualTax.toNumber() - calculatedTax,
       netPayDifference: verification.actualNetPay.toNumber() - calculatedNetPay,
       superDifference: (verification.actualSuper?.toNumber() || 0) - calculatedSuper,
-      hasDiscrepancy: verification.status === 'DISCREPANCY',
+      hasDiscrepancy: verification.status === VerificationStatus.DISCREPANCY,
       shifts: verification.payPeriod.shifts.map(ps => ({
         id: ps.shift.id,
         startTime: ps.shift.startTime,
@@ -138,7 +138,7 @@ export async function PUT(
       grossPayDifference?: number;
       taxDifference?: number;
       netPayDifference?: number;
-      status?: string;
+      status?: VerificationStatus;
     } = {
       paySlipReference: paySlipReference || null,
       notes: notes || null
@@ -168,12 +168,12 @@ export async function PUT(
         actualGrossPay: newGross,
         actualTax: newTax,
         actualNetPay: newNet,
-        actualSuper: actualSuper !== undefined ? parseFloat(actualSuper) : existingVerification.actualSuper,
-        actualHECS: actualHECS !== undefined ? parseFloat(actualHECS) : existingVerification.actualHECS,
+        actualSuper: actualSuper !== undefined ? parseFloat(actualSuper) : existingVerification.actualSuper?.toNumber() || null,
+        actualHECS: actualHECS !== undefined ? parseFloat(actualHECS) : existingVerification.actualHECS?.toNumber() || null,
         grossPayDifference,
         taxDifference,
         netPayDifference,
-        status: status || (hasDiscrepancy ? 'DISCREPANCY' : 'MATCHED')
+        status: status || (hasDiscrepancy ? VerificationStatus.DISCREPANCY : VerificationStatus.MATCHED)
       };
     } else if (status) {
       updateData.status = status;
@@ -194,7 +194,7 @@ export async function PUT(
         calculatedGrossPay: existingVerification.payPeriod.totalGrossPay?.toNumber() || 0,
         calculatedTax: existingVerification.payPeriod.totalTax?.toNumber() || 0,
         calculatedNetPay: existingVerification.payPeriod.totalNetPay?.toNumber() || 0,
-        hasDiscrepancy: updatedVerification.status === 'DISCREPANCY'
+        hasDiscrepancy: updatedVerification.status === VerificationStatus.DISCREPANCY
       }
     });
 

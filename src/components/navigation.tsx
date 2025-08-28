@@ -193,7 +193,7 @@ export default function Navigation() {
             {navigationItems.slice(0, 5).map((item) => (
               <div key={item.href} className="col">
                 <Link
-                  href={item.href}
+                  href={item.href as any}
                   className={`d-block py-2 text-decoration-none ${
                     isActive(item.href) ? 'text-primary' : 'text-light'
                   }`}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, VerificationStatus } from '@prisma/client';
 import { PayPeriodCalculator } from '@/lib/calculations/pay-period-calculator';
 
 const prisma = new PrismaClient();
@@ -18,27 +18,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Build query filters
-    const where: { userId: string; status?: string } = {
+    const where: { userId: string; status?: VerificationStatus } = {
       userId: user.id,
     };
 
     if (status) {
-      where.status = status.toUpperCase();
+      where.status = status.toUpperCase() as VerificationStatus;
     }
 
     // Query pay verifications with related data
     const verifications = await prisma.payVerification.findMany({
       where,
       include: {
-        payPeriod: {
-          include: {
-            shifts: {
-              include: {
-                shift: true
-              }
-            }
-          }
-        }
+        payPeriod: true
       },
       orderBy: {
         verificationDate: 'desc'
@@ -69,10 +61,10 @@ export async function GET(request: NextRequest) {
       verifications: verificationsWithDiscrepancies,
       summary: {
         total: verifications.length,
-        pending: verifications.filter(v => v.status === 'PENDING').length,
-        matched: verifications.filter(v => v.status === 'MATCHED').length,
-        discrepancies: verifications.filter(v => v.status === 'DISCREPANCY').length,
-        resolved: verifications.filter(v => v.status === 'RESOLVED').length,
+        pending: verifications.filter(v => v.status === VerificationStatus.PENDING).length,
+        matched: verifications.filter(v => v.status === VerificationStatus.MATCHED).length,
+        discrepancies: verifications.filter(v => v.status === VerificationStatus.DISCREPANCY).length,
+        resolved: verifications.filter(v => v.status === VerificationStatus.RESOLVED).length,
       }
     });
 
@@ -183,7 +175,7 @@ export async function POST(request: NextRequest) {
                           Math.abs(taxDifference) > tolerance || 
                           Math.abs(netPayDifference) > tolerance;
 
-    const status = hasDiscrepancy ? 'DISCREPANCY' : 'MATCHED';
+    const status = hasDiscrepancy ? VerificationStatus.DISCREPANCY : VerificationStatus.MATCHED;
 
     // Create pay verification record
     const verification = await prisma.payVerification.create({
