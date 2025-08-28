@@ -141,7 +141,7 @@ export class TaxCalculator {
     }
 
     let tax = new Decimal(0);
-    let remainingIncome = taxableIncome;
+    const remainingIncome = taxableIncome;
 
     // Sort tax brackets by minimum income
     const sortedBrackets = [...this.taxBrackets].sort((a, b) => 
@@ -176,7 +176,7 @@ export class TaxCalculator {
 
   private calculateTaxBracketBreakdown(taxableIncome: Decimal): TaxBracketCalculation[] {
     const breakdown: TaxBracketCalculation[] = [];
-    let remainingIncome = taxableIncome;
+    const remainingIncome = taxableIncome;
 
     const sortedBrackets = [...this.taxBrackets].sort((a, b) => 
       new Decimal(a.minIncome).sub(new Decimal(b.minIncome)).toNumber()
