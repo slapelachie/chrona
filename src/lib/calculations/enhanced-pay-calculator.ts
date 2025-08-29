@@ -199,33 +199,45 @@ export class EnhancedPayCalculator {
   }
 
   private getAllApplicablePenalties(startTime: Date, endTime: Date): ('evening' | 'night' | 'weekend' | 'public_holiday')[] {
-    const avgTime = new Date((startTime.getTime() + endTime.getTime()) / 2);
     const penalties: ('evening' | 'night' | 'weekend' | 'public_holiday')[] = [];
     
-    // Check if it's a public holiday (highest priority)
-    if (this.isPublicHoliday(avgTime)) {
+    // For time segments, we need to check the actual time period, not the average
+    // We'll check both start and end times to capture any penalties that apply during this segment
+    
+    // Check for public holiday - use start time to determine the date
+    if (this.isPublicHoliday(startTime)) {
       penalties.push('public_holiday');
     }
     
-    // Check if it's weekend
-    const dayOfWeek = avgTime.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) { // Sunday or Saturday
+    // Check for weekend penalties - check both start and end dates for segments that cross midnight
+    const startDayOfWeek = startTime.getDay();
+    const endDayOfWeek = endTime.getDay();
+    
+    // If this segment includes weekend time, mark as weekend
+    if (startDayOfWeek === 0 || startDayOfWeek === 6 || endDayOfWeek === 0 || endDayOfWeek === 6) {
       penalties.push('weekend');
     }
     
-    // Check time-based penalties (can combine with weekend/public holiday)
-    const timeStr = this.formatTime(avgTime);
+    // Check time-based penalties for the entire segment duration
+    const startTimeStr = this.formatTime(startTime);
+    const endTimeStr = this.formatTime(endTime);
     const eveningStart = this.payGuide.eveningStart;
     const eveningEnd = this.payGuide.eveningEnd;
     const nightStart = this.payGuide.nightStart;
     const nightEnd = this.payGuide.nightEnd;
     
-    // Night penalty check (higher priority than evening)
-    if (this.isTimeBetween(timeStr, nightStart, nightEnd)) {
-      penalties.push('night');
-    } else if (this.isTimeBetween(timeStr, eveningStart, eveningEnd)) {
+    // Check if any part of this segment falls within evening hours
+    const hasEvening = this.segmentOverlapsWith(startTimeStr, endTimeStr, eveningStart, eveningEnd);
+    if (hasEvening) {
       penalties.push('evening');
     }
+    
+    // Check if any part of this segment falls within night hours  
+    const hasNight = this.segmentOverlapsWith(startTimeStr, endTimeStr, nightStart, nightEnd);
+    if (hasNight) {
+      penalties.push('night');
+    }
+    
     
     // Apply combination rules if configured
     if (!this.payGuide.allowPenaltyCombination && penalties.length > 1) {
@@ -506,19 +518,35 @@ export class EnhancedPayCalculator {
 
   // Helper methods (reused from original PayCalculator)
   private getNextSegmentBoundary(currentTime: Date, endTime: Date): Date {
+    // Get boundaries on current day
     const boundaries = [
       this.getTimeOnDate(currentTime, this.payGuide.eveningStart),
       this.getTimeOnDate(currentTime, this.payGuide.eveningEnd),
       this.getTimeOnDate(currentTime, this.payGuide.nightStart),
-      this.getTimeOnDate(currentTime, this.payGuide.nightEnd),
       // Handle midnight boundary
-      new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate() + 1, 0, 0, 0),
+      new Date(Date.UTC(currentTime.getUTCFullYear(), currentTime.getUTCMonth(), currentTime.getUTCDate() + 1, 0, 0, 0)),
       endTime
     ];
+    
+    // For night end time, we need to check if it should be next day
+    // Night periods that cross midnight (e.g., 22:00-06:00) need special handling
+    const nightStartMinutes = this.timeStringToMinutes(this.payGuide.nightStart);
+    const nightEndMinutes = this.timeStringToMinutes(this.payGuide.nightEnd);
+    
+    if (nightEndMinutes <= nightStartMinutes) {
+      // Night period crosses midnight, so night end is on the next day
+      const nextDay = new Date(currentTime);
+      nextDay.setUTCDate(currentTime.getUTCDate() + 1);
+      boundaries.push(this.getTimeOnDate(nextDay, this.payGuide.nightEnd));
+    } else {
+      // Night period is on same day
+      boundaries.push(this.getTimeOnDate(currentTime, this.payGuide.nightEnd));
+    }
 
-    return boundaries
-      .filter(boundary => boundary > currentTime)
-      .sort((a, b) => a.getTime() - b.getTime())[0] || endTime;
+    const validBoundaries = boundaries.filter(boundary => boundary > currentTime);
+    const nextBoundary = validBoundaries.sort((a, b) => a.getTime() - b.getTime())[0] || endTime;
+    
+    return nextBoundary;
   }
 
   private isPublicHoliday(date: Date): boolean {
@@ -531,11 +559,20 @@ export class EnhancedPayCalculator {
 
   private getTimeOnDate(date: Date, timeStr: string): Date {
     const [hours, minutes] = timeStr.split(':').map(Number);
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes, 0);
+    
+    // Create the date in UTC to avoid timezone conversion issues
+    // Extract the UTC date components from the input date
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const day = date.getUTCDate();
+    
+    // Create the result date in UTC with the specified time
+    const result = new Date(Date.UTC(year, month, day, hours, minutes, 0));
+    return result;
   }
 
   private formatTime(date: Date): string {
-    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    return `${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
   }
 
   private isTimeBetween(timeStr: string, startStr: string, endStr: string): boolean {
@@ -554,5 +591,49 @@ export class EnhancedPayCalculator {
   private timeStringToMinutes(timeStr: string): number {
     const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 60 + minutes;
+  }
+
+  /**
+   * Check if a time segment overlaps with a penalty period
+   * Handles overnight periods (e.g., night shift 22:00-06:00)
+   */
+  private segmentOverlapsWith(segmentStart: string, segmentEnd: string, penaltyStart: string, penaltyEnd: string): boolean {
+    const segStart = this.timeStringToMinutes(segmentStart);
+    let segEnd = this.timeStringToMinutes(segmentEnd);
+    const penStart = this.timeStringToMinutes(penaltyStart);
+    const penEnd = this.timeStringToMinutes(penaltyEnd);
+    
+    // Handle segment that crosses midnight (e.g., 22:00-00:00)
+    // If segment end is less than start, it crosses midnight
+    if (segEnd < segStart) {
+      segEnd += 1440; // Add 24 hours in minutes
+    }
+    
+    // Handle normal penalty periods (e.g., evening: 18:00-22:00)
+    if (penStart <= penEnd) {
+      // For normal penalty periods, check straightforward overlap
+      return !(segEnd <= penStart || segStart >= penEnd);
+    }
+    
+    // Handle overnight penalty periods (e.g., night: 22:00-06:00)
+    // The penalty period crosses midnight
+    else {
+      // Check if segment overlaps with either:
+      // 1. Late night portion (22:00-24:00)
+      // 2. Early morning portion (00:00-06:00)
+      
+      // For segments that also cross midnight, we need to check both parts
+      if (segEnd > 1440) {
+        // Segment crosses midnight, split it into two parts
+        const lateNightOverlap = !(1440 <= penStart || segStart >= 1440);  // 22:00-24:00
+        const earlyMorningOverlap = !((segEnd - 1440) <= 0 || 0 >= penEnd); // 00:00-06:00
+        return lateNightOverlap || earlyMorningOverlap;
+      } else {
+        // Segment doesn't cross midnight
+        const overlapsLateNight = !(segEnd <= penStart || segStart >= 1440);  // Check against 22:00-24:00
+        const overlapsEarlyMorning = !(segEnd <= 0 || segStart >= penEnd);    // Check against 00:00-06:00
+        return overlapsLateNight || overlapsEarlyMorning;
+      }
+    }
   }
 }
