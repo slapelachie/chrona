@@ -72,173 +72,91 @@ export default function EnhancedShiftForm({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<ShiftPreview | null>(null);
-  interface PayGuideData {
-    baseHourlyRate: string;
-    casualLoading: string;
-    dailyOvertimeHours: string;
-    weeklyOvertimeHours: string;
-    eveningPenalty: string;
-    nightPenalty: string;
-    saturdayPenalty: string;
-    sundayPenalty: string;
-    publicHolidayPenalty: string;
-  }
-
-  const [payGuideData, setPayGuideData] = useState<PayGuideData | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [showPenaltyOverrides, setShowPenaltyOverrides] = useState(false);
+  
+  // Debounce timer for API calls
+  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
 
-  // Fetch pay guide data when selection changes
+  // Calculate shift preview with server-side API
   useEffect(() => {
-    if (formData.payGuideId) {
-      fetchPayGuideData(formData.payGuideId);
-    }
-  }, [formData.payGuideId]);
-
-  // Calculate shift preview with enhanced calculator
-
-  useEffect(() => {
-    if (formData.payGuideId && payGuideData) {
-      const newPreview = calculateShiftPreview(formData);
-      setPreview(newPreview);
-    }
-  }, [formData, payGuideData]);
-
-  const fetchPayGuideData = async (payGuideId: string) => {
-    try {
-      const response = await fetch(`/api/pay-rates/${payGuideId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setPayGuideData(data);
+    if (formData.payGuideId && formData.startTime && formData.endTime && formData.date) {
+      // Clear any existing timer
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
       }
-    } catch (error) {
-      console.error('Error fetching pay guide data:', error);
-    }
-  };
-
-  // Calculate shift preview with enhanced calculator
-  const calculateShiftPreview = (data: ShiftFormData): ShiftPreview => {
-    if (!payGuideData) {
-      return {
-        duration: 0,
-        estimatedPay: 0,
-        hasWarnings: false,
-        warnings: [],
-        appliedPenalties: []
+      
+      // Set a new debounced timer
+      const timer = setTimeout(() => {
+        calculateShiftPreview(formData);
+      }, 500); // 500ms debounce
+      
+      setDebounceTimer(timer);
+      
+      return () => {
+        if (timer) {
+          clearTimeout(timer);
+        }
       };
+    } else {
+      setPreview(null);
     }
+  }, [formData]);
 
-    const startDateTime = new Date(`${data.date}T${data.startTime}`);
-    const endDateTime = new Date(`${data.date}T${data.endTime}`);
-    
-    // Handle overnight shifts
-    if (endDateTime <= startDateTime) {
-      endDateTime.setDate(endDateTime.getDate() + 1);
-    }
-
-    const totalMinutes = (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60);
-    const workingMinutes = Math.max(0, totalMinutes - data.breakMinutes);
-    const duration = workingMinutes / 60;
-
-    // Mock calculation for now (would use EnhancedPayCalculator in real implementation)
-    const baseRate = parseFloat(payGuideData.baseHourlyRate);
-    const casualLoading = parseFloat(payGuideData.casualLoading);
-    
-    let regularPay = duration * baseRate;
-    let overtimePay = 0;
-    let penaltyPay = 0;
-
-    // Calculate overtime
-    if (duration > parseFloat(payGuideData.dailyOvertimeHours)) {
-      const overtimeHours = duration - parseFloat(payGuideData.dailyOvertimeHours);
-      overtimePay = overtimeHours * baseRate * 0.5; // 1.5x rate
-      regularPay = parseFloat(payGuideData.dailyOvertimeHours) * baseRate;
-    }
-
-    // Determine applied penalties
-    const appliedPenalties: string[] = [];
-    const dayOfWeek = startDateTime.getDay();
-    const hour = startDateTime.getHours();
-
-    // Auto-detect penalties (can be overridden)
-    const autoPenalties: PenaltyOverride = {};
-    
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      autoPenalties.weekend = true;
-      appliedPenalties.push(dayOfWeek === 0 ? 'Sunday' : 'Saturday');
+  // Calculate shift preview using server-side API
+  const calculateShiftPreview = async (data: ShiftFormData) => {
+    if (!data.payGuideId || !data.startTime || !data.endTime || !data.date) {
+      return;
     }
     
-    //FIXME, this only uses the start time, in reality, it should split up the penalty to be ordinary
-    // hours and night hours
-    if (hour >= 18 && hour < 22) {
-      autoPenalties.evening = true;
-      appliedPenalties.push('Evening');
-    }
+    setPreviewLoading(true);
+    setPreviewError(null);
     
-    if (hour >= 22 || hour < 6) {
-      autoPenalties.night = true;
-      appliedPenalties.push('Night');
-    }
-
-    // Apply overrides
-    const finalPenalties = { ...autoPenalties, ...data.penaltyOverrides };
-    
-    // Calculate penalty pay
-    if (finalPenalties.evening) {
-      penaltyPay += duration * baseRate * (parseFloat(payGuideData.eveningPenalty) - 1);
-    }
-    if (finalPenalties.night) {
-      penaltyPay += duration * baseRate * (parseFloat(payGuideData.nightPenalty) - 1);
-    }
-    if (finalPenalties.weekend) {
-      const weekendMultiplier = dayOfWeek === 0 ? 
-        parseFloat(payGuideData.sundayPenalty) : 
-        parseFloat(payGuideData.saturdayPenalty);
-      penaltyPay += duration * baseRate * (weekendMultiplier - 1);
-    }
-
-    // Apply casual loading
-    const totalBeforeLoading = regularPay + overtimePay + penaltyPay;
-    const casualLoadingAmount = totalBeforeLoading * casualLoading;
-    const estimatedPay = totalBeforeLoading + casualLoadingAmount;
-
-    // Generate warnings
-    const warnings: string[] = [];
-    
-    if (duration < 3) {
-      warnings.push('Very short shift (less than 3 hours)');
-    }
-    
-    if (duration > 12) {
-      warnings.push('Very long shift (more than 12 hours)');
-    }
-    
-    if (duration > 5 && data.breakMinutes < 30) {
-      warnings.push('Shifts over 5 hours should have at least 30 minutes break');
-    }
-    
-    if (duration > 10 && data.breakMinutes < 60) {
-      warnings.push('Shifts over 10 hours should have at least 60 minutes break');
-    }
-
-    // Check for penalty overrides
-    if (!data.autoCalculatePenalties || Object.keys(data.penaltyOverrides || {}).length > 0) {
-      warnings.push('Manual penalty overrides are active');
-    }
-
-    return {
-      duration: Math.round(duration * 100) / 100,
-      estimatedPay: Math.round(estimatedPay * 100) / 100,
-      hasWarnings: warnings.length > 0,
-      warnings,
-      appliedPenalties,
-      breakdown: {
-        regularPay: Math.round(regularPay * 100) / 100,
-        overtimePay: Math.round(overtimePay * 100) / 100,
-        penaltyPay: Math.round(penaltyPay * 100) / 100,
-        casualLoading: Math.round(casualLoadingAmount * 100) / 100
+    try {
+      const startTimeISO = `${data.date}T${data.startTime}:00.000Z`;
+      let endTimeISO = `${data.date}T${data.endTime}:00.000Z`;
+      
+      // Handle overnight shifts
+      const startTime = new Date(startTimeISO);
+      const endTime = new Date(endTimeISO);
+      if (endTime <= startTime) {
+        const nextDay = new Date(endTime);
+        nextDay.setDate(nextDay.getDate() + 1);
+        endTimeISO = nextDay.toISOString();
       }
-    };
+      
+      const response = await fetch('/api/shifts/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          startTime: startTimeISO,
+          endTime: endTimeISO,
+          breakMinutes: data.breakMinutes,
+          payGuideId: data.payGuideId,
+          penaltyOverrides: data.penaltyOverrides,
+          autoCalculatePenalties: data.autoCalculatePenalties
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to calculate preview');
+      }
+      
+      const previewData = await response.json();
+      setPreview(previewData);
+    } catch (error) {
+      console.error('Preview calculation error:', error);
+      setPreviewError(error instanceof Error ? error.message : 'Failed to calculate preview');
+      setPreview(null);
+    } finally {
+      setPreviewLoading(false);
+    }
   };
+
 
   const handleInputChange = (field: keyof ShiftFormData, value: string | number | boolean | PenaltyOverride) => {
     const newData = { ...formData, [field]: value };
@@ -565,7 +483,7 @@ export default function EnhancedShiftForm({
 
             {/* Shift Preview */}
             <Col lg={4}>
-              {preview && (
+              {(preview || previewLoading || previewError) && (
                 <Card className="sticky-top">
                   <Card.Header>
                     <h6 className="mb-0 d-flex align-items-center">
@@ -574,18 +492,38 @@ export default function EnhancedShiftForm({
                     </h6>
                   </Card.Header>
                   <Card.Body>
-                    <div className="mb-3">
-                      <div className="d-flex justify-content-between mb-2">
-                        <span className="text-muted">Duration</span>
-                        <strong>{preview.duration}h</strong>
+                    {previewLoading && (
+                      <div className="d-flex justify-content-center align-items-center py-4">
+                        <div className="spinner-border spinner-border-sm me-2" role="status" />
+                        <span className="text-muted">Calculating...</span>
                       </div>
-                      <div className="d-flex justify-content-between mb-3">
-                        <span className="text-muted">Estimated Pay</span>
-                        <strong className="text-success h5 mb-0">
-                          ${preview.estimatedPay.toFixed(2)}
-                        </strong>
-                      </div>
-                    </div>
+                    )}
+                    
+                    {previewError && (
+                      <Alert variant="warning" className="py-2 mb-0">
+                        <div className="d-flex align-items-start">
+                          <AlertCircle size={16} className="me-2 mt-1 flex-shrink-0" />
+                          <div className="small">
+                            Error calculating preview: {previewError}
+                          </div>
+                        </div>
+                      </Alert>
+                    )}
+                    
+                    {preview && !previewLoading && (
+                      <>
+                        <div className="mb-3">
+                          <div className="d-flex justify-content-between mb-2">
+                            <span className="text-muted">Duration</span>
+                            <strong>{preview.duration}h</strong>
+                          </div>
+                          <div className="d-flex justify-content-between mb-3">
+                            <span className="text-muted">Estimated Pay</span>
+                            <strong className="text-success h5 mb-0">
+                              ${preview.estimatedPay.toFixed(2)}
+                            </strong>
+                          </div>
+                        </div>
 
                     {preview.breakdown && (
                       <div className="mb-3">
@@ -628,17 +566,19 @@ export default function EnhancedShiftForm({
                       </div>
                     )}
 
-                    {preview.hasWarnings && (
-                      <Alert variant="warning" className="py-2 mb-0">
-                        <div className="d-flex align-items-start">
-                          <AlertCircle size={16} className="me-2 mt-1 flex-shrink-0" />
-                          <div>
-                            {preview.warnings.map((warning, index) => (
-                              <div key={index} className="small">{warning}</div>
-                            ))}
-                          </div>
-                        </div>
-                      </Alert>
+                        {preview.hasWarnings && (
+                          <Alert variant="warning" className="py-2 mb-0">
+                            <div className="d-flex align-items-start">
+                              <AlertCircle size={16} className="me-2 mt-1 flex-shrink-0" />
+                              <div>
+                                {preview.warnings.map((warning, index) => (
+                                  <div key={index} className="small">{warning}</div>
+                                ))}
+                              </div>
+                            </div>
+                          </Alert>
+                        )}
+                      </>
                     )}
                   </Card.Body>
                 </Card>
