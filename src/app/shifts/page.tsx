@@ -1,9 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Badge, Alert, Dropdown } from 'react-bootstrap';
-import { CalendarPlus, Clock, DollarSign, MoreVertical, Edit, Trash, Calendar } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Container, Row, Col, Card, Button, Alert, Spinner } from 'react-bootstrap';
+import { CalendarPlus, Calendar } from 'lucide-react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import EnhancedShiftForm from '@/components/enhanced-shift-form';
+import ShiftFilters from '@/components/shift-filters';
+import ShiftGroupHeader from '@/components/shift-group-header';
+import ShiftSummaryCards from '@/components/shift-summary-cards';
+import InfiniteScrollContainer from '@/components/infinite-scroll-container';
+import ShiftCard from '@/components/shift-card';
+import { PayPeriodGroup, ShiftFilters as ShiftFiltersType } from '@/types';
 
 interface Shift {
   id: string;
@@ -49,35 +56,121 @@ interface ShiftFormData {
 }
 
 export default function ShiftsPage() {
-  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [payPeriods, setPayPeriods] = useState<PayPeriodGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  
+  // Filter state from URL params
+  const [filters, setFilters] = useState<ShiftFiltersType>({
+    status: searchParams.get('status') || undefined,
+    startDate: searchParams.get('startDate') || undefined,
+    endDate: searchParams.get('endDate') || undefined,
+    payPeriodId: searchParams.get('payPeriodId') || undefined,
+    location: searchParams.get('location') || undefined,
+    shiftType: searchParams.get('shiftType') || undefined,
+  });
 
-  useEffect(() => {
-    fetchShifts();
-  }, []);
+  // Update URL when filters change
+  const updateURL = useCallback((newFilters: ShiftFiltersType) => {
+    const params = new URLSearchParams();
+    
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value);
+      }
+    });
+    
+    const newURL = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(newURL);
+  }, [pathname, router]);
 
-  const fetchShifts = async () => {
+  const buildApiURL = (cursor?: string) => {
+    const params = new URLSearchParams({
+      groupByPayPeriod: 'true',
+      pageSize: '20'
+    });
+    
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value);
+      }
+    });
+    
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
+    
+    return `/api/shifts?${params.toString()}`;
+  };
+
+  const fetchShifts = async (reset = false) => {
     try {
-      setLoading(true);
-      const response = await fetch('/api/shifts?limit=50');
+      if (reset) {
+        setLoading(true);
+        setPayPeriods([]);
+        setNextCursor(null);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
+      }
+      
+      const url = buildApiURL(reset ? undefined : (nextCursor || undefined));
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error('Failed to fetch shifts');
       }
       
       const data = await response.json();
-      setShifts(data.shifts);
+      
+      if (reset) {
+        setPayPeriods(data.payPeriods || []);
+      } else {
+        setPayPeriods(prev => [...prev, ...(data.payPeriods || [])]);
+      }
+      
+      setNextCursor(data.pagination?.nextCursor || null);
+      setHasMore(data.pagination?.hasMore || false);
     } catch (error) {
       console.error('Error fetching shifts:', error);
       setError('Failed to load shifts');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  };
+
+  const handleLoadMore = useCallback(() => {
+    if (!loadingMore && hasMore && nextCursor) {
+      fetchShifts(false);
+    }
+  }, [loadingMore, hasMore, nextCursor]);
+
+  // Fetch shifts when filters change
+  useEffect(() => {
+    fetchShifts(true);
+  }, [filters]);
+
+  const handleFiltersChange = (newFilters: ShiftFiltersType) => {
+    setFilters(newFilters);
+    updateURL(newFilters);
+  };
+
+  const handleResetFilters = () => {
+    const emptyFilters: ShiftFiltersType = {};
+    setFilters(emptyFilters);
+    updateURL(emptyFilters);
   };
 
   const handleSubmitShift = async (formData: ShiftFormData) => {
@@ -121,7 +214,7 @@ export default function ShiftsPage() {
       setSuccess(editingShift ? 'Shift updated successfully!' : 'Shift added successfully!');
       setShowForm(false);
       setEditingShift(null);
-      fetchShifts();
+      fetchShifts(true); // Reset and reload
     } catch (error) {
       console.error('Error saving shift:', error);
       setError(error instanceof Error ? error.message : 'Failed to save shift');
@@ -150,53 +243,10 @@ export default function ShiftsPage() {
       }
 
       setSuccess('Shift deleted successfully!');
-      fetchShifts();
+      fetchShifts(true); // Reset and reload
     } catch (error) {
       console.error('Error deleting shift:', error);
       setError('Failed to delete shift');
-    }
-  };
-
-  const formatDateTime = (dateTime: string) => {
-    return new Date(dateTime).toLocaleString('en-AU', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const formatCurrency = (amount: number | null) => {
-    if (amount === null) return '-';
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD'
-    }).format(amount);
-  };
-
-  const formatHours = (hours: number | null) => {
-    if (hours === null) return '-';
-    return `${hours.toFixed(1)}h`;
-  };
-
-  const getShiftTypeColor = (shiftType: string) => {
-    switch (shiftType) {
-      case 'REGULAR': return 'primary';
-      case 'OVERTIME': return 'warning';
-      case 'WEEKEND': return 'info';
-      case 'PUBLIC_HOLIDAY': return 'success';
-      default: return 'secondary';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'COMPLETED': return 'success';
-      case 'SCHEDULED': return 'warning';
-      case 'CANCELLED': return 'danger';
-      case 'NO_SHOW': return 'dark';
-      default: return 'secondary';
     }
   };
 
@@ -204,9 +254,9 @@ export default function ShiftsPage() {
     return (
       <Container fluid className="py-4">
         <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '200px' }}>
-          <div className="spinner-border text-primary" role="status">
+          <Spinner animation="border" variant="primary">
             <span className="visually-hidden">Loading...</span>
-          </div>
+          </Spinner>
         </div>
       </Container>
     );
@@ -251,15 +301,35 @@ export default function ShiftsPage() {
         </Alert>
       )}
 
-      {/* Shifts List */}
+      {/* Summary Cards */}
+      <ShiftSummaryCards 
+        payPeriods={payPeriods} 
+        loading={loading}
+        className="mb-4"
+      />
+
+      {/* Filters */}
+      <ShiftFilters
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+        onReset={handleResetFilters}
+        className="mb-4"
+      />
+
+      {/* Shifts Content */}
       <Row>
         <Col>
-          {shifts.length === 0 ? (
-            <Card className="text-center py-5">
+          {payPeriods.length === 0 && !loading ? (
+            <Card className="text-center py-5 border-0 shadow-sm">
               <Card.Body>
                 <Calendar size={48} className="text-muted mb-3" />
                 <h5 className="text-muted">No shifts found</h5>
-                <p className="text-muted mb-4">Start by adding your first shift</p>
+                <p className="text-muted mb-4">
+                  {Object.values(filters).some(v => v) 
+                    ? 'Try adjusting your filters or add a new shift'
+                    : 'Start by adding your first shift'
+                  }
+                </p>
                 <Button 
                   variant="primary" 
                   onClick={() => {
@@ -273,88 +343,33 @@ export default function ShiftsPage() {
               </Card.Body>
             </Card>
           ) : (
-            <div className="row">
-              {shifts.map((shift) => (
-                <div key={shift.id} className="col-12 col-lg-6 col-xl-4 mb-3">
-                  <Card className="h-100">
-                    <Card.Body>
-                      <div className="d-flex justify-content-between align-items-start mb-3">
-                        <div>
-                          <Badge bg={getShiftTypeColor(shift.shiftType)} className="mb-1">
-                            {shift.shiftType.toLowerCase().replace('_', ' ')}
-                          </Badge>
-                          <Badge bg={getStatusColor(shift.status)} className="ms-1">
-                            {shift.status.toLowerCase()}
-                          </Badge>
-                        </div>
-                        <Dropdown align="end">
-                          <Dropdown.Toggle variant="light" size="sm" className="border-0">
-                            <MoreVertical size={16} />
-                          </Dropdown.Toggle>
-                          <Dropdown.Menu>
-                            <Dropdown.Item onClick={() => handleEditShift(shift)}>
-                              <Edit size={14} className="me-2" />
-                              Edit
-                            </Dropdown.Item>
-                            <Dropdown.Divider />
-                            <Dropdown.Item 
-                              className="text-danger" 
-                              onClick={() => handleDeleteShift(shift.id)}
-                            >
-                              <Trash size={14} className="me-2" />
-                              Delete
-                            </Dropdown.Item>
-                          </Dropdown.Menu>
-                        </Dropdown>
-                      </div>
-
-                      <div className="mb-3">
-                        <div className="fw-bold">{formatDateTime(shift.startTime)}</div>
-                        {shift.endTime && (
-                          <div className="text-muted small">
-                            to {formatDateTime(shift.endTime)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="row small text-muted mb-2">
-                        <div className="col-6">
-                          <Clock size={12} className="me-1" />
-                          {shift.totalMinutes ? `${(shift.totalMinutes / 60).toFixed(1)}h` : '-'}
-                        </div>
-                        <div className="col-6">
-                          <DollarSign size={12} className="me-1" />
-                          {formatCurrency(shift.grossPay)}
-                        </div>
-                      </div>
-
-                      {(shift.regularHours || shift.overtimeHours || shift.penaltyHours) && (
-                        <div className="small">
-                          <div>Regular: {formatHours(shift.regularHours)}</div>
-                          {shift.overtimeHours && shift.overtimeHours > 0 && (
-                            <div>Overtime: {formatHours(shift.overtimeHours)}</div>
-                          )}
-                          {shift.penaltyHours && shift.penaltyHours > 0 && (
-                            <div>Penalty: {formatHours(shift.penaltyHours)}</div>
-                          )}
-                        </div>
-                      )}
-
-                      {(shift.location || shift.notes) && (
-                        <div className="mt-2 pt-2 border-top">
-                          {shift.location && (
-                            <div className="small text-muted mb-1">📍 {shift.location}</div>
-                          )}
-                          {shift.notes && (
-                            <small className="text-muted">{shift.notes}</small>
-                          )}
-                        </div>
-                      )}
-                    </Card.Body>
-                  </Card>
-                </div>
+            <InfiniteScrollContainer
+              loading={loadingMore}
+              hasMore={hasMore}
+              onLoadMore={handleLoadMore}
+            >
+              {payPeriods.map((payPeriod) => (
+                <ShiftGroupHeader
+                  key={payPeriod.id}
+                  payPeriod={payPeriod}
+                  defaultExpanded={true}
+                >
+                  <div className="p-3">
+                    <Row className="g-3">
+                      {payPeriod.shifts.map((shift) => (
+                        <Col key={shift.id} xs={12} lg={6} xl={4}>
+                          <ShiftCard
+                            shift={shift}
+                            onEdit={handleEditShift}
+                            onDelete={handleDeleteShift}
+                          />
+                        </Col>
+                      ))}
+                    </Row>
+                  </div>
+                </ShiftGroupHeader>
               ))}
-            </div>
+            </InfiniteScrollContainer>
           )}
         </Col>
       </Row>

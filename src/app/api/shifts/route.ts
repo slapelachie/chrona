@@ -10,7 +10,17 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
-    const limit = searchParams.get('limit');
+    const payPeriodId = searchParams.get('payPeriodId');
+    const location = searchParams.get('location');
+    const shiftType = searchParams.get('shiftType');
+    
+    // Pagination parameters
+    const cursor = searchParams.get('cursor'); // Format: "startTime:id"
+    const pageSize = parseInt(searchParams.get('pageSize') || '20');
+    const limit = searchParams.get('limit'); // Backward compatibility
+    
+    // Group by pay period flag
+    const groupByPayPeriod = searchParams.get('groupByPayPeriod') === 'true';
 
     // Get the first user (single-user application)
     const user = await prisma.user.findFirst();
@@ -20,36 +30,158 @@ export async function GET(request: NextRequest) {
 
     const whereCondition: Prisma.ShiftWhereInput = { userId: user.id };
 
+    // Status filter
     if (status && Object.values(ShiftStatus).includes(status as ShiftStatus)) {
       whereCondition.status = status as ShiftStatus;
     }
 
+    // Date range filter
     if (startDate || endDate) {
       whereCondition.startTime = {};
       if (startDate) whereCondition.startTime.gte = new Date(startDate);
       if (endDate) whereCondition.startTime.lte = new Date(endDate);
     }
 
+    // Pay period filter
+    if (payPeriodId) {
+      whereCondition.payPeriodShifts = {
+        some: {
+          payPeriodId: payPeriodId
+        }
+      };
+    }
+
+    // Location filter
+    if (location) {
+      whereCondition.location = {
+        contains: location
+      };
+    }
+
+    // Shift type filter
+    if (shiftType) {
+      whereCondition.shiftType = shiftType as any;
+    }
+
+    // Cursor-based pagination
+    if (cursor) {
+      const [cursorStartTime, cursorId] = cursor.split(':');
+      whereCondition.OR = [
+        {
+          startTime: {
+            lt: new Date(cursorStartTime)
+          }
+        },
+        {
+          AND: [
+            {
+              startTime: new Date(cursorStartTime)
+            },
+            {
+              id: {
+                lt: cursorId
+              }
+            }
+          ]
+        }
+      ];
+    }
+
+    // Determine take limit
+    const takeLimit = limit ? parseInt(limit) : pageSize + 1; // +1 to check if there are more items
+
     const shifts = await prisma.shift.findMany({
       where: whereCondition,
       include: {
-        payGuide: true
+        payGuide: true,
+        payPeriodShifts: {
+          include: {
+            payPeriod: true
+          }
+        }
       },
-      orderBy: { startTime: 'desc' },
-      take: limit ? parseInt(limit) : undefined
+      orderBy: [
+        { startTime: 'desc' },
+        { id: 'desc' }
+      ],
+      take: takeLimit
     });
 
+    // Pagination logic
+    let hasMore = false;
+    let nextCursor: string | null = null;
+    let paginatedShifts = shifts;
+
+    if (!limit && shifts.length > pageSize) {
+      hasMore = true;
+      paginatedShifts = shifts.slice(0, pageSize);
+      const lastShift = paginatedShifts[paginatedShifts.length - 1];
+      nextCursor = `${lastShift.startTime.toISOString()}:${lastShift.id}`;
+    }
+
     // Convert Decimal fields to numbers for frontend
-    const shiftsWithNumbers = shifts.map(shift => ({
+    const shiftsWithNumbers = paginatedShifts.map(shift => ({
       ...shift,
       regularHours: shift.regularHours?.toNumber() || null,
       overtimeHours: shift.overtimeHours?.toNumber() || null,
       penaltyHours: shift.penaltyHours?.toNumber() || null,
       grossPay: shift.grossPay?.toNumber() || null,
-      superannuation: shift.superannuation?.toNumber() || null
+      superannuation: shift.superannuation?.toNumber() || null,
+      payPeriod: shift.payPeriodShifts[0]?.payPeriod || null,
+      payGuide: shift.payGuide
     }));
 
-    return NextResponse.json({ shifts: shiftsWithNumbers });
+    // If grouping by pay period is requested
+    if (groupByPayPeriod) {
+      const payPeriodGroups = new Map<string, any>();
+      
+      shiftsWithNumbers.forEach(shift => {
+        if (shift.payPeriod) {
+          const periodId = shift.payPeriod.id;
+          if (!payPeriodGroups.has(periodId)) {
+            payPeriodGroups.set(periodId, {
+              id: shift.payPeriod.id,
+              startDate: shift.payPeriod.startDate,
+              endDate: shift.payPeriod.endDate,
+              status: shift.payPeriod.status,
+              shifts: [],
+              summary: {
+                totalHours: 0,
+                totalPay: 0,
+                shiftCount: 0
+              }
+            });
+          }
+          
+          const group = payPeriodGroups.get(periodId);
+          group.shifts.push({
+            ...shift,
+            payGuide: shift.payGuide || { name: 'Unknown' }
+          });
+          group.summary.shiftCount += 1;
+          group.summary.totalHours += (shift.regularHours || 0) + (shift.overtimeHours || 0) + (shift.penaltyHours || 0);
+          group.summary.totalPay += shift.grossPay || 0;
+        }
+      });
+
+      return NextResponse.json({
+        payPeriods: Array.from(payPeriodGroups.values()),
+        pagination: {
+          nextCursor,
+          hasMore,
+          total: shifts.length
+        }
+      });
+    }
+
+    return NextResponse.json({
+      shifts: shiftsWithNumbers,
+      pagination: {
+        nextCursor,
+        hasMore,
+        total: shifts.length
+      }
+    });
   } catch (error) {
     console.error('Get shifts error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

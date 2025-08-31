@@ -276,3 +276,58 @@ export interface ShiftTemplate {
 
 export type PayFrequency = 'weekly' | 'fortnightly' | 'monthly'
 export type AustralianState = 'NSW' | 'VIC' | 'QLD' | 'WA' | 'SA' | 'TAS' | 'ACT' | 'NT' | 'NATIONAL'
+
+// New API response types for pagination and grouping
+export interface ShiftsResponse {
+  shifts: Shift[]
+  pagination: {
+    nextCursor: string | null
+    hasMore: boolean
+    total: number
+  }
+}
+
+export interface PayPeriodsResponse {
+  payPeriods: PayPeriodGroup[]
+  pagination?: {
+    nextCursor: string | null
+    hasMore: boolean
+    total: number
+  }
+}
+
+export interface PayPeriodGroup {
+  id: string
+  startDate: string
+  endDate: string
+  status: string
+  shifts: Shift[]
+  summary: {
+    totalHours: number
+    totalPay: number
+    shiftCount: number
+  }
+}
+
+export interface PayPeriodSummaryItem {
+  id: string
+  startDate: string
+  endDate: string
+  payDate: string
+  status: string
+  shiftCount: number
+  summary: {
+    totalHours: number
+    totalPay: number
+    shiftCount: number
+  }
+}
+
+export interface ShiftFilters {
+  status?: string
+  startDate?: string
+  endDate?: string
+  payPeriodId?: string
+  location?: string
+  shiftType?: string
+}
