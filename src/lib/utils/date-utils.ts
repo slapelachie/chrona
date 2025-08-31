@@ -349,8 +349,7 @@ export class DateUtils {
         end.setDate(end.getDate() + 13);
         break;
       case 'monthly':
-        end.setMonth(end.getMonth() + 1);
-        end.setDate(end.getDate() - 1);
+        end.setMonth(end.getMonth() + 1, 0); // Last day of current month
         break;
     }
     

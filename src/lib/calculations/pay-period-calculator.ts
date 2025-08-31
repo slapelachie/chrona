@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import { PayGuide, Shift, TaxBracket, HECSThreshold, User, PublicHoliday } from '@prisma/client';
-import { PayCalculator, ShiftCalculation } from './pay-calculator';
+import { EnhancedPayCalculator, EnhancedShiftCalculation } from './enhanced-pay-calculator';
+import { PayGuideWithPenalties } from '@/types';
 import { TaxCalculator, TaxCalculation } from './tax-calculator';
 
 export interface PayPeriodCalculation {
@@ -19,7 +20,7 @@ export interface PayPeriodCalculation {
   summary: PayPeriodSummary;
 }
 
-export interface ShiftCalculationWithId extends ShiftCalculation {
+export interface ShiftCalculationWithId extends EnhancedShiftCalculation {
   shiftId: string;
   shift: Shift;
 }
@@ -55,7 +56,7 @@ export class PayPeriodCalculator {
   private readonly SUPER_THRESHOLD = new Decimal(450); // Monthly threshold for super guarantee
 
   constructor(
-    private payGuide: PayGuide,
+    private payGuideWithPenalties: PayGuideWithPenalties,
     private taxBrackets: TaxBracket[],
     private hecsThresholds: HECSThreshold[],
     private publicHolidays: PublicHoliday[],
@@ -71,8 +72,8 @@ export class PayPeriodCalculator {
     // Filter shifts to pay period
     const payPeriodShifts = this.filterShiftsToPayPeriod(shifts, payPeriodStartDate, payPeriodEndDate);
     
-    // Calculate each shift
-    const payCalculator = new PayCalculator(this.payGuide, this.publicHolidays);
+    // Calculate each shift using Enhanced Pay Calculator
+    const payCalculator = new EnhancedPayCalculator(this.payGuideWithPenalties, this.publicHolidays);
     const shiftCalculations: ShiftCalculationWithId[] = [];
     
     let totalGrossPay = new Decimal(0);
@@ -212,7 +213,7 @@ export class PayPeriodCalculator {
     let totalOvertime = new Decimal(0);
     
     for (const week of weeklyHours) {
-      const threshold = this.payGuide.weeklyOvertimeHours;
+      const threshold = this.payGuideWithPenalties.weeklyOvertimeHours;
       if (week.totalHours.gt(threshold)) {
         const excessHours = week.totalHours.sub(threshold);
         violations.push({
@@ -302,6 +303,16 @@ export class PayPeriodCalculator {
     return 26; // Default to fortnightly
   }
 
+  // Add method to get pay periods per year from frequency string
+  static getPayPeriodsPerYear(frequency: string): number {
+    switch (frequency) {
+      case 'weekly': return 52;
+      case 'fortnightly': return 26;
+      case 'monthly': return 12;
+      default: return 26; // Default to fortnightly
+    }
+  }
+
   private getWeekStart(date: Date): Date {
     const weekStart = new Date(date);
     const dayOfWeek = weekStart.getDay();
@@ -370,7 +381,10 @@ export class PayPeriodCalculator {
   }
 
   // Utility method to get current pay period dates
-  static getCurrentPayPeriodDates(payFrequency: 'weekly' | 'fortnightly' = 'fortnightly'): {
+  static getCurrentPayPeriodDates(
+    payFrequency: 'weekly' | 'fortnightly' | 'monthly' = 'fortnightly',
+    startDay: number = 1
+  ): {
     startDate: Date;
     endDate: Date;
     payDate: Date;
@@ -380,23 +394,27 @@ export class PayPeriodCalculator {
     const endDate = new Date(today);
     
     if (payFrequency === 'weekly') {
-      // Current week (Monday to Sunday)
+      // Current week starting on specified day
       const dayOfWeek = today.getDay();
-      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      startDate.setDate(today.getDate() - daysToMonday);
+      const daysToStartDay = (dayOfWeek - startDay + 7) % 7;
+      startDate.setDate(today.getDate() - daysToStartDay);
       endDate.setDate(startDate.getDate() + 6);
-    } else {
-      // Current fortnight (adjust based on your pay cycle)
+    } else if (payFrequency === 'fortnightly') {
+      // Current fortnight starting on specified day
       const dayOfWeek = today.getDay();
-      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      startDate.setDate(today.getDate() - daysToMonday);
+      const daysToStartDay = (dayOfWeek - startDay + 7) % 7;
+      startDate.setDate(today.getDate() - daysToStartDay);
       
       // Determine if this is week 1 or 2 of the fortnight
-      const weekNumber = Math.floor(today.getTime() / (1000 * 60 * 60 * 24 * 7)) % 2;
-      if (weekNumber === 1) {
+      const weeksSinceEpoch = Math.floor(startDate.getTime() / (1000 * 60 * 60 * 24 * 7));
+      if (weeksSinceEpoch % 2 === 1) {
         startDate.setDate(startDate.getDate() - 7);
       }
       endDate.setDate(startDate.getDate() + 13);
+    } else {
+      // Monthly - first day of current month to last day
+      startDate.setDate(1);
+      endDate.setMonth(endDate.getMonth() + 1, 0); // Last day of current month
     }
     
     // Pay date is typically 1-2 weeks after pay period end

@@ -245,8 +245,8 @@ export class EnhancedPayCalculator {
     // Apply Australian retail award overtime logic
     const overtimeResult = this.calculateRetailOvertimeHours(totalHours, startTime, endTime, timeSegments);
     
-    let overtime1_5xHours = overtimeResult.overtime1_5x;
-    let overtime2xHours = overtimeResult.overtime2x;
+    const overtime1_5xHours = overtimeResult.overtime1_5x;
+    const overtime2xHours = overtimeResult.overtime2x;
     let regularHours = new Decimal(regularMinutes).div(60).sub(overtime1_5xHours).sub(overtime2xHours);
     
     // Ensure regular hours don't go negative
@@ -367,32 +367,8 @@ export class EnhancedPayCalculator {
     const dayOfWeek = startTime.getDay();
     
     
-    // Check if work extends outside span of ordinary hours (if configured)
-    if (this.payGuide.overtimeOnSpanBoundary) {
-      const spanStart = this.getSpanStart(dayOfWeek);
-      const spanEnd = this.getSpanEnd(dayOfWeek);
-      const outsideSpanMinutes = this.calculateOutsideSpanMinutes(startTime, endTime, spanStart, spanEnd);
-      
-      if (outsideSpanMinutes > 0) {
-        const outsideSpanHours = new Decimal(outsideSpanMinutes).div(60);
-        
-        // Apply overtime rates based on day and PayGuide configuration
-        if (dayOfWeek === 0) { // Sunday
-          // Sunday OT uses the higher rate (overtime2x)
-          overtime2x = overtime2x.plus(outsideSpanHours);
-        } else {
-          // Monday-Saturday: distribute between rates based on hours
-          // First portion goes to overtime1_5x, excess goes to overtime2x
-          const firstTierLimit = new Decimal(3); // This could be made configurable
-          if (outsideSpanHours.lte(firstTierLimit)) {
-            overtime1_5x = overtime1_5x.plus(outsideSpanHours);
-          } else {
-            overtime1_5x = overtime1_5x.plus(firstTierLimit);
-            overtime2x = overtime2x.plus(outsideSpanHours.sub(firstTierLimit));
-          }
-        }
-      }
-    }
+    // Span boundary overtime is now handled by penalty time frames
+    // This allows for more flexible configuration of when overtime applies
     
     // Check daily hour limits (if configured)
     if (this.payGuide.overtimeOnDailyLimit) {
@@ -414,58 +390,7 @@ export class EnhancedPayCalculator {
     return { overtime1_5x, overtime2x };
   }
 
-  private getSpanStart(dayOfWeek: number): string {
-    switch (dayOfWeek) {
-      case 0: return this.payGuide.sundayStart || '09:00'; // Sunday
-      case 1: return this.payGuide.mondayStart || '07:00'; // Monday
-      case 2: return this.payGuide.tuesdayStart || '07:00'; // Tuesday
-      case 3: return this.payGuide.wednesdayStart || '07:00'; // Wednesday
-      case 4: return this.payGuide.thursdayStart || '07:00'; // Thursday
-      case 5: return this.payGuide.fridayStart || '07:00'; // Friday
-      case 6: return this.payGuide.saturdayStart || '07:00'; // Saturday
-      default: return '07:00';
-    }
-  }
 
-  private getSpanEnd(dayOfWeek: number): string {
-    switch (dayOfWeek) {
-      case 0: return this.payGuide.sundayEnd || '18:00'; // Sunday
-      case 1: return this.payGuide.mondayEnd || '21:00'; // Monday
-      case 2: return this.payGuide.tuesdayEnd || '21:00'; // Tuesday
-      case 3: return this.payGuide.wednesdayEnd || '21:00'; // Wednesday
-      case 4: return this.payGuide.thursdayEnd || '21:00'; // Thursday
-      case 5: return this.payGuide.fridayEnd || '21:00'; // Friday
-      case 6: return this.payGuide.saturdayEnd || '18:00'; // Saturday
-      default: return '21:00';
-    }
-  }
-
-  private calculateOutsideSpanMinutes(startTime: Date, endTime: Date, spanStart: string, spanEnd: string): number {
-    const startTimeStr = this.formatTime(startTime);
-    const endTimeStr = this.formatTime(endTime);
-    
-    const shiftStartMinutes = this.timeStringToMinutes(startTimeStr);
-    const shiftEndMinutes = this.timeStringToMinutes(endTimeStr);
-    const spanStartMinutes = this.timeStringToMinutes(spanStart);
-    const spanEndMinutes = this.timeStringToMinutes(spanEnd);
-    
-    let outsideMinutes = 0;
-    
-    // Before span start
-    if (shiftStartMinutes < spanStartMinutes) {
-      const beforeSpanEnd = Math.min(shiftEndMinutes, spanStartMinutes);
-      const beforeSpanMinutes = beforeSpanEnd - shiftStartMinutes;
-      outsideMinutes += beforeSpanMinutes;
-    }
-    
-    // After span end
-    if (shiftEndMinutes > spanEndMinutes) {
-      const afterSpanStart = Math.max(shiftStartMinutes, spanEndMinutes);
-      const afterSpanMinutes = shiftEndMinutes - afterSpanStart;
-      outsideMinutes += afterSpanMinutes;
-    }
-    return Math.max(0, outsideMinutes);
-  }
 
   private calculateDailyOvertimeHours(totalHours: Decimal, dayOfWeek: number): Decimal {
     // Use configurable daily limits from PayGuide

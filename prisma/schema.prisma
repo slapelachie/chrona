@@ -31,6 +31,10 @@ model User {
   lastUsedPayGuideId String?
   defaultPayGuideId  String?
   
+  // Pay period preferences
+  payPeriodFrequency String @default("fortnightly") // weekly, fortnightly, monthly
+  payPeriodStartDay  Int    @default(1)             // 0=Sunday, 1=Monday, etc.
+  
   // Relationships
   shifts            Shift[]
   payPeriods        PayPeriod[]
