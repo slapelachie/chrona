@@ -129,7 +129,7 @@ export default function PayVerificationPage() {
               <h1 className="h3 mb-1">Pay Verification</h1>
               <p className="text-muted mb-0">Compare calculated pay with actual pay slips</p>
             </div>
-            <Link href="/verification/add" passHref legacyBehavior>
+            <Link href="/verification/add">
               <Button variant="primary">
                 <Plus size={16} className="me-1" />
                 New Verification
@@ -240,7 +240,7 @@ export default function PayVerificationPage() {
               <FileText size={48} className="text-muted mb-3" />
               <h5 className="text-muted">No verifications found</h5>
               <p className="text-muted mb-3">Start by adding your first pay slip verification</p>
-              <Link href="/verification/add" passHref legacyBehavior>
+              <Link href="/verification/add">
                 <Button variant="primary">
                   <Plus size={16} className="me-1" />
                   Add First Verification

@@ -29,7 +29,7 @@ export default function Home() {
                 <p className="text-muted mb-4">
                   Ready to take control of your pay tracking?
                 </p>
-                <Link href="/dashboard" passHref legacyBehavior>
+                <Link href="/dashboard">
                   <Button variant="primary" size="lg" className="px-5">
                     Go to Dashboard
                   </Button>
@@ -49,7 +49,7 @@ export default function Home() {
                   <p className="text-muted small mb-3">
                     Overview of your current pay period and key metrics
                   </p>
-                  <Link href="/dashboard" passHref legacyBehavior>
+                  <Link href="/dashboard">
                     <Button variant="outline-primary" size="sm">
                       View Dashboard
                     </Button>
@@ -66,7 +66,7 @@ export default function Home() {
                   <p className="text-muted small mb-3">
                     Manage your work schedule and track hours
                   </p>
-                  <Link href="/shifts" passHref legacyBehavior>
+                  <Link href="/shifts">
                     <Button variant="outline-success" size="sm">
                       Manage Shifts
                     </Button>
@@ -83,7 +83,7 @@ export default function Home() {
                   <p className="text-muted small mb-3">
                     Detailed earnings and hours analysis
                   </p>
-                  <Link href="/analytics" passHref legacyBehavior>
+                  <Link href="/analytics">
                     <Button variant="outline-info" size="sm">
                       View Analytics
                     </Button>
@@ -100,7 +100,7 @@ export default function Home() {
                   <p className="text-muted small mb-3">
                     Verify your pay slips against calculations
                   </p>
-                  <Link href="/verification" passHref legacyBehavior>
+                  <Link href="/verification">
                     <Button variant="outline-warning" size="sm">
                       Verify Pay
                     </Button>
