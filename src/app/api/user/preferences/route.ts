@@ -14,7 +14,9 @@ export async function GET() {
         claimsTaxFreeThreshold: true,
         hasHECSDebt: true,
         hasStudentFinancialSupplement: true,
-        medicareLevyExemption: true
+        medicareLevyExemption: true,
+        payPeriodFrequency: true,
+        payPeriodStartDay: true
       }
     });
 
@@ -47,6 +49,10 @@ export async function GET() {
         hasHECSDebt: user.hasHECSDebt,
         hasStudentFinancialSupplement: user.hasStudentFinancialSupplement,
         medicareLevyExemption: user.medicareLevyExemption
+      },
+      payPeriodSettings: {
+        frequency: user.payPeriodFrequency,
+        startDay: user.payPeriodStartDay
       },
       payGuides: payGuides.reduce((acc, guide) => {
         acc[guide.id] = {
@@ -129,6 +135,34 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // Pay period settings
+    if (body.payPeriodSettings) {
+      const { payPeriodSettings } = body;
+      if (payPeriodSettings.frequency !== undefined) {
+        // Validate frequency value
+        const validFrequencies = ['weekly', 'fortnightly', 'monthly'];
+        if (validFrequencies.includes(payPeriodSettings.frequency)) {
+          updateData.payPeriodFrequency = payPeriodSettings.frequency;
+        } else {
+          return NextResponse.json(
+            { error: 'Invalid pay period frequency. Must be weekly, fortnightly, or monthly' },
+            { status: 400 }
+          );
+        }
+      }
+      if (payPeriodSettings.startDay !== undefined) {
+        // Validate start day (0-6)
+        if (payPeriodSettings.startDay >= 0 && payPeriodSettings.startDay <= 6) {
+          updateData.payPeriodStartDay = payPeriodSettings.startDay;
+        } else {
+          return NextResponse.json(
+            { error: 'Invalid pay period start day. Must be between 0 (Sunday) and 6 (Saturday)' },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: updateData,
@@ -139,7 +173,9 @@ export async function PUT(request: NextRequest) {
         claimsTaxFreeThreshold: true,
         hasHECSDebt: true,
         hasStudentFinancialSupplement: true,
-        medicareLevyExemption: true
+        medicareLevyExemption: true,
+        payPeriodFrequency: true,
+        payPeriodStartDay: true
       }
     });
 
@@ -154,6 +190,10 @@ export async function PUT(request: NextRequest) {
           hasHECSDebt: updatedUser.hasHECSDebt,
           hasStudentFinancialSupplement: updatedUser.hasStudentFinancialSupplement,
           medicareLevyExemption: updatedUser.medicareLevyExemption
+        },
+        payPeriodSettings: {
+          frequency: updatedUser.payPeriodFrequency,
+          startDay: updatedUser.payPeriodStartDay
         }
       }
     });

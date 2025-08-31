@@ -41,6 +41,10 @@ interface SettingsData {
     dateFormat: string;
     timeFormat: string;
   };
+  payPeriodSettings: {
+    frequency: string;
+    startDay: number;
+  };
 }
 
 export default function SettingsPage() {
@@ -101,6 +105,10 @@ export default function SettingsPage() {
           currency: 'AUD',
           dateFormat: 'dd/MM/yyyy',
           timeFormat: '24h'
+        },
+        payPeriodSettings: {
+          frequency: preferences.payPeriodSettings?.frequency || 'fortnightly',
+          startDay: preferences.payPeriodSettings?.startDay || 1
         }
       };
       
@@ -129,6 +137,10 @@ export default function SettingsPage() {
         taxSettings: {
           claimsTaxFreeThreshold: settingsData.paySettings.tfnProvided,
           hasHECSDebt: settingsData.paySettings.hecsDebt
+        },
+        payPeriodSettings: {
+          frequency: settingsData.payPeriodSettings.frequency,
+          startDay: settingsData.payPeriodSettings.startDay
         }
       };
 
@@ -469,6 +481,88 @@ export default function SettingsPage() {
                       </Form.Group>
                     </Col>
                   </Row>
+                </Form>
+              </Card.Body>
+            </Card>
+
+            <Card className="mb-4">
+              <Card.Header>
+                <h6 className="mb-0">Pay Period Configuration</h6>
+              </Card.Header>
+              <Card.Body>
+                <Form>
+                  <Row>
+                    <Col md={6}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Pay Period Frequency</Form.Label>
+                        <Form.Select
+                          value={settingsData.payPeriodSettings.frequency}
+                          onChange={(e) => updateSettings('payPeriodSettings', 'frequency', e.target.value)}
+                        >
+                          <option value="weekly">Weekly (Every 7 days)</option>
+                          <option value="fortnightly">Fortnightly (Every 14 days)</option>
+                          <option value="monthly">Monthly (Calendar month)</option>
+                        </Form.Select>
+                        <Form.Text className="text-muted">
+                          How often you receive your pay
+                        </Form.Text>
+                      </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Pay Period Start Day</Form.Label>
+                        <Form.Select
+                          value={settingsData.payPeriodSettings.startDay}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            setSettingsData(prev => prev ? {
+                              ...prev,
+                              payPeriodSettings: {
+                                ...prev.payPeriodSettings,
+                                startDay: value
+                              }
+                            } : null);
+                          }}
+                        >
+                          <option value="0">Sunday</option>
+                          <option value="1">Monday</option>
+                          <option value="2">Tuesday</option>
+                          <option value="3">Wednesday</option>
+                          <option value="4">Thursday</option>
+                          <option value="5">Friday</option>
+                          <option value="6">Saturday</option>
+                        </Form.Select>
+                        <Form.Text className="text-muted">
+                          Day of the week your pay period starts
+                        </Form.Text>
+                      </Form.Group>
+                    </Col>
+                  </Row>
+                  
+                  {/* Pay Period Preview */}
+                  <div className="p-3 bg-light rounded">
+                    <h6 className="mb-2">Current Pay Period Preview</h6>
+                    <div className="row">
+                      <div className="col-md-4">
+                        <small className="text-muted fw-bold">Frequency</small>
+                        <div className="text-capitalize">{settingsData.payPeriodSettings.frequency}</div>
+                      </div>
+                      <div className="col-md-4">
+                        <small className="text-muted fw-bold">Start Day</small>
+                        <div>
+                          {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][settingsData.payPeriodSettings.startDay]}
+                        </div>
+                      </div>
+                      <div className="col-md-4">
+                        <small className="text-muted fw-bold">Period Length</small>
+                        <div>
+                          {settingsData.payPeriodSettings.frequency === 'weekly' ? '7 days' :
+                           settingsData.payPeriodSettings.frequency === 'fortnightly' ? '14 days' :
+                           'Calendar month'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </Form>
               </Card.Body>
             </Card>
