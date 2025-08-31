@@ -163,8 +163,7 @@ export async function POST(request: NextRequest) {
     const calculation = payCalculator.calculateShift(
       startTimeDate,
       endTimeDate,
-      breakMinutes,
-      penaltyOverrides && !autoCalculatePenalties ? penaltyOverrides : undefined
+      breakMinutes
     );
 
     // Create the shift with calculated values
