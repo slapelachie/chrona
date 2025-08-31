@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { PayCalculator } from '@/lib/calculations/pay-calculator';
+import { EnhancedPayCalculator } from '@/lib/calculations/enhanced-pay-calculator';
 import { TaxCalculator } from '@/lib/calculations/tax-calculator';
+import { PayGuideWithPenalties } from '@/types';
 import Decimal from 'decimal.js';
 
 export async function GET() {
@@ -42,6 +43,17 @@ export async function GET() {
       }
     });
 
+    // Get unique pay guide IDs for efficient penalty time frame fetching
+    const uniquePayGuideIds = [...new Set(shifts.map(s => s.payGuideId))];
+    
+    // Get penalty time frames for all used pay guides
+    const penaltyTimeFrames = await prisma.penaltyTimeFrame.findMany({
+      where: { 
+        payGuideId: { in: uniquePayGuideIds }, 
+        isActive: true 
+      }
+    });
+
     // Get public holidays for calculations
     const publicHolidays = await prisma.publicHoliday.findMany({
       where: {
@@ -59,7 +71,13 @@ export async function GET() {
 
     for (const shift of shifts) {
       if (shift.endTime) {
-        const calculator = new PayCalculator(shift.payGuide, publicHolidays);
+        // Create PayGuideWithPenalties for this shift
+        const payGuideWithPenalties: PayGuideWithPenalties = {
+          ...shift.payGuide,
+          penaltyTimeFrames: penaltyTimeFrames.filter(p => p.payGuideId === shift.payGuide.id)
+        };
+
+        const calculator = new EnhancedPayCalculator(payGuideWithPenalties, publicHolidays);
         const calculation = calculator.calculateShift(
           shift.startTime,
           shift.endTime,
