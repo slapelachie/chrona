@@ -244,7 +244,7 @@ export default function PenaltyTimeFrameManager({ payGuideId, onUpdate }: Penalt
             {penalties.length === 0 ? (
               <tr>
                 <td colSpan={7} className="text-center py-3 text-muted">
-                  No custom penalties defined. Click "Add Penalty" to create your first one.
+                  No custom penalties defined. Click &quot;Add Penalty&quot; to create your first one.
                 </td>
               </tr>
             ) : (
@@ -402,7 +402,7 @@ export default function PenaltyTimeFrameManager({ payGuideId, onUpdate }: Penalt
                   ))}
                 </Form.Select>
                 <Form.Text className="text-muted">
-                  Leave as "All days" to apply to every day, or select a specific day
+                  Leave as &quot;All days&quot; to apply to every day, or select a specific day
                 </Form.Text>
               </Form.Group>
             </div>

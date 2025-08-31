@@ -110,7 +110,7 @@ export default function DashboardPage() {
                 Current pay period: {payPeriodSummary && formatDate(payPeriodSummary.startDate)} - {payPeriodSummary && formatDate(payPeriodSummary.endDate)}
               </p>
             </div>
-            <Link href="/shifts" passHref legacyBehavior>
+            <Link href="/shifts">
               <Button variant="primary" size="sm">
                 <CalendarPlus size={16} className="me-1" />
                 Add Shift
@@ -222,18 +222,18 @@ export default function DashboardPage() {
               <Card.Body className="d-flex flex-column">
                 <h5 className="card-title mb-3">Quick Actions</h5>
                 <div className="d-grid gap-2 flex-grow-1">
-                  <Link href="/shifts" passHref legacyBehavior>
+                  <Link href="/shifts">
                     <Button variant="outline-primary" size="lg">
                       <CalendarPlus size={18} className="me-2" />
                       Add New Shift
                     </Button>
                   </Link>
-                  <Link href="/shifts" passHref legacyBehavior>
+                  <Link href="/shifts">
                     <Button variant="outline-secondary">
                       View All Shifts
                     </Button>
                   </Link>
-                  <Link href="/verification" passHref legacyBehavior>
+                  <Link href="/verification">
                     <Button variant="outline-info">
                       Pay Verification
                     </Button>
@@ -327,7 +327,7 @@ export default function DashboardPage() {
       <div className="d-lg-none fixed-bottom bg-body border-top p-3">
         <Row>
           <Col>
-            <Link href="/shifts" passHref legacyBehavior>
+            <Link href="/shifts">
               <Button variant="primary" className="w-100" size="lg">
                 <CalendarPlus size={20} className="me-2" />
                 Add Shift

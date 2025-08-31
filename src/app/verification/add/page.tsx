@@ -177,7 +177,7 @@ export default function AddVerificationPage() {
       <Row className="mb-4">
         <Col>
           <div className="d-flex align-items-center">
-            <Link href="/verification" passHref legacyBehavior>
+            <Link href="/verification">
               <Button variant="outline-secondary" className="me-3">
                 <ArrowLeft size={16} />
               </Button>
@@ -210,7 +210,7 @@ export default function AddVerificationPage() {
             <FileText size={48} className="text-muted mb-3" />
             <h5 className="text-muted">No Pay Periods Available</h5>
             <p className="text-muted mb-3">You need to have worked shifts before you can verify your pay</p>
-            <Link href="/shifts" passHref legacyBehavior>
+            <Link href="/shifts">
               <Button variant="primary">Add Your First Shift</Button>
             </Link>
           </Card.Body>
