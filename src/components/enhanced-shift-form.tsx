@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { Form, Button, Modal, Alert, InputGroup, Row, Col, Card, Badge } from 'react-bootstrap';
 import { Calendar, Clock, FileText, AlertCircle, DollarSign, Settings, ToggleLeft, ToggleRight, Info } from 'lucide-react';
 import PayRateSelector from './pay-rate-selector';
+import { 
+  toLocalDateInputValue,
+  getTimezoneAbbr
+} from '@/lib/timezone';
 
 interface PenaltyOverride {
   evening?: boolean | null;
@@ -40,12 +44,18 @@ interface ShiftPreview {
   estimatedPay: number;
   hasWarnings: boolean;
   warnings: string[];
-  appliedPenalties: string[];
   breakdown?: {
     regularPay: number;
     overtimePay: number;
     penaltyPay: number;
     casualLoading: number;
+  };
+  detailedBreakdown?: {
+    regularHours: { hours: number; rate: number; amount: number };
+    overtime1_5x: { hours: number; rate: number; amount: number };
+    overtime2x: { hours: number; rate: number; amount: number };
+    penalties: Array<{ name: string; hours: number; rate: number; amount: number }>;
+    casualLoading: { rate: number; amount: number };
   };
 }
 
@@ -57,24 +67,48 @@ export default function EnhancedShiftForm({
   isEdit = false,
   loading = false 
 }: ShiftFormProps) {
-  const [formData, setFormData] = useState<ShiftFormData>({
-    date: initialData?.date || new Date().toISOString().split('T')[0],
-    startTime: initialData?.startTime || '09:00',
-    endTime: initialData?.endTime || '17:00',
-    breakMinutes: initialData?.breakMinutes || 30,
-    notes: initialData?.notes || '',
-    location: initialData?.location || '',
-    shiftType: initialData?.shiftType || 'REGULAR',
-    payGuideId: initialData?.payGuideId,
-    penaltyOverrides: initialData?.penaltyOverrides || {},
-    autoCalculatePenalties: initialData?.autoCalculatePenalties ?? true
+  const [formData, setFormData] = useState<ShiftFormData>(() => {
+    // Convert initial data from UTC to Australian timezone for display
+    let date = new Date().toISOString().split('T')[0];
+    let startTime = '09:00';
+    let endTime = '17:00';
+    
+    if (initialData?.date) {
+      // If we have initial date, it might be a UTC string, convert to local date
+      try {
+        const initialDate = new Date(initialData.date + 'T00:00:00.000Z');
+        date = toLocalDateInputValue(initialDate);
+      } catch {
+        date = initialData.date;
+      }
+    }
+    
+    if (initialData?.startTime) {
+      startTime = initialData.startTime;
+    }
+    
+    if (initialData?.endTime) {
+      endTime = initialData.endTime;
+    }
+    
+    return {
+      date,
+      startTime,
+      endTime,
+      breakMinutes: initialData?.breakMinutes || 30,
+      notes: initialData?.notes || '',
+      location: initialData?.location || '',
+      shiftType: initialData?.shiftType || 'REGULAR',
+      payGuideId: initialData?.payGuideId,
+      penaltyOverrides: initialData?.penaltyOverrides || {},
+      autoCalculatePenalties: initialData?.autoCalculatePenalties ?? true
+    };
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<ShiftPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [showPenaltyOverrides, setShowPenaltyOverrides] = useState(false);
   
   // Debounce timer for API calls
   const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
@@ -114,17 +148,7 @@ export default function EnhancedShiftForm({
     setPreviewError(null);
     
     try {
-      const startTimeISO = `${data.date}T${data.startTime}:00.000Z`;
-      let endTimeISO = `${data.date}T${data.endTime}:00.000Z`;
-      
-      // Handle overnight shifts
-      const startTime = new Date(startTimeISO);
-      const endTime = new Date(endTimeISO);
-      if (endTime <= startTime) {
-        const nextDay = new Date(endTime);
-        nextDay.setDate(nextDay.getDate() + 1);
-        endTimeISO = nextDay.toISOString();
-      }
+      // Send date and time strings directly - no timezone conversion needed
       
       const response = await fetch('/api/shifts/preview', {
         method: 'POST',
@@ -132,8 +156,9 @@ export default function EnhancedShiftForm({
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          startTime: startTimeISO,
-          endTime: endTimeISO,
+          date: data.date,
+          startTime: data.startTime,
+          endTime: data.endTime,
           breakMinutes: data.breakMinutes,
           payGuideId: data.payGuideId,
           penaltyOverrides: data.penaltyOverrides,
@@ -250,7 +275,10 @@ export default function EnhancedShiftForm({
                   <Row className="mb-3">
                     <Col md={4}>
                       <Form.Group>
-                        <Form.Label>Date</Form.Label>
+                        <Form.Label>
+                          Date 
+                          <small className="text-muted ms-1">({getTimezoneAbbr()})</small>
+                        </Form.Label>
                         <Form.Control
                           type="date"
                           value={formData.date}
@@ -265,7 +293,10 @@ export default function EnhancedShiftForm({
 
                     <Col md={4}>
                       <Form.Group>
-                        <Form.Label>Start Time</Form.Label>
+                        <Form.Label>
+                          Start Time 
+                          <small className="text-muted ms-1">({getTimezoneAbbr()})</small>
+                        </Form.Label>
                         <InputGroup>
                           <InputGroup.Text><Clock size={16} /></InputGroup.Text>
                           <Form.Control
@@ -283,7 +314,10 @@ export default function EnhancedShiftForm({
 
                     <Col md={4}>
                       <Form.Group>
-                        <Form.Label>End Time</Form.Label>
+                        <Form.Label>
+                          End Time 
+                          <small className="text-muted ms-1">({getTimezoneAbbr()})</small>
+                        </Form.Label>
                         <InputGroup>
                           <InputGroup.Text><Clock size={16} /></InputGroup.Text>
                           <Form.Control
@@ -369,7 +403,6 @@ export default function EnhancedShiftForm({
                     checked={formData.autoCalculatePenalties}
                     onChange={(e) => {
                       handleInputChange('autoCalculatePenalties', e.target.checked);
-                      setShowPenaltyOverrides(!e.target.checked);
                     }}
                   />
                 </Card.Header>
@@ -553,13 +586,13 @@ export default function EnhancedShiftForm({
                       </div>
                     )}
 
-                    {preview.appliedPenalties.length > 0 && (
+                    {preview.detailedBreakdown?.penalties && preview.detailedBreakdown.penalties.length > 0 && (
                       <div className="mb-3">
                         <small className="text-muted fw-bold">Applied Penalties:</small>
                         <div className="mt-1">
-                          {preview.appliedPenalties.map((penalty, index) => (
+                          {preview.detailedBreakdown.penalties.map((penalty, index) => (
                             <Badge key={index} bg="info" className="me-1 small">
-                              {penalty}
+                              {penalty.name}: {penalty.hours.toFixed(2)}h @ ${penalty.rate.toFixed(2)}
                             </Badge>
                           ))}
                         </div>

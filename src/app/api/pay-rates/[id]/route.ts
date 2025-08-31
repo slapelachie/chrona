@@ -78,28 +78,11 @@ export async function PUT(
     if (body.overtimeRate1_5x !== undefined) updateData.overtimeRate1_5x = new Decimal(body.overtimeRate1_5x);
     if (body.overtimeRate2x !== undefined) updateData.overtimeRate2x = new Decimal(body.overtimeRate2x);
 
-    // Penalty rates
-    if (body.eveningPenalty !== undefined) updateData.eveningPenalty = new Decimal(body.eveningPenalty);
-    if (body.nightPenalty !== undefined) updateData.nightPenalty = new Decimal(body.nightPenalty);
-    if (body.saturdayPenalty !== undefined) updateData.saturdayPenalty = new Decimal(body.saturdayPenalty);
-    if (body.sundayPenalty !== undefined) updateData.sundayPenalty = new Decimal(body.sundayPenalty);
-    if (body.publicHolidayPenalty !== undefined) updateData.publicHolidayPenalty = new Decimal(body.publicHolidayPenalty);
-
-    // Time boundaries
-    if (body.eveningStart !== undefined) updateData.eveningStart = body.eveningStart;
-    if (body.eveningEnd !== undefined) updateData.eveningEnd = body.eveningEnd;
-    if (body.nightStart !== undefined) updateData.nightStart = body.nightStart;
-    if (body.nightEnd !== undefined) updateData.nightEnd = body.nightEnd;
 
     // Overtime thresholds
     if (body.dailyOvertimeHours !== undefined) updateData.dailyOvertimeHours = new Decimal(body.dailyOvertimeHours);
     if (body.weeklyOvertimeHours !== undefined) updateData.weeklyOvertimeHours = new Decimal(body.weeklyOvertimeHours);
 
-    // Penalty combination settings
-    if (body.allowPenaltyCombination !== undefined) updateData.allowPenaltyCombination = body.allowPenaltyCombination;
-    if (body.penaltyCombinationRules !== undefined) {
-      updateData.penaltyCombinationRules = body.penaltyCombinationRules ? JSON.stringify(body.penaltyCombinationRules) : null;
-    }
 
     const payGuide = await prisma.payGuide.update({
       where: { id: params.id },

@@ -54,35 +54,47 @@ model PayGuide {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Pay rates
-  baseHourlyRate    Decimal // Base hourly rate
-  casualLoading     Decimal @default(0.25) // 25% casual loading
-  overtimeRate1_5x  Decimal @default(1.5)  // 1.5x overtime
-  overtimeRate2x    Decimal @default(2.0)  // 2x overtime
+  baseHourlyRate    Decimal // Base hourly rate (includes casual loading for retail award)
+  casualLoading     Decimal @default(0.0) // Additional casual loading (0 for retail as already included)
   
-  // Penalty rates (as multipliers)
-  eveningPenalty    Decimal @default(1.15) // 15% evening penalty
-  nightPenalty      Decimal @default(1.30) // 30% night penalty
-  saturdayPenalty   Decimal @default(1.25) // 25% Saturday penalty
-  sundayPenalty     Decimal @default(1.75) // 75% Sunday penalty
-  publicHolidayPenalty Decimal @default(2.50) // 150% public holiday penalty
+  // Overtime rates (as multipliers) - Australian Retail Award defaults
+  overtimeRate1_5x  Decimal @default(1.75)  // 175% for Mon-Sat first 3 hours OT
+  overtimeRate2x    Decimal @default(2.25)  // 225% for Mon-Sat after 3 hours, all Sunday OT
   
-  // Shift boundaries (times)
-  eveningStart      String   @default("18:00") // 6 PM
-  eveningEnd        String   @default("22:00") // 10 PM
-  nightStart        String   @default("22:00") // 10 PM
-  nightEnd          String   @default("06:00") // 6 AM
+  // Overtime thresholds - Australian Retail Award defaults
+  dailyOvertimeHours      Decimal @default(9.0)  // Daily OT after 9 hours (retail award)
+  specialDayOvertimeHours Decimal @default(11.0) // Monday can work 11 hours (one day per week)
+  weeklyOvertimeHours     Decimal @default(38.0) // Weekly OT after 38 hours
   
-  // Overtime thresholds
-  dailyOvertimeHours    Decimal @default(8.0)  // Daily OT after 8 hours
-  weeklyOvertimeHours   Decimal @default(38.0) // Weekly OT after 38 hours
-  
-  // Penalty combination settings
-  allowPenaltyCombination Boolean @default(true)
-  penaltyCombinationRules String?  // JSON field for penalty combination rules
+  // Overtime trigger configuration
+  overtimeOnSpanBoundary  Boolean @default(true)  // OT when outside span of ordinary hours
+  overtimeOnDailyLimit    Boolean @default(true)  // OT when exceeding daily hour limits
+  overtimeOnWeeklyLimit   Boolean @default(true)  // OT when exceeding weekly hour limits
   
   shifts        Shift[]
+  penaltyTimeFrames PenaltyTimeFrame[]
   
   @@map("pay_guides")
+}
+
+// Custom penalty time frame model for flexible penalty rules
+model PenaltyTimeFrame {
+  id          String   @id @default(cuid())
+  payGuideId  String
+  name        String   // e.g., "Late Night Premium", "Early Morning Bonus"
+  description String?  // Optional description of the penalty
+  startTime   String   // Time in HH:MM format (24-hour)
+  endTime     String   // Time in HH:MM format (24-hour)
+  penaltyRate Decimal  // Penalty multiplier (e.g., 1.5 for 50% penalty)
+  dayOfWeek   Int?     // 0=Sunday, 1=Monday, etc. null=applies to all days
+  priority    Int      @default(0) // Higher numbers take precedence for overlapping periods
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  payGuide    PayGuide @relation(fields: [payGuideId], references: [id], onDelete: Cascade)
+  
+  @@map("penalty_time_frames")
 }
 
 // Tax bracket model for Australian tax system

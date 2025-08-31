@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Table, Badge, Modal, Form, Alert, InputGroup, Tooltip, OverlayTrigger } from 'react-bootstrap';
-import { DollarSign, Plus, Edit2, Copy, Trash2, Search, CheckCircle, XCircle } from 'lucide-react';
+import { DollarSign, Plus, Edit2, Copy, Trash2, Search, CheckCircle, XCircle, Clock } from 'lucide-react';
 import Decimal from 'decimal.js';
+import PenaltyTimeFrameManager from '@/components/penalty-time-frame-manager';
 
 interface PayGuide {
   id: string;
@@ -13,18 +14,10 @@ interface PayGuide {
   isActive: boolean;
   baseHourlyRate: string;
   casualLoading: string;
-  eveningPenalty: string;
-  nightPenalty: string;
-  saturdayPenalty: string;
-  sundayPenalty: string;
-  publicHolidayPenalty: string;
-  eveningStart: string;
-  eveningEnd: string;
-  nightStart: string;
-  nightEnd: string;
+  overtimeRate1_5x: string;
+  overtimeRate2x: string;
   dailyOvertimeHours: string;
   weeklyOvertimeHours: string;
-  allowPenaltyCombination: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -38,18 +31,8 @@ interface PayGuideFormData {
   casualLoading: string;
   overtimeRate1_5x: string;
   overtimeRate2x: string;
-  eveningPenalty: string;
-  nightPenalty: string;
-  saturdayPenalty: string;
-  sundayPenalty: string;
-  publicHolidayPenalty: string;
-  eveningStart: string;
-  eveningEnd: string;
-  nightStart: string;
-  nightEnd: string;
   dailyOvertimeHours: string;
   weeklyOvertimeHours: string;
-  allowPenaltyCombination: boolean;
 }
 
 export default function PayRatesPage() {
@@ -64,6 +47,11 @@ export default function PayRatesPage() {
   const [selectedPayGuide, setSelectedPayGuide] = useState<PayGuide | null>(null);
   const [saving, setSaving] = useState(false);
   
+  // Penalty management modal states
+  const [showPenaltyModal, setShowPenaltyModal] = useState(false);
+  const [penaltyPayGuideId, setPenaltyPayGuideId] = useState<string | null>(null);
+  const [penaltyPayGuideName, setPenaltyPayGuideName] = useState<string>('');
+  
   // Form state
   const [formData, setFormData] = useState<PayGuideFormData>({
     name: '',
@@ -74,18 +62,8 @@ export default function PayRatesPage() {
     casualLoading: '0.25',
     overtimeRate1_5x: '1.5',
     overtimeRate2x: '2.0',
-    eveningPenalty: '1.15',
-    nightPenalty: '1.30',
-    saturdayPenalty: '1.25',
-    sundayPenalty: '1.75',
-    publicHolidayPenalty: '2.50',
-    eveningStart: '18:00',
-    eveningEnd: '22:00',
-    nightStart: '22:00',
-    nightEnd: '06:00',
     dailyOvertimeHours: '8.0',
-    weeklyOvertimeHours: '38.0',
-    allowPenaltyCombination: true
+    weeklyOvertimeHours: '38.0'
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -136,18 +114,8 @@ export default function PayRatesPage() {
       casualLoading: '0.25',
       overtimeRate1_5x: '1.5',
       overtimeRate2x: '2.0',
-      eveningPenalty: '1.15',
-      nightPenalty: '1.30',
-      saturdayPenalty: '1.25',
-      sundayPenalty: '1.75',
-      publicHolidayPenalty: '2.50',
-      eveningStart: '18:00',
-      eveningEnd: '22:00',
-      nightStart: '22:00',
-      nightEnd: '06:00',
       dailyOvertimeHours: '8.0',
-      weeklyOvertimeHours: '38.0',
-      allowPenaltyCombination: true
+      weeklyOvertimeHours: '38.0'
     });
     setErrors({});
     setShowModal(true);
@@ -163,20 +131,10 @@ export default function PayRatesPage() {
       isActive: payGuide.isActive,
       baseHourlyRate: payGuide.baseHourlyRate,
       casualLoading: payGuide.casualLoading,
-      overtimeRate1_5x: '1.5', // These aren't stored in the current schema, using defaults
-      overtimeRate2x: '2.0',
-      eveningPenalty: payGuide.eveningPenalty,
-      nightPenalty: payGuide.nightPenalty,
-      saturdayPenalty: payGuide.saturdayPenalty,
-      sundayPenalty: payGuide.sundayPenalty,
-      publicHolidayPenalty: payGuide.publicHolidayPenalty,
-      eveningStart: payGuide.eveningStart,
-      eveningEnd: payGuide.eveningEnd,
-      nightStart: payGuide.nightStart,
-      nightEnd: payGuide.nightEnd,
+      overtimeRate1_5x: payGuide.overtimeRate1_5x,
+      overtimeRate2x: payGuide.overtimeRate2x,
       dailyOvertimeHours: payGuide.dailyOvertimeHours,
-      weeklyOvertimeHours: payGuide.weeklyOvertimeHours,
-      allowPenaltyCombination: payGuide.allowPenaltyCombination
+      weeklyOvertimeHours: payGuide.weeklyOvertimeHours
     });
     setErrors({});
     setShowModal(true);
@@ -200,6 +158,12 @@ export default function PayRatesPage() {
       console.error('Error duplicating pay guide:', error);
       setAlertMessage({ type: 'error', message: 'Failed to duplicate pay guide' });
     }
+  };
+
+  const handleManagePenalties = (payGuide: PayGuide) => {
+    setPenaltyPayGuideId(payGuide.id);
+    setPenaltyPayGuideName(payGuide.name);
+    setShowPenaltyModal(true);
   };
 
   const handleDelete = async (payGuide: PayGuide) => {
@@ -380,7 +344,7 @@ export default function PayRatesPage() {
                     <tr>
                       <th>Name</th>
                       <th>Base Rate</th>
-                      <th>Penalties</th>
+                      <th>Overtime Rates</th>
                       <th>Effective Period</th>
                       <th>Status</th>
                       <th>Actions</th>
@@ -400,7 +364,7 @@ export default function PayRatesPage() {
                             <div>
                               <div className="fw-bold">{guide.name}</div>
                               <small className="text-muted">
-                                Casual loading: {formatPercentage(guide.casualLoading)}
+                                Casual loading: {guide.casualLoading ? formatPercentage(guide.casualLoading) : '0%'}
                               </small>
                             </div>
                           </td>
@@ -413,18 +377,15 @@ export default function PayRatesPage() {
                           <td>
                             <div className="d-flex flex-wrap gap-1">
                               <Badge bg="secondary" className="small">
-                                Eve: {formatPercentage(guide.eveningPenalty)}
+                                1.5x: {formatCurrency(new Decimal(guide.baseHourlyRate).mul(guide.overtimeRate1_5x).toString())}
                               </Badge>
                               <Badge bg="secondary" className="small">
-                                Night: {formatPercentage(guide.nightPenalty)}
-                              </Badge>
-                              <Badge bg="secondary" className="small">
-                                Sat: {formatPercentage(guide.saturdayPenalty)}
-                              </Badge>
-                              <Badge bg="secondary" className="small">
-                                Sun: {formatPercentage(guide.sundayPenalty)}
+                                2x: {formatCurrency(new Decimal(guide.baseHourlyRate).mul(guide.overtimeRate2x).toString())}
                               </Badge>
                             </div>
+                            <small className="text-muted d-block">
+                              Daily OT: {guide.dailyOvertimeHours}h • Weekly: {guide.weeklyOvertimeHours}h
+                            </small>
                           </td>
                           <td>
                             <div>
@@ -454,6 +415,16 @@ export default function PayRatesPage() {
                                   onClick={() => handleEdit(guide)}
                                 >
                                   <Edit2 size={14} />
+                                </Button>
+                              </OverlayTrigger>
+                              
+                              <OverlayTrigger overlay={<Tooltip>Manage Penalties</Tooltip>}>
+                                <Button 
+                                  variant="outline-info" 
+                                  size="sm"
+                                  onClick={() => handleManagePenalties(guide)}
+                                >
+                                  <Clock size={14} />
                                 </Button>
                               </OverlayTrigger>
                               
@@ -602,163 +573,44 @@ export default function PayRatesPage() {
               </Row>
             </div>
 
-            {/* Penalty Rates */}
+            {/* Overtime Rates */}
             <div className="mb-4">
-              <h6 className="text-primary mb-3">Penalty Rates</h6>
+              <h6 className="text-primary mb-3">Overtime Rates</h6>
               <Row>
-                <Col md={3}>
+                <Col md={6}>
                   <Form.Group className="mb-3">
-                    <Form.Label>Evening</Form.Label>
+                    <Form.Label>First Overtime Rate (1.5x)</Form.Label>
                     <InputGroup>
                       <Form.Control
                         type="number"
                         step="0.01"
                         min="1"
-                        value={formData.eveningPenalty}
-                        onChange={(e) => setFormData({ ...formData, eveningPenalty: e.target.value })}
+                        value={formData.overtimeRate1_5x}
+                        onChange={(e) => setFormData({ ...formData, overtimeRate1_5x: e.target.value })}
                       />
-                      <InputGroup.Text>x</InputGroup.Text>
+                      <InputGroup.Text>x base rate</InputGroup.Text>
                     </InputGroup>
                     <Form.Text className="text-muted">
-                      {formatPercentage(formData.eveningPenalty || '1')} penalty
+                      Rate: ${formatCurrency(new Decimal(formData.baseHourlyRate || '0').mul(formData.overtimeRate1_5x || '1').toString())}
                     </Form.Text>
                   </Form.Group>
                 </Col>
-                <Col md={3}>
+                <Col md={6}>
                   <Form.Group className="mb-3">
-                    <Form.Label>Night</Form.Label>
+                    <Form.Label>Second Overtime Rate (2x)</Form.Label>
                     <InputGroup>
                       <Form.Control
                         type="number"
                         step="0.01"
                         min="1"
-                        value={formData.nightPenalty}
-                        onChange={(e) => setFormData({ ...formData, nightPenalty: e.target.value })}
+                        value={formData.overtimeRate2x}
+                        onChange={(e) => setFormData({ ...formData, overtimeRate2x: e.target.value })}
                       />
-                      <InputGroup.Text>x</InputGroup.Text>
+                      <InputGroup.Text>x base rate</InputGroup.Text>
                     </InputGroup>
                     <Form.Text className="text-muted">
-                      {formatPercentage(formData.nightPenalty || '1')} penalty
+                      Rate: ${formatCurrency(new Decimal(formData.baseHourlyRate || '0').mul(formData.overtimeRate2x || '1').toString())}
                     </Form.Text>
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Saturday</Form.Label>
-                    <InputGroup>
-                      <Form.Control
-                        type="number"
-                        step="0.01"
-                        min="1"
-                        value={formData.saturdayPenalty}
-                        onChange={(e) => setFormData({ ...formData, saturdayPenalty: e.target.value })}
-                      />
-                      <InputGroup.Text>x</InputGroup.Text>
-                    </InputGroup>
-                    <Form.Text className="text-muted">
-                      {formatPercentage(formData.saturdayPenalty || '1')} penalty
-                    </Form.Text>
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Sunday</Form.Label>
-                    <InputGroup>
-                      <Form.Control
-                        type="number"
-                        step="0.01"
-                        min="1"
-                        value={formData.sundayPenalty}
-                        onChange={(e) => setFormData({ ...formData, sundayPenalty: e.target.value })}
-                      />
-                      <InputGroup.Text>x</InputGroup.Text>
-                    </InputGroup>
-                    <Form.Text className="text-muted">
-                      {formatPercentage(formData.sundayPenalty || '1')} penalty
-                    </Form.Text>
-                  </Form.Group>
-                </Col>
-              </Row>
-              
-              <Row>
-                <Col md={4}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Public Holiday</Form.Label>
-                    <InputGroup>
-                      <Form.Control
-                        type="number"
-                        step="0.01"
-                        min="1"
-                        value={formData.publicHolidayPenalty}
-                        onChange={(e) => setFormData({ ...formData, publicHolidayPenalty: e.target.value })}
-                      />
-                      <InputGroup.Text>x</InputGroup.Text>
-                    </InputGroup>
-                    <Form.Text className="text-muted">
-                      {formatPercentage(formData.publicHolidayPenalty || '1')} penalty
-                    </Form.Text>
-                  </Form.Group>
-                </Col>
-                <Col md={8}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Penalty Combination</Form.Label>
-                    <Form.Check
-                      type="switch"
-                      id="allowPenaltyCombination"
-                      label="Allow multiple penalties to be applied simultaneously"
-                      checked={formData.allowPenaltyCombination}
-                      onChange={(e) => setFormData({ ...formData, allowPenaltyCombination: e.target.checked })}
-                    />
-                    <Form.Text className="text-muted">
-                      E.g., evening penalty + weekend penalty for Saturday evening shifts
-                    </Form.Text>
-                  </Form.Group>
-                </Col>
-              </Row>
-            </div>
-
-            {/* Time Boundaries */}
-            <div className="mb-4">
-              <h6 className="text-primary mb-3">Time Boundaries</h6>
-              <Row>
-                <Col md={3}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Evening Start</Form.Label>
-                    <Form.Control
-                      type="time"
-                      value={formData.eveningStart}
-                      onChange={(e) => setFormData({ ...formData, eveningStart: e.target.value })}
-                    />
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Evening End</Form.Label>
-                    <Form.Control
-                      type="time"
-                      value={formData.eveningEnd}
-                      onChange={(e) => setFormData({ ...formData, eveningEnd: e.target.value })}
-                    />
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Night Start</Form.Label>
-                    <Form.Control
-                      type="time"
-                      value={formData.nightStart}
-                      onChange={(e) => setFormData({ ...formData, nightStart: e.target.value })}
-                    />
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Night End</Form.Label>
-                    <Form.Control
-                      type="time"
-                      value={formData.nightEnd}
-                      onChange={(e) => setFormData({ ...formData, nightEnd: e.target.value })}
-                    />
                   </Form.Group>
                 </Col>
               </Row>
@@ -814,6 +666,34 @@ export default function PayRatesPage() {
             </Button>
           </Modal.Footer>
         </Form>
+      </Modal>
+
+      {/* Penalty Management Modal */}
+      <Modal show={showPenaltyModal} onHide={() => setShowPenaltyModal(false)} size="xl" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <Clock size={24} className="text-primary me-2" />
+            Manage Custom Penalties - {penaltyPayGuideName}
+          </Modal.Title>
+        </Modal.Header>
+        
+        <Modal.Body>
+          {penaltyPayGuideId && (
+            <PenaltyTimeFrameManager 
+              payGuideId={penaltyPayGuideId}
+              onUpdate={() => {
+                // Optionally refresh pay guides list if needed
+                // fetchPayGuides();
+              }}
+            />
+          )}
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowPenaltyModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
       </Modal>
     </Container>
   );

@@ -4,6 +4,7 @@ import Decimal from 'decimal.js'
 // Re-export Prisma types for convenience
 export type User = Prisma.UserGetPayload<Record<string, never>>
 export type PayGuide = Prisma.PayGuideGetPayload<Record<string, never>>
+export type PenaltyTimeFrame = Prisma.PenaltyTimeFrameGetPayload<Record<string, never>>
 export type TaxBracket = Prisma.TaxBracketGetPayload<Record<string, never>>
 export type HECSThreshold = Prisma.HECSThresholdGetPayload<Record<string, never>>
 export type PublicHoliday = Prisma.PublicHolidayGetPayload<Record<string, never>>
@@ -12,10 +13,20 @@ export type PayPeriod = Prisma.PayPeriodGetPayload<Record<string, never>>
 export type PayVerification = Prisma.PayVerificationGetPayload<Record<string, never>>
 
 // Extended types with relations
+export type PayGuideWithPenalties = Prisma.PayGuideGetPayload<{
+  include: {
+    penaltyTimeFrames: true
+  }
+}>
+
 export type ShiftWithRelations = Prisma.ShiftGetPayload<{
   include: {
     user: true
-    payGuide: true
+    payGuide: {
+      include: {
+        penaltyTimeFrames: true
+      }
+    }
   }
 }>
 
@@ -53,6 +64,17 @@ export interface PayVerificationFormData {
   notes?: string
 }
 
+export interface PenaltyTimeFrameFormData {
+  name: string
+  description?: string
+  startTime: string  // HH:MM format
+  endTime: string    // HH:MM format
+  penaltyRate: string // Decimal as string for form handling
+  dayOfWeek?: number  // 0=Sunday, 1=Monday, etc. null=all days
+  priority: number
+  isActive: boolean
+}
+
 // Enhanced Calculation Types with Decimal.js
 export interface ShiftCalculation {
   totalMinutes: number
@@ -67,15 +89,20 @@ export interface ShiftCalculation {
   breakdown: PayBreakdown
 }
 
+export interface CustomPenaltyBreakdown {
+  id: string
+  name: string
+  hours: Decimal
+  rate: Decimal
+  amount: Decimal
+}
+
 export interface PayBreakdown {
   baseRate: Decimal
   regularHours: { hours: Decimal; rate: Decimal; amount: Decimal }
   overtime1_5x: { hours: Decimal; rate: Decimal; amount: Decimal }
   overtime2x: { hours: Decimal; rate: Decimal; amount: Decimal }
-  eveningPenalty: { hours: Decimal; rate: Decimal; amount: Decimal }
-  nightPenalty: { hours: Decimal; rate: Decimal; amount: Decimal }
-  weekendPenalty: { hours: Decimal; rate: Decimal; amount: Decimal }
-  publicHolidayPenalty: { hours: Decimal; rate: Decimal; amount: Decimal }
+  customPenalties: CustomPenaltyBreakdown[]
   casualLoading: { rate: Decimal; amount: Decimal }
 }
 
@@ -230,11 +257,12 @@ export interface ShiftAnalysis {
 }
 
 export interface PenaltyPeriod {
-  type: 'evening' | 'night' | 'weekend' | 'public_holiday'
+  id: string
+  name: string
   startTime: Date
   endTime: Date
   durationMinutes: number
-  rate: number
+  rate: Decimal
 }
 
 export interface ShiftTemplate {

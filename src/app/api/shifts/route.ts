@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { PayCalculator } from '@/lib/calculations/pay-calculator';
+import { EnhancedPayCalculator } from '@/lib/calculations/enhanced-pay-calculator';
 import { Prisma, ShiftStatus } from '@prisma/client';
+import { PayGuideWithPenalties } from '@/types';
 
 export async function GET(request: NextRequest) {
   try {
@@ -133,6 +134,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Get penalty time frames for the enhanced calculator
+    const penaltyTimeFrames = await prisma.penaltyTimeFrame.findMany({
+      where: {
+        payGuideId: payGuide.id,
+        isActive: true
+      }
+    });
+
+    // Create the pay guide with penalty time frames for the calculator
+    const payGuideWithPenalties: PayGuideWithPenalties = {
+      ...payGuide,
+      penaltyTimeFrames
+    };
+
     // Get public holidays for calculation
     const publicHolidays = await prisma.publicHoliday.findMany({
       where: {
@@ -143,12 +158,13 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Calculate shift pay
-    const payCalculator = new PayCalculator(payGuide, publicHolidays);
+    // Calculate shift pay using Enhanced calculator
+    const payCalculator = new EnhancedPayCalculator(payGuideWithPenalties, publicHolidays);
     const calculation = payCalculator.calculateShift(
       startTimeDate,
       endTimeDate,
-      breakMinutes
+      breakMinutes,
+      penaltyOverrides && !autoCalculatePenalties ? penaltyOverrides : undefined
     );
 
     // Create the shift with calculated values
@@ -179,6 +195,22 @@ export async function POST(request: NextRequest) {
 
     // Add shift to current pay period
     await addShiftToPayPeriod(shift.id, user.id, startTimeDate);
+
+    // Helper function to extract penalty by name from penalties array
+    const extractPenalty = (name: string) => {
+      const penalty = calculation.breakdown.penalties.find(p => 
+        p.name.toLowerCase().includes(name.toLowerCase())
+      );
+      return penalty ? {
+        hours: penalty.hours.toNumber(),
+        rate: penalty.rate.toNumber(),
+        amount: penalty.amount.toNumber()
+      } : {
+        hours: 0,
+        rate: 0,
+        amount: 0
+      };
+    };
 
     // Convert Decimal fields to numbers for frontend
     const shiftWithNumbers = {
@@ -214,36 +246,25 @@ export async function POST(request: NextRequest) {
             rate: calculation.breakdown.overtime2x.rate.toNumber(),
             amount: calculation.breakdown.overtime2x.amount.toNumber()
           },
-          eveningPenalty: {
-            ...calculation.breakdown.eveningPenalty,
-            hours: calculation.breakdown.eveningPenalty.hours.toNumber(),
-            rate: calculation.breakdown.eveningPenalty.rate.toNumber(),
-            amount: calculation.breakdown.eveningPenalty.amount.toNumber()
-          },
-          nightPenalty: {
-            ...calculation.breakdown.nightPenalty,
-            hours: calculation.breakdown.nightPenalty.hours.toNumber(),
-            rate: calculation.breakdown.nightPenalty.rate.toNumber(),
-            amount: calculation.breakdown.nightPenalty.amount.toNumber()
-          },
-          weekendPenalty: {
-            ...calculation.breakdown.weekendPenalty,
-            hours: calculation.breakdown.weekendPenalty.hours.toNumber(),
-            rate: calculation.breakdown.weekendPenalty.rate.toNumber(),
-            amount: calculation.breakdown.weekendPenalty.amount.toNumber()
-          },
-          publicHolidayPenalty: {
-            ...calculation.breakdown.publicHolidayPenalty,
-            hours: calculation.breakdown.publicHolidayPenalty.hours.toNumber(),
-            rate: calculation.breakdown.publicHolidayPenalty.rate.toNumber(),
-            amount: calculation.breakdown.publicHolidayPenalty.amount.toNumber()
-          },
+          eveningPenalty: extractPenalty('evening'),
+          nightPenalty: extractPenalty('night'),
+          saturdayPenalty: extractPenalty('saturday'),
+          sundayPenalty: extractPenalty('sunday'),
+          publicHolidayPenalty: extractPenalty('holiday'),
           casualLoading: {
             ...calculation.breakdown.casualLoading,
             rate: calculation.breakdown.casualLoading.rate.toNumber(),
             amount: calculation.breakdown.casualLoading.amount.toNumber()
           },
-          baseRate: calculation.breakdown.baseRate.toNumber()
+          baseRate: calculation.breakdown.baseRate.toNumber(),
+          // Also include the new penalties array structure for future use
+          penalties: calculation.breakdown.penalties.map(p => ({
+            id: p.id,
+            name: p.name,
+            hours: p.hours.toNumber(),
+            rate: p.rate.toNumber(),
+            amount: p.amount.toNumber()
+          }))
         }
       }
     }, { status: 201 });

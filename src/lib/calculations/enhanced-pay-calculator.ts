@@ -1,36 +1,33 @@
 import Decimal from 'decimal.js';
-import { PayGuide, PublicHoliday } from '@prisma/client';
+import { PayGuide, PublicHoliday, PenaltyTimeFrame } from '@prisma/client';
+import { PayGuideWithPenalties } from '@/types';
 
-// Enhanced interfaces for multiple penalty support
-export interface PenaltyOverride {
-  evening?: boolean | null; // null = auto, true/false = override
-  night?: boolean | null;
-  weekend?: boolean | null;
-  publicHoliday?: boolean | null;
-  overrideReason?: string;
-  overrideTimestamp?: Date;
-}
-
+// Time segment for penalty analysis
 export interface EnhancedTimeSegment {
   startTime: Date;
   endTime: Date;
-  penaltyTypes: ('evening' | 'night' | 'weekend' | 'public_holiday')[];
+  penalties: PenaltyTimeFrame[]; // Penalty time frames that apply to this segment
   durationMinutes: number;
-  isRegular: boolean;
+  isRegular: boolean; // True if no penalties apply
 }
 
+// Hours breakdown for penalty analysis
 export interface EnhancedHoursBreakdown {
   regular: Decimal;
   overtime1_5x: Decimal;
   overtime2x: Decimal;
-  // Individual penalty hours (can overlap)
-  evening: Decimal;
-  night: Decimal;
-  saturday: Decimal;
-  sunday: Decimal;
-  publicHoliday: Decimal;
+  // Penalty hours (keyed by penalty ID)
+  penalties: Map<string, { penalty: PenaltyTimeFrame; hours: Decimal }>;
   // Combined penalty hours for display
   totalPenalty: Decimal;
+}
+
+export interface PenaltyBreakdown {
+  id: string;
+  name: string;
+  hours: Decimal;
+  rate: Decimal;
+  amount: Decimal;
 }
 
 export interface EnhancedPayBreakdown {
@@ -38,11 +35,7 @@ export interface EnhancedPayBreakdown {
   regularHours: { hours: Decimal; rate: Decimal; amount: Decimal };
   overtime1_5x: { hours: Decimal; rate: Decimal; amount: Decimal };
   overtime2x: { hours: Decimal; rate: Decimal; amount: Decimal };
-  eveningPenalty: { hours: Decimal; rate: Decimal; amount: Decimal };
-  nightPenalty: { hours: Decimal; rate: Decimal; amount: Decimal };
-  saturdayPenalty: { hours: Decimal; rate: Decimal; amount: Decimal };
-  sundayPenalty: { hours: Decimal; rate: Decimal; amount: Decimal };
-  publicHolidayPenalty: { hours: Decimal; rate: Decimal; amount: Decimal };
+  penalties: PenaltyBreakdown[]; // Penalty breakdowns
   casualLoading: { rate: Decimal; amount: Decimal };
   totalPenaltyPay: Decimal;
   regularPay: Decimal;
@@ -61,81 +54,34 @@ export interface EnhancedShiftCalculation {
   casualLoading: Decimal;
   grossPay: Decimal;
   breakdown: EnhancedPayBreakdown;
-  appliedPenalties: string[];
-  penaltyOverridesApplied: boolean;
-}
-
-export interface PenaltyCombinationRules {
-  allowCombinations: boolean;
-  combinationMatrix: {
-    [key: string]: {
-      canCombineWith: string[];
-      calculation: 'additive' | 'highest' | 'multiplicative';
-      priority: number;
-    };
-  };
+  appliedPenalties: string[]; // Names of applied penalties
 }
 
 export class EnhancedPayCalculator {
-  private defaultCombinationRules: PenaltyCombinationRules = {
-    allowCombinations: true,
-    combinationMatrix: {
-      evening: {
-        canCombineWith: ['weekend', 'public_holiday'],
-        calculation: 'additive',
-        priority: 1
-      },
-      night: {
-        canCombineWith: ['weekend', 'public_holiday'],
-        calculation: 'additive',
-        priority: 2
-      },
-      weekend: {
-        canCombineWith: ['evening', 'night'],
-        calculation: 'additive',
-        priority: 3
-      },
-      public_holiday: {
-        canCombineWith: ['evening', 'night'],
-        calculation: 'highest', // Public holiday usually takes precedence
-        priority: 4
-      }
-    }
-  };
-
   constructor(
-    private payGuide: PayGuide,
+    private payGuide: PayGuideWithPenalties,
     private publicHolidays: PublicHoliday[] = []
   ) {}
 
   calculateShift(
     startTime: Date,
     endTime: Date,
-    breakMinutes: number = 0,
-    penaltyOverrides?: PenaltyOverride
+    breakMinutes: number = 0
   ): EnhancedShiftCalculation {
     // Calculate total working time
     const totalMinutes = this.calculateWorkingMinutes(startTime, endTime, breakMinutes);
     
-    // Break down shift into time segments with multiple penalty detection
-    const timeSegments = this.analyzeMultiplePenalties(startTime, endTime, breakMinutes);
+    // Break down shift into time segments with penalty detection
+    const timeSegments = this.analyzePenalties(startTime, endTime, breakMinutes);
     
-    // Apply penalty overrides if provided
-    const adjustedSegments = penaltyOverrides 
-      ? this.applyPenaltyOverrides(timeSegments, penaltyOverrides)
-      : timeSegments;
-    
-    // Calculate different types of hours
-    const hoursBreakdown = this.calculateEnhancedHoursBreakdown(adjustedSegments, totalMinutes);
+    // Calculate different types of hours with overtime logic
+    const hoursBreakdown = this.calculateEnhancedHoursBreakdown(timeSegments, totalMinutes, startTime, endTime);
     
     // Calculate pay for each component
     const payBreakdown = this.calculateEnhancedPayBreakdown(hoursBreakdown);
     
-    // Apply casual loading
-    const casualLoading = payBreakdown.regularPay
-      .plus(payBreakdown.overtimePay)
-      .plus(payBreakdown.penaltyPay)
-      .mul(this.payGuide.casualLoading);
+    // Casual loading is already handled in payBreakdown
+    const casualLoading = payBreakdown.casualLoading.amount;
     
     const grossPay = payBreakdown.regularPay
       .plus(payBreakdown.overtimePay)
@@ -143,7 +89,7 @@ export class EnhancedPayCalculator {
       .plus(casualLoading);
 
     // Determine applied penalties
-    const appliedPenalties = this.getAppliedPenalties(adjustedSegments);
+    const appliedPenalties = this.getAppliedPenalties(timeSegments);
 
     return {
       totalMinutes,
@@ -156,8 +102,7 @@ export class EnhancedPayCalculator {
       casualLoading,
       grossPay,
       breakdown: payBreakdown,
-      appliedPenalties,
-      penaltyOverridesApplied: !!penaltyOverrides
+      appliedPenalties
     };
   }
 
@@ -167,7 +112,7 @@ export class EnhancedPayCalculator {
     return Math.max(0, totalMinutes - breakMinutes);
   }
 
-  private analyzeMultiplePenalties(startTime: Date, endTime: Date, breakMinutes: number): EnhancedTimeSegment[] {
+  private analyzePenalties(startTime: Date, endTime: Date, breakMinutes: number): EnhancedTimeSegment[] {
     const segments: EnhancedTimeSegment[] = [];
     const workingEndTime = new Date(endTime.getTime() - (breakMinutes * 60 * 1000));
     
@@ -179,16 +124,16 @@ export class EnhancedPayCalculator {
       
       if (segmentStart >= segmentEnd) break;
       
-      const penaltyTypes = this.getAllApplicablePenalties(segmentStart, segmentEnd);
+      const penalties = this.getApplicablePenalties(segmentStart, segmentEnd);
       const durationMinutes = Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / (1000 * 60));
       
       if (durationMinutes > 0) {
         segments.push({
           startTime: segmentStart,
           endTime: segmentEnd,
-          penaltyTypes,
+          penalties,
           durationMinutes,
-          isRegular: penaltyTypes.length === 0
+          isRegular: penalties.length === 0
         });
       }
       
@@ -198,205 +143,136 @@ export class EnhancedPayCalculator {
     return segments;
   }
 
-  private getAllApplicablePenalties(startTime: Date, endTime: Date): ('evening' | 'night' | 'weekend' | 'public_holiday')[] {
-    const penalties: ('evening' | 'night' | 'weekend' | 'public_holiday')[] = [];
+
+  private getApplicablePenalties(startTime: Date, endTime: Date): PenaltyTimeFrame[] {
+    const applicablePenalties: PenaltyTimeFrame[] = [];
     
-    // For time segments, we need to check the actual time period, not the average
-    // We'll check both start and end times to capture any penalties that apply during this segment
-    
-    // Check for public holiday - use start time to determine the date
+    // Check for public holiday first (highest priority - 250% rate)
     if (this.isPublicHoliday(startTime)) {
-      penalties.push('public_holiday');
-    }
-    
-    // Check for weekend penalties - check both start and end dates for segments that cross midnight
-    const startDayOfWeek = startTime.getDay();
-    const endDayOfWeek = endTime.getDay();
-    
-    // If this segment includes weekend time, mark as weekend
-    if (startDayOfWeek === 0 || startDayOfWeek === 6 || endDayOfWeek === 0 || endDayOfWeek === 6) {
-      penalties.push('weekend');
-    }
-    
-    // Check time-based penalties for the entire segment duration
-    const startTimeStr = this.formatTime(startTime);
-    const endTimeStr = this.formatTime(endTime);
-    const eveningStart = this.payGuide.eveningStart;
-    const eveningEnd = this.payGuide.eveningEnd;
-    const nightStart = this.payGuide.nightStart;
-    const nightEnd = this.payGuide.nightEnd;
-    
-    // Check if any part of this segment falls within evening hours
-    const hasEvening = this.segmentOverlapsWith(startTimeStr, endTimeStr, eveningStart, eveningEnd);
-    if (hasEvening) {
-      penalties.push('evening');
-    }
-    
-    // Check if any part of this segment falls within night hours  
-    const hasNight = this.segmentOverlapsWith(startTimeStr, endTimeStr, nightStart, nightEnd);
-    if (hasNight) {
-      penalties.push('night');
-    }
-    
-    
-    // Apply combination rules if configured
-    if (!this.payGuide.allowPenaltyCombination && penalties.length > 1) {
-      return this.applyPenaltyCombinationRules(penalties);
-    }
-    
-    return penalties;
-  }
-
-  private applyPenaltyCombinationRules(penalties: string[]): ('evening' | 'night' | 'weekend' | 'public_holiday')[] {
-    const rules = this.getCombinationRules();
-    
-    if (!rules.allowCombinations) {
-      // Return the highest priority penalty
-      return [penalties.sort((a, b) => 
-        (rules.combinationMatrix[b]?.priority || 0) - (rules.combinationMatrix[a]?.priority || 0)
-      )[0]] as ('evening' | 'night' | 'weekend' | 'public_holiday')[];
-    }
-    
-    // Apply combination matrix rules
-    const allowedCombinations: string[] = [];
-    
-    for (const penalty of penalties) {
-      const penaltyRules = rules.combinationMatrix[penalty];
-      if (!penaltyRules) {
-        allowedCombinations.push(penalty);
-        continue;
-      }
-      
-      const canCombine = penalties.every(otherPenalty => 
-        otherPenalty === penalty || penaltyRules.canCombineWith.includes(otherPenalty)
-      );
-      
-      if (canCombine) {
-        allowedCombinations.push(penalty);
-      }
-    }
-    
-    return allowedCombinations as ('evening' | 'night' | 'weekend' | 'public_holiday')[];
-  }
-
-  private getCombinationRules(): PenaltyCombinationRules {
-    if (this.payGuide.penaltyCombinationRules) {
-      try {
-        return JSON.parse(this.payGuide.penaltyCombinationRules);
-      } catch {
-        console.warn('Failed to parse penalty combination rules, using defaults');
-      }
-    }
-    return this.defaultCombinationRules;
-  }
-
-  private applyPenaltyOverrides(segments: EnhancedTimeSegment[], overrides: PenaltyOverride): EnhancedTimeSegment[] {
-    return segments.map(segment => {
-      const modifiedPenalties = [...segment.penaltyTypes];
-      
-      // Apply overrides
-      Object.entries(overrides).forEach(([penaltyType, override]) => {
-        if (override === null) return; // Auto calculation
-        
-        const penaltyName = penaltyType as keyof PenaltyOverride;
-        if (penaltyName === 'overrideReason' || penaltyName === 'overrideTimestamp') return;
-        
-        const penaltyKey = penaltyName === 'weekend' ? 'weekend' : penaltyName;
-        const currentlyHasPenalty = modifiedPenalties.includes(penaltyKey as 'evening' | 'night' | 'weekend' | 'public_holiday');
-        
-        if (override && !currentlyHasPenalty) {
-          // Force add penalty
-          modifiedPenalties.push(penaltyKey as 'evening' | 'night' | 'weekend' | 'public_holiday');
-        } else if (!override && currentlyHasPenalty) {
-          // Force remove penalty
-          const index = modifiedPenalties.indexOf(penaltyKey as 'evening' | 'night' | 'weekend' | 'public_holiday');
-          if (index > -1) {
-            modifiedPenalties.splice(index, 1);
-          }
-        }
-      });
-      
-      return {
-        ...segment,
-        penaltyTypes: modifiedPenalties,
-        isRegular: modifiedPenalties.length === 0
+      // Create a virtual penalty time frame for public holidays
+      const publicHolidayPenalty: PenaltyTimeFrame = {
+        id: 'public-holiday',
+        payGuideId: this.payGuide.id,
+        name: 'Public Holiday Penalty',
+        description: 'Public holiday penalty rate (250%)',
+        startTime: '00:00',
+        endTime: '23:59',
+        penaltyRate: new Decimal('2.5'), // 250% rate
+        dayOfWeek: null,
+        priority: 10, // Highest priority
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
+      applicablePenalties.push(publicHolidayPenalty);
+      // Public holidays override all other penalties
+      return applicablePenalties;
+    }
+
+    // Check defined penalty time frames
+    if (this.payGuide.penaltyTimeFrames) {
+      const dayOfWeek = startTime.getDay(); // 0=Sunday, 1=Monday, etc.
+      
+      for (const penalty of this.payGuide.penaltyTimeFrames) {
+        // Skip inactive penalties
+        if (!penalty.isActive) {
+          continue;
+        }
+        
+        // Check day of week constraint
+        if (penalty.dayOfWeek !== null && penalty.dayOfWeek !== dayOfWeek) {
+          continue;
+        }
+        
+        // Check if the time segment overlaps with the penalty time frame
+        const segmentStartTime = this.formatTime(startTime);
+        const segmentEndTime = this.formatTime(endTime);
+        
+        if (this.segmentOverlapsWith(segmentStartTime, segmentEndTime, penalty.startTime, penalty.endTime)) {
+          applicablePenalties.push(penalty);
+        }
+      }
+    }
+    
+    // Sort by priority (higher priority first)
+    return applicablePenalties.sort((a, b) => b.priority - a.priority);
+  }
+
+  private isPublicHoliday(date: Date): boolean {
+    // For local dates (timezone-converted), use local date string instead of ISO
+    const dateStr = date.getFullYear() + '-' + 
+                    String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(date.getDate()).padStart(2, '0');
+    
+    return this.publicHolidays.some(holiday => {
+      const holidayStr = holiday.date.toISOString().split('T')[0];
+      return holidayStr === dateStr;
     });
   }
 
-  private calculateEnhancedHoursBreakdown(timeSegments: EnhancedTimeSegment[], totalMinutes: number): EnhancedHoursBreakdown {
+
+
+
+
+  private calculateEnhancedHoursBreakdown(timeSegments: EnhancedTimeSegment[], totalMinutes: number, startTime: Date, endTime: Date): EnhancedHoursBreakdown {
     let regularMinutes = 0;
-    let eveningMinutes = 0;
-    let nightMinutes = 0;
-    let saturdayMinutes = 0;
-    let sundayMinutes = 0;
-    let publicHolidayMinutes = 0;
+
+    // Track penalty minutes
+    const penaltyMinutes = new Map<string, { penalty: PenaltyTimeFrame; minutes: number }>();
 
     timeSegments.forEach(segment => {
       if (segment.isRegular) {
         regularMinutes += segment.durationMinutes;
       }
-      
-      // Count penalty minutes (can overlap)
-      segment.penaltyTypes.forEach(penaltyType => {
-        switch (penaltyType) {
-          case 'evening':
-            eveningMinutes += segment.durationMinutes;
-            break;
-          case 'night':
-            nightMinutes += segment.durationMinutes;
-            break;
-          case 'weekend':
-            const avgTime = new Date((segment.startTime.getTime() + segment.endTime.getTime()) / 2);
-            if (avgTime.getDay() === 0) { // Sunday
-              sundayMinutes += segment.durationMinutes;
-            } else { // Saturday
-              saturdayMinutes += segment.durationMinutes;
-            }
-            break;
-          case 'public_holiday':
-            publicHolidayMinutes += segment.durationMinutes;
-            break;
+
+      // Count penalty minutes
+      segment.penalties.forEach(penalty => {
+        const key = penalty.id;
+        const existing = penaltyMinutes.get(key);
+        if (existing) {
+          existing.minutes += segment.durationMinutes;
+        } else {
+          penaltyMinutes.set(key, {
+            penalty,
+            minutes: segment.durationMinutes
+          });
         }
       });
     });
 
     const totalHours = new Decimal(totalMinutes).div(60);
-    const dailyOvertimeThreshold = this.payGuide.dailyOvertimeHours;
     
-    // Calculate overtime
-    let overtime1_5xHours = new Decimal(0);
-    let overtime2xHours = new Decimal(0);
-    let regularHours = new Decimal(regularMinutes).div(60);
+    // Apply Australian retail award overtime logic
+    const overtimeResult = this.calculateRetailOvertimeHours(totalHours, startTime, endTime, timeSegments);
     
-    if (totalHours.gt(dailyOvertimeThreshold)) {
-      const overtimeHours = totalHours.sub(dailyOvertimeThreshold);
-      
-      if (overtimeHours.gt(2)) {
-        // First 2 hours at 1.5x, rest at 2x
-        overtime1_5xHours = new Decimal(2);
-        overtime2xHours = overtimeHours.sub(2);
-      } else {
-        // All overtime at 1.5x
-        overtime1_5xHours = overtimeHours;
-      }
-      
-      // Reduce regular hours by overtime amount
-      regularHours = dailyOvertimeThreshold;
+    let overtime1_5xHours = overtimeResult.overtime1_5x;
+    let overtime2xHours = overtimeResult.overtime2x;
+    let regularHours = new Decimal(regularMinutes).div(60).sub(overtime1_5xHours).sub(overtime2xHours);
+    
+    // Ensure regular hours don't go negative
+    if (regularHours.lt(0)) {
+      regularHours = new Decimal(0);
     }
 
-    // Calculate total penalty hours (unique, not overlapping for display)
-    const totalPenaltyMinutes = eveningMinutes + nightMinutes + saturdayMinutes + sundayMinutes + publicHolidayMinutes;
+    // Convert penalty minutes to hours
+    const penaltyHours = new Map<string, { penalty: PenaltyTimeFrame; hours: Decimal }>();
+    penaltyMinutes.forEach((value, key) => {
+      penaltyHours.set(key, {
+        penalty: value.penalty,
+        hours: new Decimal(value.minutes).div(60)
+      });
+    });
+
+    // Calculate total penalty hours
+    const penaltyMinutesTotal = Array.from(penaltyMinutes.values())
+      .reduce((sum, item) => sum + item.minutes, 0);
+    const totalPenaltyMinutes = penaltyMinutesTotal;
 
     return {
       regular: regularHours,
       overtime1_5x: overtime1_5xHours,
       overtime2x: overtime2xHours,
-      evening: new Decimal(eveningMinutes).div(60),
-      night: new Decimal(nightMinutes).div(60),
-      saturday: new Decimal(saturdayMinutes).div(60),
-      sunday: new Decimal(sundayMinutes).div(60),
-      publicHoliday: new Decimal(publicHolidayMinutes).div(60),
+      penalties: penaltyHours,
       totalPenalty: new Decimal(totalPenaltyMinutes).div(60)
     };
   }
@@ -406,36 +282,42 @@ export class EnhancedPayCalculator {
     
     const regularPay = hoursBreakdown.regular.mul(baseRate);
     
+    // Use configurable overtime rates from PayGuide
     const overtime1_5xPay = hoursBreakdown.overtime1_5x
       .mul(baseRate)
-      .mul(this.payGuide.overtimeRate1_5x);
+      .mul(this.payGuide.overtimeRate1_5x); // Configurable rate (default 175% for retail)
       
     const overtime2xPay = hoursBreakdown.overtime2x
       .mul(baseRate)
-      .mul(this.payGuide.overtimeRate2x);
+      .mul(this.payGuide.overtimeRate2x); // Configurable rate (default 225% for retail)
     
-    // Calculate penalty pay for each type
-    const eveningPay = hoursBreakdown.evening
-      .mul(baseRate)
-      .mul(this.payGuide.eveningPenalty);
+    // Calculate penalty pay
+    const penaltyBreakdowns: PenaltyBreakdown[] = [];
+    let penaltyTotalPay = new Decimal(0);
+    
+    hoursBreakdown.penalties.forEach((value, key) => {
+      const penaltyPay = value.hours
+        .mul(baseRate)
+        .mul(value.penalty.penaltyRate);
       
-    const nightPay = hoursBreakdown.night
-      .mul(baseRate)
-      .mul(this.payGuide.nightPenalty);
+      penaltyBreakdowns.push({
+        id: value.penalty.id,
+        name: value.penalty.name,
+        hours: value.hours,
+        rate: baseRate.mul(value.penalty.penaltyRate),
+        amount: penaltyPay
+      });
       
-    const saturdayPay = hoursBreakdown.saturday
-      .mul(baseRate)
-      .mul(this.payGuide.saturdayPenalty);
+      penaltyTotalPay = penaltyTotalPay.plus(penaltyPay);
+    });
 
-    const sundayPay = hoursBreakdown.sunday
-      .mul(baseRate)
-      .mul(this.payGuide.sundayPenalty);
-        
-    const publicHolidayPay = hoursBreakdown.publicHoliday
-      .mul(baseRate)
-      .mul(this.payGuide.publicHolidayPenalty);
+    const totalPenaltyPay = penaltyTotalPay;
 
-    const totalPenaltyPay = eveningPay.plus(nightPay).plus(saturdayPay).plus(sundayPay).plus(publicHolidayPay);
+    // Calculate casual loading from PayGuide
+    const casualLoadingRate = this.payGuide.casualLoading || new Decimal(0);
+    const casualLoading = casualLoadingRate.greaterThan(0) 
+      ? regularPay.plus(overtime1_5xPay).plus(overtime2xPay).plus(totalPenaltyPay).mul(casualLoadingRate)
+      : new Decimal(0);
 
     return {
       baseRate,
@@ -454,34 +336,10 @@ export class EnhancedPayCalculator {
         rate: baseRate.mul(this.payGuide.overtimeRate2x),
         amount: overtime2xPay
       },
-      eveningPenalty: {
-        hours: hoursBreakdown.evening,
-        rate: baseRate.mul(this.payGuide.eveningPenalty),
-        amount: eveningPay
-      },
-      nightPenalty: {
-        hours: hoursBreakdown.night,
-        rate: baseRate.mul(this.payGuide.nightPenalty),
-        amount: nightPay
-      },
-      saturdayPenalty: {
-        hours: hoursBreakdown.saturday,
-        rate: baseRate.mul(this.payGuide.saturdayPenalty),
-        amount: saturdayPay
-      },
-      sundayPenalty: {
-        hours: hoursBreakdown.sunday,
-        rate: baseRate.mul(this.payGuide.sundayPenalty),
-        amount: sundayPay
-      },
-      publicHolidayPenalty: {
-        hours: hoursBreakdown.publicHoliday,
-        rate: baseRate.mul(this.payGuide.publicHolidayPenalty),
-        amount: publicHolidayPay
-      },
+      penalties: penaltyBreakdowns,
       casualLoading: {
-        rate: this.payGuide.casualLoading,
-        amount: regularPay.plus(overtime1_5xPay).plus(overtime2xPay).plus(totalPenaltyPay).mul(this.payGuide.casualLoading)
+        rate: casualLoadingRate,
+        amount: casualLoading
       },
       totalPenaltyPay,
       regularPay: regularPay,
@@ -490,26 +348,148 @@ export class EnhancedPayCalculator {
     };
   }
 
+  /**
+   * Calculate overtime hours according to Australian retail award rules:
+   * 1. Outside span of ordinary hours
+   * 2. Over 11 hours on one day (Monday only, once per week)
+   * 3. Over 9 hours on other days
+   * 4. Over 38 hours per week (weekly check would be done at pay period level)
+   */
+  private calculateRetailOvertimeHours(
+    totalHours: Decimal, 
+    startTime: Date, 
+    endTime: Date, 
+    timeSegments: EnhancedTimeSegment[]
+  ): { overtime1_5x: Decimal; overtime2x: Decimal } {
+    let overtime1_5x = new Decimal(0);
+    let overtime2x = new Decimal(0);
+
+    const dayOfWeek = startTime.getDay();
+    
+    
+    // Check if work extends outside span of ordinary hours (if configured)
+    if (this.payGuide.overtimeOnSpanBoundary) {
+      const spanStart = this.getSpanStart(dayOfWeek);
+      const spanEnd = this.getSpanEnd(dayOfWeek);
+      const outsideSpanMinutes = this.calculateOutsideSpanMinutes(startTime, endTime, spanStart, spanEnd);
+      
+      if (outsideSpanMinutes > 0) {
+        const outsideSpanHours = new Decimal(outsideSpanMinutes).div(60);
+        
+        // Apply overtime rates based on day and PayGuide configuration
+        if (dayOfWeek === 0) { // Sunday
+          // Sunday OT uses the higher rate (overtime2x)
+          overtime2x = overtime2x.plus(outsideSpanHours);
+        } else {
+          // Monday-Saturday: distribute between rates based on hours
+          // First portion goes to overtime1_5x, excess goes to overtime2x
+          const firstTierLimit = new Decimal(3); // This could be made configurable
+          if (outsideSpanHours.lte(firstTierLimit)) {
+            overtime1_5x = overtime1_5x.plus(outsideSpanHours);
+          } else {
+            overtime1_5x = overtime1_5x.plus(firstTierLimit);
+            overtime2x = overtime2x.plus(outsideSpanHours.sub(firstTierLimit));
+          }
+        }
+      }
+    }
+    
+    // Check daily hour limits (if configured)
+    if (this.payGuide.overtimeOnDailyLimit) {
+      const dailyOvertimeHours = this.calculateDailyOvertimeHours(totalHours, dayOfWeek);
+      if (dailyOvertimeHours.gt(0)) {
+        // Add to existing overtime (don't double-count)
+        const additionalOT = dailyOvertimeHours.sub(overtime1_5x).sub(overtime2x);
+        if (additionalOT.gt(0)) {
+          if (dayOfWeek === 0) { // Sunday
+            overtime2x = overtime2x.plus(additionalOT);
+          } else {
+            // Add to lower rate first, then higher rate
+            overtime1_5x = overtime1_5x.plus(additionalOT);
+          }
+        }
+      }
+    }
+
+    return { overtime1_5x, overtime2x };
+  }
+
+  private getSpanStart(dayOfWeek: number): string {
+    switch (dayOfWeek) {
+      case 0: return this.payGuide.sundayStart || '09:00'; // Sunday
+      case 1: return this.payGuide.mondayStart || '07:00'; // Monday
+      case 2: return this.payGuide.tuesdayStart || '07:00'; // Tuesday
+      case 3: return this.payGuide.wednesdayStart || '07:00'; // Wednesday
+      case 4: return this.payGuide.thursdayStart || '07:00'; // Thursday
+      case 5: return this.payGuide.fridayStart || '07:00'; // Friday
+      case 6: return this.payGuide.saturdayStart || '07:00'; // Saturday
+      default: return '07:00';
+    }
+  }
+
+  private getSpanEnd(dayOfWeek: number): string {
+    switch (dayOfWeek) {
+      case 0: return this.payGuide.sundayEnd || '18:00'; // Sunday
+      case 1: return this.payGuide.mondayEnd || '21:00'; // Monday
+      case 2: return this.payGuide.tuesdayEnd || '21:00'; // Tuesday
+      case 3: return this.payGuide.wednesdayEnd || '21:00'; // Wednesday
+      case 4: return this.payGuide.thursdayEnd || '21:00'; // Thursday
+      case 5: return this.payGuide.fridayEnd || '21:00'; // Friday
+      case 6: return this.payGuide.saturdayEnd || '18:00'; // Saturday
+      default: return '21:00';
+    }
+  }
+
+  private calculateOutsideSpanMinutes(startTime: Date, endTime: Date, spanStart: string, spanEnd: string): number {
+    const startTimeStr = this.formatTime(startTime);
+    const endTimeStr = this.formatTime(endTime);
+    
+    const shiftStartMinutes = this.timeStringToMinutes(startTimeStr);
+    const shiftEndMinutes = this.timeStringToMinutes(endTimeStr);
+    const spanStartMinutes = this.timeStringToMinutes(spanStart);
+    const spanEndMinutes = this.timeStringToMinutes(spanEnd);
+    
+    let outsideMinutes = 0;
+    
+    // Before span start
+    if (shiftStartMinutes < spanStartMinutes) {
+      const beforeSpanEnd = Math.min(shiftEndMinutes, spanStartMinutes);
+      const beforeSpanMinutes = beforeSpanEnd - shiftStartMinutes;
+      outsideMinutes += beforeSpanMinutes;
+    }
+    
+    // After span end
+    if (shiftEndMinutes > spanEndMinutes) {
+      const afterSpanStart = Math.max(shiftStartMinutes, spanEndMinutes);
+      const afterSpanMinutes = shiftEndMinutes - afterSpanStart;
+      outsideMinutes += afterSpanMinutes;
+    }
+    return Math.max(0, outsideMinutes);
+  }
+
+  private calculateDailyOvertimeHours(totalHours: Decimal, dayOfWeek: number): Decimal {
+    // Use configurable daily limits from PayGuide
+    // Check if this day can have extended hours (typically Monday for retail)
+    const canHaveExtendedHours = dayOfWeek === 1; // Monday - this could be made configurable too
+    const dailyLimit = canHaveExtendedHours 
+      ? (this.payGuide.specialDayOvertimeHours || this.payGuide.dailyOvertimeHours)
+      : this.payGuide.dailyOvertimeHours;
+    
+    if (totalHours.gt(dailyLimit)) {
+      const overtimeHours = totalHours.sub(dailyLimit);
+      return overtimeHours;
+    }
+    
+    return new Decimal(0);
+  }
+
   private getAppliedPenalties(segments: EnhancedTimeSegment[]): string[] {
     const appliedPenalties = new Set<string>();
     
     segments.forEach(segment => {
-      segment.penaltyTypes.forEach(penaltyType => {
-        switch (penaltyType) {
-          case 'evening':
-            appliedPenalties.add('Evening');
-            break;
-          case 'night':
-            appliedPenalties.add('Night');
-            break;
-          case 'weekend':
-            const avgTime = new Date((segment.startTime.getTime() + segment.endTime.getTime()) / 2);
-            appliedPenalties.add(avgTime.getDay() === 0 ? 'Sunday' : 'Saturday');
-            break;
-          case 'public_holiday':
-            appliedPenalties.add('Public Holiday');
-            break;
-        }
+      // Add penalty names
+      segment.penalties.forEach(penalty => {
+        appliedPenalties.add(penalty.name);
       });
     });
     
@@ -518,30 +498,36 @@ export class EnhancedPayCalculator {
 
   // Helper methods (reused from original PayCalculator)
   private getNextSegmentBoundary(currentTime: Date, endTime: Date): Date {
-    // Get boundaries on current day
+    // Get boundaries on current day - custom penalties only
     const boundaries = [
-      this.getTimeOnDate(currentTime, this.payGuide.eveningStart),
-      this.getTimeOnDate(currentTime, this.payGuide.eveningEnd),
-      this.getTimeOnDate(currentTime, this.payGuide.nightStart),
       // Handle midnight boundary
-      new Date(Date.UTC(currentTime.getUTCFullYear(), currentTime.getUTCMonth(), currentTime.getUTCDate() + 1, 0, 0, 0)),
+      new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate() + 1, 0, 0, 0),
       endTime
     ];
-    
-    // For night end time, we need to check if it should be next day
-    // Night periods that cross midnight (e.g., 22:00-06:00) need special handling
-    const nightStartMinutes = this.timeStringToMinutes(this.payGuide.nightStart);
-    const nightEndMinutes = this.timeStringToMinutes(this.payGuide.nightEnd);
-    
-    if (nightEndMinutes <= nightStartMinutes) {
-      // Night period crosses midnight, so night end is on the next day
-      const nextDay = new Date(currentTime);
-      nextDay.setUTCDate(currentTime.getUTCDate() + 1);
-      boundaries.push(this.getTimeOnDate(nextDay, this.payGuide.nightEnd));
-    } else {
-      // Night period is on same day
-      boundaries.push(this.getTimeOnDate(currentTime, this.payGuide.nightEnd));
+
+    // Add penalty boundaries
+    if (this.payGuide.penaltyTimeFrames) {
+      const dayOfWeek = currentTime.getDay();
+      for (const penalty of this.payGuide.penaltyTimeFrames) {
+        if (penalty.isActive && (penalty.dayOfWeek === null || penalty.dayOfWeek === dayOfWeek)) {
+          boundaries.push(this.getTimeOnDate(currentTime, penalty.startTime));
+          boundaries.push(this.getTimeOnDate(currentTime, penalty.endTime));
+          
+          // Handle midnight crossing for penalties
+          const startMinutes = this.timeStringToMinutes(penalty.startTime);
+          const endMinutes = this.timeStringToMinutes(penalty.endTime);
+          
+          if (endMinutes <= startMinutes) {
+            // Penalty crosses midnight
+            const nextDay = new Date(currentTime);
+            nextDay.setDate(currentTime.getDate() + 1);
+            boundaries.push(this.getTimeOnDate(nextDay, penalty.endTime));
+          }
+        }
+      }
     }
+    
+    // Penalties handle their own midnight crossing logic above
 
     const validBoundaries = boundaries.filter(boundary => boundary > currentTime);
     const nextBoundary = validBoundaries.sort((a, b) => a.getTime() - b.getTime())[0] || endTime;
@@ -549,30 +535,23 @@ export class EnhancedPayCalculator {
     return nextBoundary;
   }
 
-  private isPublicHoliday(date: Date): boolean {
-    const dateStr = date.toISOString().split('T')[0];
-    return this.publicHolidays.some(holiday => {
-      const holidayStr = holiday.date.toISOString().split('T')[0];
-      return holidayStr === dateStr;
-    });
-  }
 
   private getTimeOnDate(date: Date, timeStr: string): Date {
     const [hours, minutes] = timeStr.split(':').map(Number);
     
-    // Create the date in UTC to avoid timezone conversion issues
-    // Extract the UTC date components from the input date
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth();
-    const day = date.getUTCDate();
+    // Create the date in local time to match input dates
+    // Extract the local date components from the input date
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
     
-    // Create the result date in UTC with the specified time
-    const result = new Date(Date.UTC(year, month, day, hours, minutes, 0));
+    // Create the result date in local time with the specified time
+    const result = new Date(year, month, day, hours, minutes, 0);
     return result;
   }
 
   private formatTime(date: Date): string {
-    return `${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   }
 
   private isTimeBetween(timeStr: string, startStr: string, endStr: string): boolean {
@@ -636,4 +615,5 @@ export class EnhancedPayCalculator {
       }
     }
   }
+
 }
