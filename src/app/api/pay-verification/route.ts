@@ -141,8 +141,21 @@ export async function POST(request: NextRequest) {
         throw new Error('Pay guide not found');
       }
       
+      // Get penalty time frames for this pay guide
+      const penaltyTimeFrames = await prisma.penaltyTimeFrame.findMany({
+        where: { 
+          payGuideId: payGuide.id, 
+          isActive: true 
+        }
+      });
+
+      const payGuideWithPenalties = {
+        ...payGuide,
+        penaltyTimeFrames
+      };
+
       // Calculate pay period
-      const calculator = new PayPeriodCalculator(payGuide, taxBrackets, hecsThresholds, publicHolidays, user);
+      const calculator = new PayPeriodCalculator(payGuideWithPenalties, taxBrackets, hecsThresholds, publicHolidays, user);
       const shifts = payPeriod.shifts.map(ps => ps.shift);
       const calculation = calculator.calculatePayPeriod(shifts, payPeriod.startDate, payPeriod.endDate);
       

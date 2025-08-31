@@ -6,11 +6,12 @@ import Decimal from 'decimal.js';
 // GET /api/penalties/[id] - Get a specific penalty time frame
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const penalty = await prisma.penaltyTimeFrame.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         payGuide: {
           select: {
@@ -41,14 +42,15 @@ export async function GET(
 // PUT /api/penalties/[id] - Update a penalty time frame
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const data: PenaltyTimeFrameFormData = await request.json();
 
     // Check if penalty exists
     const existingPenalty = await prisma.penaltyTimeFrame.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
 
     if (!existingPenalty) {
@@ -83,7 +85,7 @@ export async function PUT(
 
     // Update the penalty time frame
     const penalty = await prisma.penaltyTimeFrame.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         name: data.name.trim(),
         description: data.description?.trim() || null,
@@ -109,12 +111,13 @@ export async function PUT(
 // DELETE /api/penalties/[id] - Delete a penalty time frame
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Check if penalty exists
     const existingPenalty = await prisma.penaltyTimeFrame.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
 
     if (!existingPenalty) {
@@ -126,7 +129,7 @@ export async function DELETE(
 
     // Delete the penalty time frame
     await prisma.penaltyTimeFrame.delete({
-      where: { id: params.id }
+      where: { id }
     });
 
     return NextResponse.json({ message: 'Penalty time frame deleted successfully' });
