@@ -11,7 +11,11 @@ CREATE TABLE "users" (
     "claimsTaxFreeThreshold" BOOLEAN NOT NULL DEFAULT true,
     "hasHECSDebt" BOOLEAN NOT NULL DEFAULT false,
     "hasStudentFinancialSupplement" BOOLEAN NOT NULL DEFAULT false,
-    "medicareLevyExemption" BOOLEAN NOT NULL DEFAULT false
+    "medicareLevyExemption" BOOLEAN NOT NULL DEFAULT false,
+    "lastUsedPayGuideId" TEXT,
+    "defaultPayGuideId" TEXT,
+    "payPeriodFrequency" TEXT NOT NULL DEFAULT 'fortnightly',
+    "payPeriodStartDay" INTEGER NOT NULL DEFAULT 1
 );
 
 -- CreateTable
@@ -25,21 +29,33 @@ CREATE TABLE "pay_guides" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     "baseHourlyRate" DECIMAL NOT NULL,
-    "casualLoading" DECIMAL NOT NULL DEFAULT 0.25,
-    "overtimeRate1_5x" DECIMAL NOT NULL DEFAULT 1.5,
-    "overtimeRate2x" DECIMAL NOT NULL DEFAULT 2.0,
-    "eveningPenalty" DECIMAL NOT NULL DEFAULT 1.15,
-    "nightPenalty" DECIMAL NOT NULL DEFAULT 1.30,
-    "saturdayPenalty" DECIMAL NOT NULL DEFAULT 1.25,
-    "sundayPenalty" DECIMAL NOT NULL DEFAULT 1.75,
-    "publicHolidayPenalty" DECIMAL NOT NULL DEFAULT 2.50,
-    "eveningStart" TEXT NOT NULL DEFAULT '18:00',
-    "eveningEnd" TEXT NOT NULL DEFAULT '22:00',
-    "nightStart" TEXT NOT NULL DEFAULT '22:00',
-    "nightEnd" TEXT NOT NULL DEFAULT '06:00',
-    "dailyOvertimeHours" DECIMAL NOT NULL DEFAULT 8.0,
+    "casualLoading" DECIMAL NOT NULL DEFAULT 0.0,
+    "overtimeRate1_5x" DECIMAL NOT NULL DEFAULT 1.75,
+    "overtimeRate2x" DECIMAL NOT NULL DEFAULT 2.25,
+    "dailyOvertimeHours" DECIMAL NOT NULL DEFAULT 9.0,
+    "specialDayOvertimeHours" DECIMAL NOT NULL DEFAULT 11.0,
     "weeklyOvertimeHours" DECIMAL NOT NULL DEFAULT 38.0,
+    "overtimeOnSpanBoundary" BOOLEAN NOT NULL DEFAULT true,
+    "overtimeOnDailyLimit" BOOLEAN NOT NULL DEFAULT true,
+    "overtimeOnWeeklyLimit" BOOLEAN NOT NULL DEFAULT true,
     CONSTRAINT "pay_guides_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "penalty_time_frames" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "payGuideId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "startTime" TEXT NOT NULL,
+    "endTime" TEXT NOT NULL,
+    "penaltyRate" DECIMAL NOT NULL,
+    "dayOfWeek" INTEGER,
+    "priority" INTEGER NOT NULL DEFAULT 0,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "penalty_time_frames_payGuideId_fkey" FOREIGN KEY ("payGuideId") REFERENCES "pay_guides" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -83,8 +99,11 @@ CREATE TABLE "shifts" (
     "shiftType" TEXT NOT NULL DEFAULT 'REGULAR',
     "status" TEXT NOT NULL DEFAULT 'SCHEDULED',
     "notes" TEXT,
+    "location" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
+    "penaltyOverrides" TEXT,
+    "autoCalculatePenalties" BOOLEAN NOT NULL DEFAULT true,
     "totalMinutes" INTEGER,
     "regularHours" DECIMAL,
     "overtimeHours" DECIMAL,
