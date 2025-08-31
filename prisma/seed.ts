@@ -122,34 +122,119 @@ async function main() {
   }
   console.log('🎉 Seeded 2025 public holidays')
 
-  // Create a sample pay guide based on General Retail Industry Award
+  // Create accurate pay guide based on General Retail Industry Award MA000004 matching example.json
   const payGuide = await prisma.payGuide.upsert({
     where: { id: 'retail-award-2024' },
     update: {},
     create: {
       id: 'retail-award-2024',
-      name: 'General Retail Industry Award MA000004 - Level 1',
-      effectiveFrom: new Date('2024-07-01'),
+      name: 'General Retail Industry Award MA000004 - Level 1 Casual',
+      effectiveFrom: new Date('2025-07-01'),
       isActive: true,
       userId: user.id,
-      baseHourlyRate: 23.23, // Level 1 adult rate (example)
-      casualLoading: 0.25, // 25% casual loading
-      overtimeRate1_5x: 1.5,
-      overtimeRate2x: 2.0,
-      eveningPenalty: 1.15, // 15% evening penalty (6pm-10pm)
-      nightPenalty: 1.30, // 30% night penalty (10pm-6am)
-      saturdayPenalty: 1.25, // 25% Saturday penalty
-      sundayPenalty: 1.75, // 75% Sunday penalty
-      publicHolidayPenalty: 2.50, // 150% public holiday penalty
-      eveningStart: '18:00',
-      eveningEnd: '22:00',
-      nightStart: '22:00',
-      nightEnd: '06:00',
-      dailyOvertimeHours: 8.0,
+      baseHourlyRate: 26.55, // Level 1 casual rate (includes 25% casual loading: 21.24 * 1.25)
+      casualLoading: 0.0, // Set to 0 since already included in base rate
+      overtimeRate1_5x: 1.75, // 175% for Mon-Sat first 3 hours OT
+      overtimeRate2x: 2.25, // 225% for Mon-Sat after 3 hours, all Sunday OT
+      dailyOvertimeHours: 9.0, // OT after 9 hours on non-Monday days
+      specialDayOvertimeHours: 11.0, // Monday can work 11 hours
       weeklyOvertimeHours: 38.0,
+      overtimeOnSpanBoundary: true, // OT when outside span of ordinary hours
+      overtimeOnDailyLimit: true, // OT when exceeding daily limits
+      overtimeOnWeeklyLimit: true // OT when exceeding weekly limits
     },
   })
   console.log('📋 Created sample pay guide:', payGuide.name)
+
+  // Create additional retail award level 2 from example.json
+  const payGuideLevel2 = await prisma.payGuide.upsert({
+    where: { id: 'retail-award-level2-2025' },
+    update: {},
+    create: {
+      id: 'retail-award-level2-2025',
+      name: 'General Retail Industry Award MA000004 - Level 2 Casual',
+      effectiveFrom: new Date('2025-07-01'),
+      isActive: false,
+      userId: user.id,
+      baseHourlyRate: 27.16, // Level 2 casual rate from example.json
+      casualLoading: 0.0, // Set to 0 since already included in base rate
+      overtimeRate1_5x: 1.75, // 175% for Mon-Sat first 3 hours OT
+      overtimeRate2x: 2.25, // 225% for Mon-Sat after 3 hours, all Sunday OT
+      dailyOvertimeHours: 9.0,
+      specialDayOvertimeHours: 11.0,
+      weeklyOvertimeHours: 38.0,
+      overtimeOnSpanBoundary: true,
+      overtimeOnDailyLimit: true,
+      overtimeOnWeeklyLimit: true,
+    },
+  })
+
+  // Set user's default pay guide
+  await prisma.user.update({
+    where: { id: 'default-user' },
+    data: {
+      defaultPayGuideId: payGuide.id,
+      lastUsedPayGuideId: payGuide.id,
+    },
+  })
+
+  console.log('📋 Created additional retail award levels')
+
+  // Create standard Australian retail award penalty time frames
+  const saturdayPenalty = await prisma.penaltyTimeFrame.create({
+    data: {
+      payGuideId: payGuide.id,
+      name: 'Saturday Penalty',
+      description: 'Saturday penalty rate (125%) as per Australian Retail Industry Award',
+      startTime: '00:00',
+      endTime: '23:59',
+      penaltyRate: 1.25, // 125% rate
+      dayOfWeek: 6, // Saturday
+      priority: 3,
+      isActive: true
+    }
+  })
+
+  const sundayPenalty = await prisma.penaltyTimeFrame.create({
+    data: {
+      payGuideId: payGuide.id,
+      name: 'Sunday Penalty',
+      description: 'Sunday penalty rate (175%) as per Australian Retail Industry Award',
+      startTime: '00:00',
+      endTime: '23:59', 
+      penaltyRate: 1.75, // 175% rate
+      dayOfWeek: 0, // Sunday
+      priority: 4,
+      isActive: true
+    }
+  })
+
+  // Create evening penalty for Monday-Friday (separate entries for each weekday)
+  const weekdays = [
+    { day: 1, name: 'Monday' },
+    { day: 2, name: 'Tuesday' }, 
+    { day: 3, name: 'Wednesday' },
+    { day: 4, name: 'Thursday' },
+    { day: 5, name: 'Friday' }
+  ]
+  
+  for (const weekday of weekdays) {
+    await prisma.penaltyTimeFrame.create({
+      data: {
+        payGuideId: payGuide.id,
+        name: `Evening Penalty (${weekday.name})`,
+        description: `Evening penalty rate (125%) from 6pm-midnight on ${weekday.name}`,
+        startTime: '18:00',
+        endTime: '23:59',
+        penaltyRate: 1.25, // 125% rate
+        dayOfWeek: weekday.day,
+        priority: 1,
+        isActive: true
+      }
+    })
+  }
+
+  console.log('💰 Created standard penalty time frames')
 
   // Create sample shifts for demonstration
   const today = new Date()

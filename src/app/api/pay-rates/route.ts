@@ -92,26 +92,10 @@ export async function POST(request: NextRequest) {
       overtimeRate1_5x: new Decimal(body.overtimeRate1_5x ?? 1.5),
       overtimeRate2x: new Decimal(body.overtimeRate2x ?? 2.0),
       
-      // Penalty rates
-      eveningPenalty: new Decimal(body.eveningPenalty ?? 1.15),
-      nightPenalty: new Decimal(body.nightPenalty ?? 1.30),
-      saturdayPenalty: new Decimal(body.saturdayPenalty ?? 1.25),
-      sundayPenalty: new Decimal(body.sundayPenalty ?? 1.75),
-      publicHolidayPenalty: new Decimal(body.publicHolidayPenalty ?? 2.50),
-      
-      // Time boundaries
-      eveningStart: body.eveningStart ?? "18:00",
-      eveningEnd: body.eveningEnd ?? "22:00",
-      nightStart: body.nightStart ?? "22:00",
-      nightEnd: body.nightEnd ?? "06:00",
       
       // Overtime thresholds
       dailyOvertimeHours: new Decimal(body.dailyOvertimeHours ?? 8.0),
       weeklyOvertimeHours: new Decimal(body.weeklyOvertimeHours ?? 38.0),
-      
-      // Penalty combination settings
-      allowPenaltyCombination: body.allowPenaltyCombination ?? true,
-      penaltyCombinationRules: body.penaltyCombinationRules ? JSON.stringify(body.penaltyCombinationRules) : null,
     };
 
     const payGuide = await prisma.payGuide.create({

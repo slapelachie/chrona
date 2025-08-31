@@ -10,11 +10,8 @@ interface PayGuide {
   name: string;
   baseHourlyRate: string;
   casualLoading: string;
-  eveningPenalty: string;
-  nightPenalty: string;
-  saturdayPenalty: string;
-  sundayPenalty: string;
-  publicHolidayPenalty: string;
+  overtimeRate1_5x: string;
+  overtimeRate2x: string;
   isActive: boolean;
   effectiveFrom: string;
   effectiveTo?: string;
@@ -208,7 +205,7 @@ export default function PayRateSelector({
             </div>
             <div className="col-6">
               <div className="small">
-                <strong>{formatPercentage(selectedPayGuide.casualLoading)}</strong>
+                <strong>{selectedPayGuide.casualLoading ? formatPercentage(selectedPayGuide.casualLoading) : '0%'}</strong>
                 <span className="text-muted"> casual loading</span>
               </div>
             </div>
@@ -216,17 +213,14 @@ export default function PayRateSelector({
               <div className="d-flex flex-wrap gap-1 mt-1">
                 <Badge bg="secondary" className="small">
                   <Clock size={8} className="me-1" />
-                  Eve: {formatPercentage(selectedPayGuide.eveningPenalty)}
+                  OT 1.5x: ${formatCurrency(new Decimal(selectedPayGuide.baseHourlyRate).mul(selectedPayGuide.overtimeRate1_5x).toString())}
                 </Badge>
                 <Badge bg="secondary" className="small">
                   <Clock size={8} className="me-1" />
-                  Night: {formatPercentage(selectedPayGuide.nightPenalty)}
+                  OT 2x: ${formatCurrency(new Decimal(selectedPayGuide.baseHourlyRate).mul(selectedPayGuide.overtimeRate2x).toString())}
                 </Badge>
-                <Badge bg="secondary" className="small">
-                  Sat: {formatPercentage(selectedPayGuide.saturdayPenalty)}
-                </Badge>
-                <Badge bg="secondary" className="small">
-                  Sun: {formatPercentage(selectedPayGuide.sundayPenalty)}
+                <Badge bg="info" className="small">
+                  Custom penalties managed separately
                 </Badge>
               </div>
             </div>
