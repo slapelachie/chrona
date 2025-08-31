@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { PayCalculator } from '@/lib/calculations/pay-calculator';
+import { EnhancedPayCalculator } from '@/lib/calculations/enhanced-pay-calculator';
 import { ShiftType, ShiftStatus } from '@prisma/client';
 import { Decimal } from 'decimal.js';
+import { PayGuideWithPenalties } from '@/types';
 
 interface ShiftUpdateData {
   startTime?: Date;
@@ -96,6 +97,20 @@ export async function PUT(
       }
 
       if (newEndTime) {
+        // Get penalty time frames for the enhanced calculator
+        const penaltyTimeFrames = await prisma.penaltyTimeFrame.findMany({
+          where: {
+            payGuideId: existingShift.payGuide.id,
+            isActive: true
+          }
+        });
+
+        // Create the pay guide with penalty time frames for the calculator
+        const payGuideWithPenalties: PayGuideWithPenalties = {
+          ...existingShift.payGuide,
+          penaltyTimeFrames
+        };
+
         // Get public holidays for calculation
         const publicHolidays = await prisma.publicHoliday.findMany({
           where: {
@@ -106,8 +121,8 @@ export async function PUT(
           }
         });
 
-        // Recalculate pay
-        const payCalculator = new PayCalculator(existingShift.payGuide, publicHolidays);
+        // Recalculate pay using Enhanced calculator
+        const payCalculator = new EnhancedPayCalculator(payGuideWithPenalties, publicHolidays);
         const calculation = payCalculator.calculateShift(
           newStartTime,
           newEndTime,
