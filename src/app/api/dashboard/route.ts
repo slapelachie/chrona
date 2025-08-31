@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { EnhancedPayCalculator } from '@/lib/calculations/enhanced-pay-calculator';
 import { TaxCalculator } from '@/lib/calculations/tax-calculator';
+import { PayPeriodCalculator } from '@/lib/calculations/pay-period-calculator';
+import { PayPeriodService } from '@/lib/services/pay-period-service';
 import { PayGuideWithPenalties } from '@/types';
 import Decimal from 'decimal.js';
 
@@ -21,12 +23,8 @@ export async function GET() {
       return NextResponse.json({ error: 'User or active pay guide not found' }, { status: 404 });
     }
 
-    // Get current pay period
-    const currentPayPeriod = await getCurrentPayPeriod(user.id);
-    
-    if (!currentPayPeriod) {
-      return NextResponse.json({ error: 'No current pay period found' }, { status: 404 });
-    }
+    // Get current pay period using centralized service
+    const currentPayPeriod = await PayPeriodService.getCurrentPayPeriod(user.id);
 
     // Get shifts for current pay period
     const shifts = await prisma.shift.findMany({
@@ -102,7 +100,9 @@ export async function GET() {
     
     // Calculate proper tax for this pay period
     const grossPayDecimal = new Decimal(totalGrossPay);
-    const taxCalculation = taxCalculator.calculatePayPeriodTax(grossPayDecimal, 26); // Fortnightly (26 periods per year)
+    // Get pay periods per year based on user frequency
+    const periodsPerYear = await PayPeriodService.getPayPeriodsPerYear(user.id);
+    const taxCalculation = taxCalculator.calculatePayPeriodTax(grossPayDecimal, periodsPerYear);
     
     const estimatedNet = taxCalculation.netPay.toNumber();
 
@@ -196,45 +196,3 @@ export async function GET() {
   }
 }
 
-async function getCurrentPayPeriod(userId: string) {
-  const now = new Date();
-  
-  // Look for existing pay period that includes today
-  const existing = await prisma.payPeriod.findFirst({
-    where: {
-      userId,
-      startDate: { lte: now },
-      endDate: { gte: now }
-    }
-  });
-
-  if (existing) {
-    return existing;
-  }
-
-  // Create a new fortnightly pay period starting from the most recent Monday
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday = 0, so offset by 6
-  
-  const startDate = new Date(today);
-  startDate.setDate(today.getDate() - mondayOffset);
-  startDate.setHours(0, 0, 0, 0);
-
-  const endDate = new Date(startDate);
-  endDate.setDate(startDate.getDate() + 13); // 14 days total (fortnightly)
-  endDate.setHours(23, 59, 59, 999);
-
-  const payDate = new Date(endDate);
-  payDate.setDate(endDate.getDate() + 7); // Pay date 1 week after period ends
-
-  return await prisma.payPeriod.create({
-    data: {
-      userId,
-      startDate,
-      endDate,
-      payDate,
-      status: 'OPEN'
-    }
-  });
-}
