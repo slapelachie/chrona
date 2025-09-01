@@ -1,7 +1,7 @@
 {
   "name": "chrona",
   "version": "1.0.0",
-  "description": "",
+  "description": "Australian Casual Pay Tracker - Mobile-first Next.js application for tracking Australian casual pay, forecasting earnings, and verifying payments",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,21 +12,16 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run"
   },
-  "keywords": [],
+  "keywords": ["australian", "pay", "tracker", "casual", "award", "wages", "nextjs", "mobile"],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "@prisma/client": "^6.15.0",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.8",
     "bootstrap": "^5.3.8",
-    "bootstrap-icons": "^1.13.1",
-    "decimal.js": "^10.6.0",
     "lucide-react": "^0.542.0",
     "next": "^15.5.2",
-    "prisma": "^6.15.0",
     "react": "^19.1.1",
     "react-bootstrap": "^2.10.10",
     "react-dom": "^19.1.1",
@@ -45,8 +40,5 @@
     "sass": "^1.91.0",
     "tsx": "^4.20.5",
     "vitest": "^3.2.4"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   }
 }
