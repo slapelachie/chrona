@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { EnhancedPayCalculator } from '@/lib/calculations/enhanced-pay-calculator';
-import { Prisma, ShiftStatus } from '@prisma/client';
+import { PayPeriodService } from '@/lib/services/pay-period-service';
+import { Prisma, ShiftStatus, ShiftType } from '@prisma/client';
 import { PayGuideWithPenalties } from '@/types';
+import { isUTCMidnight, createLocalDateTime } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,6 +15,7 @@ export async function GET(request: NextRequest) {
     const payPeriodId = searchParams.get('payPeriodId');
     const location = searchParams.get('location');
     const shiftType = searchParams.get('shiftType');
+    const search = searchParams.get('search');
     
     // Pagination parameters
     const cursor = searchParams.get('cursor'); // Format: "startTime:id"
@@ -61,6 +64,43 @@ export async function GET(request: NextRequest) {
     // Shift type filter
     if (shiftType) {
       whereCondition.shiftType = shiftType as any;
+    }
+
+    // Search functionality
+    if (search) {
+      const searchTerms = search.toLowerCase().split(' ').filter(term => term.length > 0);
+      if (searchTerms.length > 0) {
+        whereCondition.OR = whereCondition.OR || [];
+        whereCondition.OR.push(
+          // Search in notes
+          {
+            notes: {
+              contains: search
+            }
+          },
+          // Search in location
+          {
+            location: {
+              contains: search
+            }
+          }
+        );
+
+        // Handle shift type search separately with valid enum values
+        const validShiftTypes = Object.values(ShiftType);
+        const matchingShiftTypes = validShiftTypes.filter(type => 
+          type.toLowerCase().includes(search.toLowerCase()) ||
+          type.replace('_', ' ').toLowerCase().includes(search.toLowerCase())
+        );
+        
+        if (matchingShiftTypes.length > 0) {
+          whereCondition.OR.push({
+            shiftType: {
+              in: matchingShiftTypes
+            }
+          });
+        }
+      }
     }
 
     // Cursor-based pagination
@@ -213,6 +253,19 @@ export async function POST(request: NextRequest) {
 
     if (startTimeDate >= endTimeDate) {
       return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 });
+    }
+
+    // Timezone validation: prevent UTC midnight timestamps which indicate incorrect timezone handling
+    if (isUTCMidnight(startTimeDate)) {
+      console.warn('⚠️  Shift start time appears to be UTC midnight - this may indicate incorrect timezone handling');
+      console.warn('   Original:', startTime, '→', startTimeDate.toISOString());
+      console.warn('   Consider using createLocalDateTime for proper timezone handling');
+    }
+
+    if (isUTCMidnight(endTimeDate)) {
+      console.warn('⚠️  Shift end time appears to be UTC midnight - this may indicate incorrect timezone handling');
+      console.warn('   Original:', endTime, '→', endTimeDate.toISOString());  
+      console.warn('   Consider using createLocalDateTime for proper timezone handling');
     }
 
     // Get the first user (single-user application)
@@ -406,38 +459,26 @@ export async function POST(request: NextRequest) {
 }
 
 async function addShiftToPayPeriod(shiftId: string, userId: string, shiftDate: Date) {
-  // Find or create pay period for this shift
+  // Get the appropriate pay period for this shift date using PayPeriodService
+  const payPeriodDates = await PayPeriodService.getPayPeriodForDate(shiftDate, userId);
+  
+  // Find or create pay period in database
   let payPeriod = await prisma.payPeriod.findFirst({
     where: {
       userId,
-      startDate: { lte: shiftDate },
-      endDate: { gte: shiftDate }
+      startDate: payPeriodDates.startDate,
+      endDate: payPeriodDates.endDate
     }
   });
 
   if (!payPeriod) {
-    // Create a new fortnightly pay period
-    const today = shiftDate;
-    const dayOfWeek = today.getDay();
-    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - mondayOffset);
-    startDate.setHours(0, 0, 0, 0);
-
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 13);
-    endDate.setHours(23, 59, 59, 999);
-
-    const payDate = new Date(endDate);
-    payDate.setDate(endDate.getDate() + 7);
-
+    // Create new pay period using PayPeriodService data
     payPeriod = await prisma.payPeriod.create({
       data: {
         userId,
-        startDate,
-        endDate,
-        payDate,
+        startDate: payPeriodDates.startDate,
+        endDate: payPeriodDates.endDate,
+        payDate: payPeriodDates.payDate,
         status: 'OPEN'
       }
     });

@@ -10,29 +10,11 @@ import ShiftGroupHeader from '@/components/shift-group-header';
 import ShiftSummaryCards from '@/components/shift-summary-cards';
 import InfiniteScrollContainer from '@/components/infinite-scroll-container';
 import ShiftCard from '@/components/shift-card';
-import { PayPeriodGroup, ShiftFilters as ShiftFiltersType } from '@/types';
-
-interface Shift {
-  id: string;
-  startTime: string;
-  endTime: string | null;
-  breakMinutes: number;
-  shiftType: string;
-  status: string;
-  notes: string | null;
-  location: string | null;
-  penaltyOverrides: string | null;
-  autoCalculatePenalties: boolean;
-  totalMinutes: number | null;
-  regularHours: number | null;
-  overtimeHours: number | null;
-  penaltyHours: number | null;
-  grossPay: number | null;
-  superannuation: number | null;
-  payGuide: {
-    name: string;
-  };
-}
+import ShiftCalendar from '@/components/calendar/shift-calendar';
+import ViewToggle, { ViewType } from '@/components/view-toggle';
+import BulkSelectionProvider from '@/components/bulk-operations/bulk-selection-provider';
+import BulkActionsToolbar from '@/components/bulk-operations/bulk-actions-toolbar';
+import { PayPeriodGroup, ShiftFilters as ShiftFiltersType, ShiftForDisplay } from '@/types';
 
 interface PenaltyOverride {
   evening?: boolean | null;
@@ -62,14 +44,23 @@ export default function ShiftsPage() {
   const [hasMore, setHasMore] = useState(true);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingShift, setEditingShift] = useState<Shift | null>(null);
+  const [editingShift, setEditingShift] = useState<ShiftForDisplay | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<ViewType>('list');
   
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  
+  // Load view preference from localStorage
+  useEffect(() => {
+    const savedView = localStorage.getItem('chrona-shifts-view') as ViewType;
+    if (savedView && (savedView === 'list' || savedView === 'calendar')) {
+      setCurrentView(savedView);
+    }
+  }, []);
   
   // Filter state from URL params
   const [filters, setFilters] = useState<ShiftFiltersType>({
@@ -79,6 +70,7 @@ export default function ShiftsPage() {
     payPeriodId: searchParams.get('payPeriodId') || undefined,
     location: searchParams.get('location') || undefined,
     shiftType: searchParams.get('shiftType') || undefined,
+    search: searchParams.get('search') || undefined,
   });
 
   // Update URL when filters change
@@ -92,7 +84,7 @@ export default function ShiftsPage() {
     });
     
     const newURL = params.toString() ? `${pathname}?${params.toString()}` : pathname;
-    router.replace(newURL);
+    window.history.replaceState({}, '', newURL);
   }, [pathname, router]);
 
   const buildApiURL = (cursor?: string) => {
@@ -173,14 +165,132 @@ export default function ShiftsPage() {
     updateURL(emptyFilters);
   };
 
+  const handleViewChange = (view: ViewType) => {
+    setCurrentView(view);
+    localStorage.setItem('chrona-shifts-view', view);
+  };
+
+  const handleAddShift = (date?: Date) => {
+    setEditingShift(null);
+    setShowForm(true);
+    // TODO: Pre-populate date if provided
+  };
+
+  // Bulk operation handlers
+  const handleBulkDelete = async (shiftIds: string[]) => {
+    try {
+      const response = await fetch('/api/shifts/bulk-delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shiftIds })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete shifts');
+      }
+      
+      setSuccess(`Successfully deleted ${shiftIds.length} shift${shiftIds.length !== 1 ? 's' : ''}`);
+      fetchShifts(true); // Reload data
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to delete shifts');
+    }
+  };
+
+  const handleBulkStatusUpdate = async (shiftIds: string[], status: string) => {
+    try {
+      const response = await fetch('/api/shifts/bulk-update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shiftIds, updates: { status } })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update shift status');
+      }
+      
+      setSuccess(`Successfully updated status for ${shiftIds.length} shift${shiftIds.length !== 1 ? 's' : ''}`);
+      fetchShifts(true); // Reload data
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to update shifts');
+    }
+  };
+
+  const handleBulkLocationUpdate = async (shiftIds: string[], location: string) => {
+    try {
+      const response = await fetch('/api/shifts/bulk-update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shiftIds, updates: { location } })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update shift location');
+      }
+      
+      setSuccess(`Successfully updated location for ${shiftIds.length} shift${shiftIds.length !== 1 ? 's' : ''}`);
+      fetchShifts(true); // Reload data
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to update shifts');
+    }
+  };
+
+  const handleBulkNotesUpdate = async (shiftIds: string[], notes: string, mode: 'replace' | 'append' | 'prepend') => {
+    try {
+      const response = await fetch('/api/shifts/bulk-update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shiftIds, updates: { notes }, notesMode: mode })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update shift notes');
+      }
+      
+      setSuccess(`Successfully updated notes for ${shiftIds.length} shift${shiftIds.length !== 1 ? 's' : ''}`);
+      fetchShifts(true); // Reload data
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to update shifts');
+    }
+  };
+
+  const handleBulkExport = async (shiftIds: string[], format: 'csv' | 'pdf') => {
+    try {
+      const response = await fetch('/api/shifts/bulk-export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shiftIds, format })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to export shifts');
+      }
+      
+      // Handle file download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shifts-export.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      setSuccess(`Successfully exported ${shiftIds.length} shift${shiftIds.length !== 1 ? 's' : ''}`);
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to export shifts');
+    }
+  };
+
   const handleSubmitShift = async (formData: ShiftFormData) => {
     try {
       setFormLoading(true);
       setError(null);
       
-      // Combine date and time into ISO strings
-      const startTime = new Date(`${formData.date}T${formData.startTime}`).toISOString();
-      const endTime = new Date(`${formData.date}T${formData.endTime}`).toISOString();
+      // Use local timezone utilities to ensure consistent timezone handling
+      const { createLocalDateTime } = await import('@/lib/timezone');
+      const startTime = createLocalDateTime(formData.date, formData.startTime).toISOString();
+      const endTime = createLocalDateTime(formData.date, formData.endTime).toISOString();
       
       const shiftData = {
         startTime,
@@ -223,7 +333,7 @@ export default function ShiftsPage() {
     }
   };
 
-  const handleEditShift = (shift: Shift) => {
+  const handleEditShift = (shift: ShiftForDisplay) => {
     setEditingShift(shift);
     setShowForm(true);
   };
@@ -263,139 +373,159 @@ export default function ShiftsPage() {
   }
 
   return (
-    <Container fluid className="py-4">
-      {/* Page Header */}
-      <Row className="mb-4">
-        <Col>
-          <div className="d-flex justify-content-between align-items-center">
-            <div>
-              <h1 className="h3 mb-1">Shifts</h1>
-              <p className="text-muted mb-0">
-                Manage your work shifts and track hours
-              </p>
-            </div>
-            <Button 
-              variant="primary" 
-              onClick={() => {
-                setEditingShift(null);
-                setShowForm(true);
-              }}
-            >
-              <CalendarPlus size={16} className="me-1" />
-              Add Shift
-            </Button>
-          </div>
-        </Col>
-      </Row>
-
-      {/* Alerts */}
-      {error && (
-        <Alert variant="danger" dismissible onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-      
-      {success && (
-        <Alert variant="success" dismissible onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
-
-      {/* Summary Cards */}
-      <ShiftSummaryCards 
-        payPeriods={payPeriods} 
-        loading={loading}
-        className="mb-4"
-      />
-
-      {/* Filters */}
-      <ShiftFilters
-        filters={filters}
-        onFiltersChange={handleFiltersChange}
-        onReset={handleResetFilters}
-        className="mb-4"
-      />
-
-      {/* Shifts Content */}
-      <Row>
-        <Col>
-          {payPeriods.length === 0 && !loading ? (
-            <Card className="text-center py-5 border-0 shadow-sm">
-              <Card.Body>
-                <Calendar size={48} className="text-muted mb-3" />
-                <h5 className="text-muted">No shifts found</h5>
-                <p className="text-muted mb-4">
-                  {Object.values(filters).some(v => v) 
-                    ? 'Try adjusting your filters or add a new shift'
-                    : 'Start by adding your first shift'
-                  }
+    <BulkSelectionProvider>
+      <Container fluid className="py-4">
+        {/* Page Header */}
+        <Row className="mb-4">
+          <Col>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <h1 className="h3 mb-1">Shifts</h1>
+                <p className="text-muted mb-0">
+                  Manage your work shifts and track hours
                 </p>
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <ViewToggle 
+                  currentView={currentView}
+                  onViewChange={handleViewChange}
+                />
                 <Button 
                   variant="primary" 
-                  onClick={() => {
-                    setEditingShift(null);
-                    setShowForm(true);
-                  }}
+                  onClick={() => handleAddShift()}
                 >
                   <CalendarPlus size={16} className="me-1" />
-                  Add Your First Shift
+                  Add Shift
                 </Button>
-              </Card.Body>
-            </Card>
-          ) : (
-            <InfiniteScrollContainer
-              loading={loadingMore}
-              hasMore={hasMore}
-              onLoadMore={handleLoadMore}
-            >
-              {payPeriods.map((payPeriod) => (
-                <ShiftGroupHeader
-                  key={payPeriod.id}
-                  payPeriod={payPeriod}
-                  defaultExpanded={true}
-                >
-                  <div className="p-3">
-                    <Row className="g-3">
-                      {payPeriod.shifts.map((shift) => (
-                        <Col key={shift.id} xs={12} lg={6} xl={4}>
-                          <ShiftCard
-                            shift={shift}
-                            onEdit={handleEditShift}
-                            onDelete={handleDeleteShift}
-                          />
-                        </Col>
-                      ))}
-                    </Row>
-                  </div>
-                </ShiftGroupHeader>
-              ))}
-            </InfiniteScrollContainer>
-          )}
-        </Col>
-      </Row>
+              </div>
+            </div>
+          </Col>
+        </Row>
 
-      {/* Enhanced Shift Form Modal */}
-      <EnhancedShiftForm
-        show={showForm}
-        onHide={() => {
-          setShowForm(false);
-          setEditingShift(null);
-        }}
-        onSubmit={handleSubmitShift}
-        initialData={editingShift ? {
-          date: new Date(editingShift.startTime).toISOString().split('T')[0],
-          startTime: new Date(editingShift.startTime).toTimeString().slice(0, 5),
-          endTime: editingShift.endTime ? new Date(editingShift.endTime).toTimeString().slice(0, 5) : '',
-          breakMinutes: editingShift.breakMinutes,
-          notes: editingShift.notes || '',
-          location: editingShift.location || '',
-          shiftType: editingShift.shiftType as 'REGULAR' | 'OVERTIME' | 'WEEKEND' | 'PUBLIC_HOLIDAY',
-          penaltyOverrides: editingShift.penaltyOverrides ? JSON.parse(editingShift.penaltyOverrides) : {},
-          autoCalculatePenalties: editingShift.autoCalculatePenalties ?? true
-        } : undefined}
-        isEdit={!!editingShift}
-        loading={formLoading}
-      />
-    </Container>
+        {/* Alerts */}
+        {error && (
+          <Alert variant="danger" dismissible onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+        
+        {success && (
+          <Alert variant="success" dismissible onClose={() => setSuccess(null)}>
+            {success}
+          </Alert>
+        )}
+
+        {/* Summary Cards */}
+        <ShiftSummaryCards 
+          loading={loading}
+          className="mb-4"
+        />
+
+        {/* Filters */}
+        <ShiftFilters
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          onReset={handleResetFilters}
+          className="mb-4"
+        />
+
+        {/* Shifts Content */}
+        <Row>
+          <Col>
+            {payPeriods.length === 0 && !loading ? (
+              <Card className="text-center py-5 border-0 shadow-sm">
+                <Card.Body>
+                  <Calendar size={48} className="text-muted mb-3" />
+                  <h5 className="text-muted">No shifts found</h5>
+                  <p className="text-muted mb-4">
+                    {Object.values(filters).some(v => v) 
+                      ? 'Try adjusting your filters or add a new shift'
+                      : 'Start by adding your first shift'
+                    }
+                  </p>
+                  <Button 
+                    variant="primary" 
+                    onClick={() => handleAddShift()}
+                  >
+                    <CalendarPlus size={16} className="me-1" />
+                    Add Your First Shift
+                  </Button>
+                </Card.Body>
+              </Card>
+            ) : currentView === 'calendar' ? (
+              <ShiftCalendar
+                payPeriods={payPeriods}
+                loading={loading}
+                onShiftEdit={handleEditShift}
+                onShiftDelete={handleDeleteShift}
+                onAddShift={handleAddShift}
+                searchTerm={filters.search}
+              />
+            ) : (
+              <InfiniteScrollContainer
+                loading={loadingMore}
+                hasMore={hasMore}
+                onLoadMore={handleLoadMore}
+              >
+                {payPeriods.map((payPeriod) => (
+                  <ShiftGroupHeader
+                    key={payPeriod.id}
+                    payPeriod={payPeriod}
+                    defaultExpanded={true}
+                  >
+                    <div className="p-3">
+                      <Row className="g-3">
+                        {payPeriod.shifts.map((shift) => (
+                          <Col key={shift.id} xs={12} lg={6} xl={4}>
+                            <ShiftCard
+                              shift={shift}
+                              onEdit={handleEditShift}
+                              onDelete={handleDeleteShift}
+                              searchTerm={filters.search}
+                            />
+                          </Col>
+                        ))}
+                      </Row>
+                    </div>
+                  </ShiftGroupHeader>
+                ))}
+              </InfiniteScrollContainer>
+            )}
+          </Col>
+        </Row>
+
+        {/* Enhanced Shift Form Modal */}
+        <EnhancedShiftForm
+          show={showForm}
+          onHide={() => {
+            setShowForm(false);
+            setEditingShift(null);
+          }}
+          onSubmit={handleSubmitShift}
+          initialData={editingShift ? {
+            date: new Date(editingShift.startTime).toISOString().split('T')[0],
+            startTime: new Date(editingShift.startTime).toTimeString().slice(0, 5),
+            endTime: editingShift.endTime ? new Date(editingShift.endTime).toTimeString().slice(0, 5) : '',
+            breakMinutes: editingShift.breakMinutes,
+            notes: editingShift.notes || '',
+            location: editingShift.location || '',
+            shiftType: editingShift.shiftType as 'REGULAR' | 'OVERTIME' | 'WEEKEND' | 'PUBLIC_HOLIDAY',
+            penaltyOverrides: editingShift.penaltyOverrides ? JSON.parse(editingShift.penaltyOverrides) : {},
+            autoCalculatePenalties: editingShift.autoCalculatePenalties ?? true
+          } : undefined}
+          isEdit={!!editingShift}
+          loading={formLoading}
+        />
+
+        {/* Bulk Actions Toolbar */}
+        <BulkActionsToolbar
+          onBulkDelete={handleBulkDelete}
+          onBulkStatusUpdate={handleBulkStatusUpdate}
+          onBulkLocationUpdate={handleBulkLocationUpdate}
+          onBulkNotesUpdate={handleBulkNotesUpdate}
+          onBulkExport={handleBulkExport}
+        />
+      </Container>
+    </BulkSelectionProvider>
   );
 }

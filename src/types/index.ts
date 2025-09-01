@@ -296,12 +296,34 @@ export interface PayPeriodsResponse {
   }
 }
 
+export interface ShiftForDisplay {
+  id: string
+  startTime: string
+  endTime: string | null
+  breakMinutes: number
+  shiftType: string
+  status: string
+  notes: string | null
+  location: string | null
+  penaltyOverrides: string | null
+  autoCalculatePenalties: boolean
+  totalMinutes: number | null
+  regularHours: number | null
+  overtimeHours: number | null
+  penaltyHours: number | null
+  grossPay: number | null
+  superannuation: number | null
+  payGuide: {
+    name: string
+  }
+}
+
 export interface PayPeriodGroup {
   id: string
   startDate: string
   endDate: string
   status: string
-  shifts: Shift[]
+  shifts: ShiftForDisplay[]
   summary: {
     totalHours: number
     totalPay: number
@@ -330,4 +352,5 @@ export interface ShiftFilters {
   payPeriodId?: string
   location?: string
   shiftType?: string
+  search?: string
 }

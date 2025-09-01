@@ -1,7 +1,9 @@
 'use client';
 
-import { Card, Badge, Dropdown } from 'react-bootstrap';
+import { Card, Badge, Dropdown, Form } from 'react-bootstrap';
 import { Clock, DollarSign, MoreVertical, Edit, Trash } from 'lucide-react';
+import { highlightSearchTerms } from '@/lib/utils/text-utils';
+import { useBulkSelection } from '@/components/bulk-operations/bulk-selection-provider';
 
 interface Shift {
   id: string;
@@ -29,9 +31,11 @@ interface ShiftCardProps {
   shift: Shift;
   onEdit: (shift: Shift) => void;
   onDelete: (shiftId: string) => void;
+  searchTerm?: string;
 }
 
-export default function ShiftCard({ shift, onEdit, onDelete }: ShiftCardProps) {
+export default function ShiftCard({ shift, onEdit, onDelete, searchTerm }: ShiftCardProps) {
+  const { isShiftSelected, toggleShift } = useBulkSelection();
   const formatDateTime = (dateTime: string) => {
     return new Date(dateTime).toLocaleString('en-AU', {
       weekday: 'short',
@@ -75,17 +79,28 @@ export default function ShiftCard({ shift, onEdit, onDelete }: ShiftCardProps) {
     }
   };
 
+  const isSelected = isShiftSelected(shift.id);
+
   return (
-    <Card className="h-100 border-0 shadow-sm">
+    <Card className={`h-100 border-0 shadow-sm ${isSelected ? 'border-primary border-2' : ''}`}>
       <Card.Body className="p-3">
         <div className="d-flex justify-content-between align-items-start mb-3">
-          <div>
-            <Badge bg={getShiftTypeColor(shift.shiftType)} className="mb-1">
-              {shift.shiftType.toLowerCase().replace('_', ' ')}
-            </Badge>
-            <Badge bg={getStatusColor(shift.status)} className="ms-1">
-              {shift.status.toLowerCase()}
-            </Badge>
+          <div className="d-flex align-items-start">
+            <Form.Check
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => toggleShift(shift.id)}
+              className="me-2"
+              style={{ marginTop: '2px' }}
+            />
+            <div>
+              <Badge bg={getShiftTypeColor(shift.shiftType)} className="mb-1">
+                {shift.shiftType.toLowerCase().replace('_', ' ')}
+              </Badge>
+              <Badge bg={getStatusColor(shift.status)} className="ms-1">
+                {shift.status.toLowerCase()}
+              </Badge>
+            </div>
           </div>
           <Dropdown align="end">
             <Dropdown.Toggle variant="light" size="sm" className="border-0">
@@ -143,10 +158,14 @@ export default function ShiftCard({ shift, onEdit, onDelete }: ShiftCardProps) {
         {(shift.location || shift.notes) && (
           <div className="mt-2 pt-2 border-top">
             {shift.location && (
-              <div className="small text-muted mb-1">📍 {shift.location}</div>
+              <div className="small text-muted mb-1">
+                📍 {highlightSearchTerms(shift.location, searchTerm)}
+              </div>
             )}
             {shift.notes && (
-              <small className="text-muted">{shift.notes}</small>
+              <small className="text-muted">
+                {highlightSearchTerms(shift.notes, searchTerm)}
+              </small>
             )}
           </div>
         )}

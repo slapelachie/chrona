@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Navigation from '@/components/navigation'
+import { SettingsProvider } from '@/contexts/settings-context'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -19,10 +20,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Navigation />
-        <main className="min-h-screen bg-background">
-          {children}
-        </main>
+        <SettingsProvider>
+          <Navigation />
+          <main className="min-h-screen bg-background">
+            {children}
+          </main>
+        </SettingsProvider>
       </body>
     </html>
   )

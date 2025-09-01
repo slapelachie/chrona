@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, Nav } from 'react-bootstrap';
 import { Settings, User, DollarSign, Bell, ExternalLink, Plus } from 'lucide-react';
+import { useSettings } from '@/contexts/settings-context';
 
 interface PayGuide {
   id: string;
@@ -40,6 +41,7 @@ interface SettingsData {
     currency: string;
     dateFormat: string;
     timeFormat: string;
+    weekStartDay: number;
   };
   payPeriodSettings: {
     frequency: string;
@@ -48,6 +50,7 @@ interface SettingsData {
 }
 
 export default function SettingsPage() {
+  const { weekStartDay, updateWeekStartDay } = useSettings();
   const [settingsData, setSettingsData] = useState<SettingsData | null>(null);
   const [payGuides, setPayGuides] = useState<PayGuide[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,7 +107,8 @@ export default function SettingsPage() {
           theme: 'dark',
           currency: 'AUD',
           dateFormat: 'dd/MM/yyyy',
-          timeFormat: '24h'
+          timeFormat: '24h',
+          weekStartDay
         },
         payPeriodSettings: {
           frequency: preferences.payPeriodSettings?.frequency || 'fortnightly',
@@ -412,7 +416,7 @@ export default function SettingsPage() {
                   </div>
                   
                   {payGuides.length > 0 ? (
-                    <div className="p-3 bg-light rounded mb-3">
+                    <div className="p-3 rounded mb-3" style={{backgroundColor: 'var(--chrona-bg-secondary)'}}>
                       <div className="row">
                         <div className="col-12">
                           <small className="text-muted fw-bold">Your Pay Guides ({payGuides.length})</small>
@@ -540,7 +544,7 @@ export default function SettingsPage() {
                   </Row>
                   
                   {/* Pay Period Preview */}
-                  <div className="p-3 bg-light rounded">
+                  <div className="p-3 rounded" style={{backgroundColor: 'var(--chrona-bg-secondary)'}}>
                     <h6 className="mb-2">Current Pay Period Preview</h6>
                     <div className="row">
                       <div className="col-md-4">
@@ -726,6 +730,35 @@ export default function SettingsPage() {
                           <option value="24h">24 Hour (14:30)</option>
                           <option value="12h">12 Hour (2:30 PM)</option>
                         </Form.Select>
+                      </Form.Group>
+                    </Col>
+                  </Row>
+                  
+                  <Row>
+                    <Col md={6}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Week Start Day</Form.Label>
+                        <Form.Select
+                          value={weekStartDay}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            updateWeekStartDay(value);
+                            // Also update local state for consistency
+                            setSettingsData(prev => prev ? {
+                              ...prev,
+                              preferences: {
+                                ...prev.preferences,
+                                weekStartDay: value
+                              }
+                            } : null);
+                          }}
+                        >
+                          <option value="0">Sunday</option>
+                          <option value="1">Monday</option>
+                        </Form.Select>
+                        <Form.Text className="text-muted">
+                          Choose which day the calendar week starts on
+                        </Form.Text>
                       </Form.Group>
                     </Col>
                   </Row>
