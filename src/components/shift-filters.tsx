@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, Form, Row, Col, Button, Collapse, Badge } from 'react-bootstrap';
 import { Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { ShiftFilters as ShiftFiltersType, PayPeriodSummaryItem } from '@/types';
+import SearchBar from '@/components/search/search-bar';
 
 interface ShiftFiltersProps {
   filters: ShiftFiltersType;
@@ -135,6 +136,18 @@ export default function ShiftFilters({
         <Card className="border-0 shadow-sm">
           <Card.Body className="py-3">
             <Form>
+              {/* Search Bar */}
+              <Row className="g-3 mb-3">
+                <Col xs={12}>
+                  <SearchBar
+                    value={filters.search || ''}
+                    onChange={(value) => handleFilterChange('search', value)}
+                    onClear={() => handleFilterChange('search', undefined)}
+                    placeholder="Search shifts by location, notes, or type..."
+                  />
+                </Col>
+              </Row>
+              
               <Row className="g-3">
                 {/* Date Range */}
                 <Col md={6}>

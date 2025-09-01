@@ -58,22 +58,36 @@ export class PayPeriodService {
 
       // Calculate what the pay period should be based on current preferences
       const expectedPayPeriod = this.dateUtils.getCurrentPayPeriod(frequency, startDay);
+      console.log(expectedPayPeriod)
       
       // Check if existing pay period matches expected dates (within 1 day tolerance for rounding)
       const startDateMatch = Math.abs(existing.startDate.getTime() - expectedPayPeriod.startDate.getTime()) < (24 * 60 * 60 * 1000);
       const endDateMatch = Math.abs(existing.endDate.getTime() - expectedPayPeriod.endDate.getTime()) < (24 * 60 * 60 * 1000);
       
-      // If existing pay period matches current preferences, return it
+      // If existing pay period matches current preferences, return it with corrected times
       if (startDateMatch && endDateMatch) {
-        return existing;
+        // Ensure proper midnight boundaries even if stored times are wrong
+        const correctedPeriod = {
+          ...existing,
+          startDate: new Date(existing.startDate),
+          endDate: new Date(existing.endDate)
+        };
+        correctedPeriod.startDate.setHours(0, 0, 0, 0);
+        correctedPeriod.endDate.setHours(23, 59, 59, 999);
+        return correctedPeriod;
       }
       
       // If preferences have changed, update the existing pay period with correct dates
+      const correctedStart = new Date(expectedPayPeriod.startDate);
+      const correctedEnd = new Date(expectedPayPeriod.endDate);
+      correctedStart.setHours(0, 0, 0, 0);
+      correctedEnd.setHours(23, 59, 59, 999);
+
       const updatedPayPeriod = await prisma.payPeriod.update({
         where: { id: existing.id },
         data: {
-          startDate: expectedPayPeriod.startDate,
-          endDate: expectedPayPeriod.endDate,
+          startDate: correctedStart,
+          endDate: correctedEnd,
           payDate: expectedPayPeriod.payDate,
           status: 'OPEN'
         }
@@ -88,11 +102,17 @@ export class PayPeriodService {
 
     const payPeriodDates = this.dateUtils.getCurrentPayPeriod(frequency, startDay);
 
+    // Ensure proper midnight boundaries
+    const correctedStart = new Date(payPeriodDates.startDate);
+    const correctedEnd = new Date(payPeriodDates.endDate);
+    correctedStart.setHours(0, 0, 0, 0);
+    correctedEnd.setHours(23, 59, 59, 999);
+
     const newPayPeriod = await prisma.payPeriod.create({
       data: {
         userId: user.id,
-        startDate: payPeriodDates.startDate,
-        endDate: payPeriodDates.endDate,
+        startDate: correctedStart,
+        endDate: correctedEnd,
         payDate: payPeriodDates.payDate,
         status: 'OPEN'
       }

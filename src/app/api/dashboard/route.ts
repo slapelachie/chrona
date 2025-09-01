@@ -41,6 +41,7 @@ export async function GET() {
       }
     });
 
+
     // Get unique pay guide IDs for efficient penalty time frame fetching
     const uniquePayGuideIds = [...new Set(shifts.map(s => s.payGuideId))];
     

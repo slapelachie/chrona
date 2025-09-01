@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { createLocalMidnight } from '../src/lib/timezone'
 
 const prisma = new PrismaClient()
 
@@ -92,16 +93,17 @@ async function main() {
   console.log('🎓 Seeded 2024-25 HECS thresholds')
 
   // Seed Australian Public Holidays for 2025 (National)
+  // Using createLocalMidnight to ensure holidays are stored with proper local timezone
   const publicHolidays2025 = [
-    { name: 'New Year\'s Day', date: new Date('2025-01-01'), state: 'NATIONAL' },
-    { name: 'Australia Day', date: new Date('2025-01-27'), state: 'NATIONAL' },
-    { name: 'Good Friday', date: new Date('2025-04-18'), state: 'NATIONAL' },
-    { name: 'Easter Saturday', date: new Date('2025-04-19'), state: 'NATIONAL' },
-    { name: 'Easter Monday', date: new Date('2025-04-21'), state: 'NATIONAL' },
-    { name: 'ANZAC Day', date: new Date('2025-04-25'), state: 'NATIONAL' },
-    { name: 'Queen\'s Birthday', date: new Date('2025-06-09'), state: 'NATIONAL' },
-    { name: 'Christmas Day', date: new Date('2025-12-25'), state: 'NATIONAL' },
-    { name: 'Boxing Day', date: new Date('2025-12-26'), state: 'NATIONAL' },
+    { name: 'New Year\'s Day', date: createLocalMidnight('2025-01-01'), state: 'NATIONAL' },
+    { name: 'Australia Day', date: createLocalMidnight('2025-01-27'), state: 'NATIONAL' },
+    { name: 'Good Friday', date: createLocalMidnight('2025-04-18'), state: 'NATIONAL' },
+    { name: 'Easter Saturday', date: createLocalMidnight('2025-04-19'), state: 'NATIONAL' },
+    { name: 'Easter Monday', date: createLocalMidnight('2025-04-21'), state: 'NATIONAL' },
+    { name: 'ANZAC Day', date: createLocalMidnight('2025-04-25'), state: 'NATIONAL' },
+    { name: 'Queen\'s Birthday', date: createLocalMidnight('2025-06-09'), state: 'NATIONAL' },
+    { name: 'Christmas Day', date: createLocalMidnight('2025-12-25'), state: 'NATIONAL' },
+    { name: 'Boxing Day', date: createLocalMidnight('2025-12-26'), state: 'NATIONAL' },
   ]
 
   for (const holiday of publicHolidays2025) {
