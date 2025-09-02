@@ -80,6 +80,7 @@ export class PayCalculator {
       (sum, penalty) => sum.plus(penalty.hours),
       new Decimal(0)
     )
+
     const overtimePeriodHours = appliedOvertimePeriods.reduce(
       (sum, overtime) => sum.plus(overtime.hours),
       new Decimal(0)
@@ -155,46 +156,89 @@ export class PayCalculator {
 
     // Calculate overtime hours as excess worked hours beyond maximum
     const overtimeHours = Decimal.max(0, totalWorkedHours.minus(maximumHours))
-    const regularHours = totalWorkedHours.minus(overtimeHours)
+    const regularHours = new Decimal(maximumHours)
 
-    // Calculate penalties for regular hours only (breaks are distributed across these)
-    const appliedPenalties: AppliedPenalty[] = []
+    // Collect all rate rules (penalties and overtime) that could apply
+    const allRateRules: Array<{
+      period: Period
+      type: 'penalty' | 'overtime'
+      timeFrame: PenaltyTimeFrame | OvertimeTimeFrame
+      multiplier: Decimal
+    }> = []
 
+    // Add penalty timeframes
     for (const timeFrame of this.penaltyTimeFrames) {
       const periods = this.findRulePeriods(startTime, endTime, timeFrame)
       for (const period of periods) {
-        const penaltyResult = this.createPenaltyFromRule(
-          {
-            period,
-            type: 'penalty',
-            timeFrame,
-            multiplier: timeFrame.multiplier,
-          },
-          breakPeriods,
-          regularHours
-        )
-        if (penaltyResult) appliedPenalties.push(penaltyResult)
+        allRateRules.push({
+          period,
+          type: 'penalty',
+          timeFrame,
+          multiplier: timeFrame.multiplier,
+        })
       }
     }
 
-    // Calculate overtime periods if there are overtime hours
+    // Add overtime timeframes (only if we have overtime hours)
+    if (overtimeHours.greaterThan(0)) {
+      for (const timeFrame of this.overtimeTimeFrames) {
+        if (this.doesOvertimeTimeFrameApply(startTime, endTime, timeFrame)) {
+          // Calculate overtime start by working backwards from end time
+          const overtimeMinutes = overtimeHours.times(60).toNumber()
+          const overtimeStart = new Date(
+            endTime.getTime() - overtimeMinutes * 60 * 1000
+          )
+
+          if (overtimeHours.greaterThan(3)) {
+            // Split into two periods: first 3 hours and remaining hours
+            const firstThreeHoursEnd = addHours(overtimeStart, 3)
+            
+            // First 3 hours at first rate
+            allRateRules.push({
+              period: { start: overtimeStart, end: firstThreeHoursEnd },
+              type: 'overtime',
+              timeFrame,
+              multiplier: timeFrame.firstThreeHoursMult,
+            })
+
+            // Remaining hours at second rate
+            allRateRules.push({
+              period: { start: firstThreeHoursEnd, end: endTime },
+              type: 'overtime',
+              timeFrame,
+              multiplier: timeFrame.afterThreeHoursMult,
+            })
+          } else {
+            // All overtime hours at first rate
+            allRateRules.push({
+              period: { start: overtimeStart, end: endTime },
+              type: 'overtime',
+              timeFrame,
+              multiplier: timeFrame.firstThreeHoursMult,
+            })
+          }
+        }
+      }
+    }
+
+    // Select highest rate rules to avoid double-counting overlapping periods
+    const selectedRules = this.selectHighestRateRules(allRateRules)
+
+    // Create penalties and overtimes from selected rules
+    const appliedPenalties: AppliedPenalty[] = []
     const appliedOvertimePeriods: AppliedOvertime[] = []
 
-    if (overtimeHours.greaterThan(0)) {
-      // Find the best overtime timeframe for this shift
-      const applicableOvertimeFrame = this.findApplicableOvertimeTimeFrame(
-        startTime,
-        endTime
-      )
-
-      if (applicableOvertimeFrame) {
-        const overtimeResults = this.createOvertimeFromHours(
-          applicableOvertimeFrame,
-          overtimeHours,
-          startTime,
-          endTime
+    for (const rule of selectedRules) {
+      if (rule.type === 'penalty') {
+        const penaltyResult = this.createPenaltyFromRule(
+          rule,
+          breakPeriods,
+          totalWorkedHours
         )
-        appliedOvertimePeriods.push(...overtimeResults)
+        if (penaltyResult) appliedPenalties.push(penaltyResult)
+      } else if (rule.type === 'overtime') {
+        const overtimeResult = this.createOvertimeFromRule(rule, breakPeriods)
+        if (overtimeResult) appliedOvertimePeriods.push(overtimeResult)
       }
     }
 
@@ -377,7 +421,10 @@ export class PayCalculator {
         ) {
           if (
             !highestRule ||
-            rule.multiplier.greaterThan(highestRule.multiplier)
+            rule.multiplier.greaterThan(highestRule.multiplier) ||
+            (rule.multiplier.equals(highestRule.multiplier) &&
+              rule.type === 'overtime' &&
+              highestRule.type === 'penalty')
           ) {
             highestRule = rule
           }
@@ -389,6 +436,7 @@ export class PayCalculator {
         const existingRule = selectedRules.find(
           (r) =>
             r.timeFrame.id === highestRule!.timeFrame.id &&
+            r.multiplier.equals(highestRule!.multiplier) &&
             r.period.end.getTime() === segmentStart.getTime()
         )
 
@@ -435,6 +483,53 @@ export class PayCalculator {
     }
 
     return totalOverlapMinutes
+  }
+
+  /**
+   * Create overtime result from selected rule
+   */
+  private createOvertimeFromRule(
+    rule: {
+      period: Period
+      type: 'penalty' | 'overtime'
+      timeFrame: PenaltyTimeFrame | OvertimeTimeFrame
+      multiplier: Decimal
+    },
+    breakPeriods: BreakPeriod[]
+  ): AppliedOvertime | null {
+    const timeFrame = rule.timeFrame as OvertimeTimeFrame
+    const overtimeMinutes = differenceInMinutes(
+      rule.period.end,
+      rule.period.start
+    )
+
+    // Calculate break time that overlaps with this overtime period
+    const breakOverlapMinutes = this.calculateBreakOverlap(
+      rule.period,
+      breakPeriods
+    )
+    const workedOvertimeMinutes = Math.max(
+      0,
+      overtimeMinutes - breakOverlapMinutes
+    )
+    const overtimeHours = new Decimal(workedOvertimeMinutes).dividedBy(60)
+
+    if (overtimeHours.greaterThan(0)) {
+      const overtimeRate = this.payGuide.baseRate.times(rule.multiplier)
+      const overtimePay = overtimeHours.times(overtimeRate)
+
+      return {
+        timeFrameId: timeFrame.id,
+        name: timeFrame.name,
+        multiplier: rule.multiplier,
+        hours: overtimeHours,
+        pay: this.roundToCents(overtimePay),
+        startTime: rule.period.start,
+        endTime: rule.period.end,
+      }
+    }
+
+    return null
   }
 
   /**
