@@ -268,20 +268,83 @@ describe('PayCalculator - Blackbox Tests', () => {
       expect(result.penalties).toHaveLength(1)
     })
 
-    it.skip('should calculate base pay for shifts with no applicable penalties', () => {
-      // TODO: Create PayCalculator with no penalty timeframes
-      // Test shift that would only receive base rate pay
-      // Should have basePay > 0, penaltyPay = 0
+    it('should calculate base pay for shifts with no applicable penalties', () => {
+      const calculator = new PayCalculator(
+        retailPayGuide,
+        [], // No penalty timeframes
+        retailOvertimeTimeFrames
+      )
+
+      const result = calculator.calculate(
+        new Date('2025-07-07T09:00:00'), // Monday 9am
+        new Date('2025-07-07T15:00:00'), // Monday 3pm
+        []
+      )
+
+      expect(result.shift.totalHours.toString()).toBe('6')
+      expect(result.breakdown.baseHours.toString()).toBe('6')
+      expect(result.breakdown.basePay.toString()).toBe('159.3') // 6 * 26.55
+      expect(result.breakdown.penaltyHours.toString()).toBe('0')
+      expect(result.breakdown.penaltyPay.toString()).toBe('0')
+      expect(result.breakdown.totalPay.toString()).toBe('159.3')
+      expect(result.penalties).toHaveLength(0)
     })
 
-    it.skip('should calculate pay for shift exactly at minimum hours boundary', () => {
-      // TODO: Test shift of exactly 3 hours (minimum)
-      // Should not trigger minimum hour enforcement
+    it('should calculate pay for shift exactly at minimum hours boundary', () => {
+      const calculator = new PayCalculator(
+        retailPayGuide,
+        retailPenaltyTimeFrames,
+        retailOvertimeTimeFrames
+      )
+
+      const result = calculator.calculate(
+        new Date('2025-07-07T09:00:00'), // Monday 9am
+        new Date('2025-07-07T12:00:00'), // Monday 12pm
+        []
+      )
+
+      expect(result.shift.totalHours.toString()).toBe('3')
+      expect(result.breakdown.baseHours.toString()).toBe('0')
+      expect(result.breakdown.basePay.toString()).toBe('0')
+      expect(result.breakdown.penaltyHours.toString()).toBe('3')
+      expect(result.breakdown.penaltyPay.toString()).toBe('99.56') // 3 * 26.55 * 1.25
+      expect(result.breakdown.totalPay.toString()).toBe('99.56')
+      expect(result.penalties).toHaveLength(1)
+      expect(result.penalties[0].name).toBe('Casual Loading')
     })
 
-    it.skip('should handle shift transitioning from regular to evening penalty hours', () => {
-      // TODO: Test shift like 4pm-7pm that crosses into evening penalty
-      // Should split into casual loading + evening penalty periods
+    it('should handle shift transitioning from regular to evening penalty hours', () => {
+      const calculator = new PayCalculator(
+        retailPayGuide,
+        retailPenaltyTimeFrames,
+        retailOvertimeTimeFrames
+      )
+
+      const result = calculator.calculate(
+        new Date('2025-07-07T16:00:00'), // Monday 4pm
+        new Date('2025-07-07T19:00:00'), // Monday 7pm
+        []
+      )
+
+      expect(result.shift.totalHours.toString()).toBe('3')
+      expect(result.breakdown.baseHours.toString()).toBe('0')
+      expect(result.breakdown.basePay.toString()).toBe('0')
+      expect(result.breakdown.penaltyHours.toString()).toBe('3')
+      expect(result.breakdown.totalPay.toString()).toBe('106.21')
+      expect(result.penalties).toHaveLength(2)
+
+      const casualLoading = result.penalties.find(p => p.name === 'Casual Loading')
+      const eveningPenalty = result.penalties.find(p => p.name === 'Evening Penalty')
+
+      expect(casualLoading).toBeTruthy()
+      expect(casualLoading!.hours.toString()).toBe('2') // 4pm-6pm
+      expect(casualLoading!.multiplier.toString()).toBe('1.25')
+      expect(casualLoading!.pay.toString()).toBe('66.38') // 2 * 26.55 * 1.25
+
+      expect(eveningPenalty).toBeTruthy()
+      expect(eveningPenalty!.hours.toString()).toBe('1') // 6pm-7pm
+      expect(eveningPenalty!.multiplier.toString()).toBe('1.5')
+      expect(eveningPenalty!.pay.toString()).toBe('39.83') // 1 * 26.55 * 1.5
     })
   })
 
@@ -394,19 +457,76 @@ describe('PayCalculator - Blackbox Tests', () => {
       expect(satMorningPenalty!.multiplier.toString()).toBe('1.75')
     })
 
-    it.skip('should apply Saturday night penalty for evening weekend shifts', () => {
-      // TODO: Test Saturday 18:00-00:00 shift
-      // Should apply Saturday night penalty (1.75x multiplier)
+    it('should apply Saturday night penalty for evening weekend shifts', () => {
+      const calculator = new PayCalculator(
+        retailPayGuide,
+        retailPenaltyTimeFrames,
+        retailOvertimeTimeFrames
+      )
+
+      const result = calculator.calculate(
+        new Date('2025-07-05T18:00:00'), // Saturday 6pm
+        new Date('2025-07-06T00:00:00'), // Sunday 12am
+        []
+      )
+
+      expect(result.shift.totalHours.toString()).toBe('6')
+      expect(result.breakdown.baseHours.toString()).toBe('0')
+      expect(result.breakdown.basePay.toString()).toBe('0')
+      expect(result.breakdown.penaltyHours.toString()).toBe('6')
+      expect(result.breakdown.penaltyPay.toString()).toBe('278.78') // 6 * 26.55 * 1.75
+      expect(result.breakdown.totalPay.toString()).toBe('278.78')
+      expect(result.penalties).toHaveLength(1)
+      expect(result.penalties[0].name).toBe('Saturday Night Penalty')
+      expect(result.penalties[0].multiplier.toString()).toBe('1.75')
     })
 
-    it.skip('should apply Sunday morning penalty for early weekend shifts', () => {
-      // TODO: Test Sunday 00:00-09:00 shift
-      // Should apply Sunday morning penalty (2.25x multiplier)
+    it('should apply Sunday morning penalty for early weekend shifts', () => {
+      const calculator = new PayCalculator(
+        retailPayGuide,
+        retailPenaltyTimeFrames,
+        retailOvertimeTimeFrames
+      )
+
+      const result = calculator.calculate(
+        new Date('2025-07-06T00:00:00'), // Sunday 12am
+        new Date('2025-07-06T09:00:00'), // Sunday 9am
+        []
+      )
+
+      expect(result.shift.totalHours.toString()).toBe('9')
+      expect(result.breakdown.baseHours.toString()).toBe('0')
+      expect(result.breakdown.basePay.toString()).toBe('0')
+      expect(result.breakdown.penaltyHours.toString()).toBe('9')
+      expect(result.breakdown.penaltyPay.toString()).toBe('537.64') // 9 * 26.55 * 2.25
+      expect(result.breakdown.totalPay.toString()).toBe('537.64')
+      expect(result.penalties).toHaveLength(1)
+      expect(result.penalties[0].name).toBe('Sunday Morning Penalty')
+      expect(result.penalties[0].multiplier.toString()).toBe('2.25')
     })
 
-    it.skip('should apply Sunday night penalty for evening weekend shifts', () => {
-      // TODO: Test Sunday 18:00-00:00 shift
-      // Should apply Sunday night penalty (2.25x multiplier)
+    it('should apply Sunday night penalty for evening weekend shifts', () => {
+      const calculator = new PayCalculator(
+        retailPayGuide,
+        retailPenaltyTimeFrames,
+        retailOvertimeTimeFrames
+      )
+
+      const result = calculator.calculate(
+        new Date('2025-07-06T18:00:00'), // Sunday 6pm
+        new Date('2025-07-07T00:00:00'), // Monday 12am
+        []
+      )
+
+      expect(result.shift.totalHours.toString()).toBe('6')
+      expect(result.breakdown.baseHours.toString()).toBe('0')
+      expect(result.breakdown.basePay.toString()).toBe('0')
+      expect(result.breakdown.penaltyHours.toString()).toBe('6')
+      expect(result.breakdown.penaltyPay.toString()).toBe('358.43') // 6 * 26.55 * 2.25
+      expect(result.breakdown.totalPay.toString()).toBe('358.43')
+      expect(result.penalties).toHaveLength(1)
+      expect(result.penalties[0].name).toBe('Sunday Night Penalty')
+      expect(result.penalties[0].multiplier.toString()).toBe('2.25')
     })
 
     describe('Time-of-Day Premium Rates', () => {
@@ -514,14 +634,52 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(result.penalties).toHaveLength(2)
       })
 
-      it.skip('should apply evening penalty for isolated weekday evening hours', () => {
-        // TODO: Test shift during only evening penalty hours (18:00-21:00)
-        // Should apply evening penalty multiplier without other penalties
+      it('should apply evening penalty for isolated weekday evening hours', () => {
+        const calculator = new PayCalculator(
+          retailPayGuide,
+          retailPenaltyTimeFrames,
+          retailOvertimeTimeFrames
+        )
+
+        const result = calculator.calculate(
+          new Date('2025-07-07T18:00:00'), // Monday 6pm
+          new Date('2025-07-07T21:00:00'), // Monday 9pm
+          []
+        )
+
+        expect(result.shift.totalHours.toString()).toBe('3')
+        expect(result.breakdown.baseHours.toString()).toBe('0')
+        expect(result.breakdown.basePay.toString()).toBe('0')
+        expect(result.breakdown.penaltyHours.toString()).toBe('3')
+        expect(result.breakdown.penaltyPay.toString()).toBe('119.48') // 3 * 26.55 * 1.5
+        expect(result.breakdown.totalPay.toString()).toBe('119.48')
+        expect(result.penalties).toHaveLength(1)
+        expect(result.penalties[0].name).toBe('Evening Penalty')
+        expect(result.penalties[0].multiplier.toString()).toBe('1.5')
       })
 
-      it.skip('should apply early morning penalty for isolated early morning hours', () => {
-        // TODO: Test shift during only early morning penalty hours (00:00-07:00)
-        // Should apply early morning penalty multiplier
+      it('should apply early morning penalty for isolated early morning hours', () => {
+        const calculator = new PayCalculator(
+          retailPayGuide,
+          retailPenaltyTimeFrames,
+          retailOvertimeTimeFrames
+        )
+
+        const result = calculator.calculate(
+          new Date('2025-07-07T00:00:00'), // Monday 12am
+          new Date('2025-07-07T07:00:00'), // Monday 7am
+          []
+        )
+
+        expect(result.shift.totalHours.toString()).toBe('7')
+        expect(result.breakdown.baseHours.toString()).toBe('0')
+        expect(result.breakdown.basePay.toString()).toBe('0')
+        expect(result.breakdown.penaltyHours.toString()).toBe('7')
+        expect(result.breakdown.penaltyPay.toString()).toBe('325.24') // 7 * 26.55 * 1.75
+        expect(result.breakdown.totalPay.toString()).toBe('325.24')
+        expect(result.penalties).toHaveLength(1)
+        expect(result.penalties[0].name).toBe('Early Morning Penalty')
+        expect(result.penalties[0].multiplier.toString()).toBe('1.75')
       })
 
       describe.skip('Public Holiday Premium Rates', () => {
@@ -783,14 +941,59 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(result.overtimes).toHaveLength(0)
       })
 
-      it.skip('should apply overtime exactly at 3-hour tier boundary', () => {
-        // TODO: Test shift with exactly 3 hours overtime
-        // Should apply first tier rate only, not second tier
+      it('should apply overtime exactly at 3-hour tier boundary', () => {
+        const calculator = new PayCalculator(
+          retailPayGuide,
+          retailPenaltyTimeFrames,
+          retailOvertimeTimeFrames
+        )
+
+        const result = calculator.calculate(
+          new Date('2025-07-07T08:00:00'), // Monday 8am
+          new Date('2025-07-07T22:00:00'), // Monday 10pm
+          []
+        )
+
+        expect(result.shift.totalHours.toString()).toBe('14')
+        expect(result.breakdown.penaltyHours.toString()).toBe('11') // Regular hours with casual loading
+        expect(result.breakdown.overtimeHours.toString()).toBe('3') // Exactly 3 hours overtime
+
+        // Should have only one overtime period at first tier rate
+        expect(result.overtimes).toHaveLength(1)
+        expect(result.overtimes[0].name).toBe('Overtime (Mon - Sat)')
+        expect(result.overtimes[0].hours.toString()).toBe('3')
+        expect(result.overtimes[0].multiplier.toString()).toBe('1.75') // First tier rate only
+        expect(result.overtimes[0].pay.toString()).toBe('139.39') // 3 * 26.55 * 1.75
+
+        expect(result.breakdown.overtimePay.toString()).toBe('139.39')
       })
 
-      it.skip('should calculate overtime with base rate only (no penalties)', () => {
-        // TODO: Test overtime shift with PayCalculator that has no penalty timeframes
-        // Should have base pay + overtime pay, no penalty pay
+      it('should calculate overtime with base rate only (no penalties)', () => {
+        const calculator = new PayCalculator(
+          retailPayGuide,
+          [], // No penalty timeframes
+          retailOvertimeTimeFrames
+        )
+
+        const result = calculator.calculate(
+          new Date('2025-07-07T08:00:00'), // Monday 8am
+          new Date('2025-07-07T21:00:00'), // Monday 9pm
+          []
+        )
+
+        expect(result.shift.totalHours.toString()).toBe('13')
+        expect(result.breakdown.baseHours.toString()).toBe('11') // Regular hours at base rate
+        expect(result.breakdown.basePay.toString()).toBe('292.05') // 11 * 26.55
+        expect(result.breakdown.penaltyHours.toString()).toBe('0') // No penalties
+        expect(result.breakdown.penaltyPay.toString()).toBe('0')
+        expect(result.breakdown.overtimeHours.toString()).toBe('2') // 2 hours overtime
+        expect(result.breakdown.overtimePay.toString()).toBe('92.93') // 2 * 26.55 * 1.75
+        expect(result.breakdown.totalPay.toString()).toBe('384.98') // 292.05 + 92.93
+
+        expect(result.penalties).toHaveLength(0)
+        expect(result.overtimes).toHaveLength(1)
+        expect(result.overtimes[0].name).toBe('Overtime (Mon - Sat)')
+        expect(result.overtimes[0].multiplier.toString()).toBe('1.75')
       })
     })
   })
