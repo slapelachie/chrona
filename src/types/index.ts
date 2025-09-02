@@ -16,12 +16,13 @@ export interface User {
 export interface PayGuide {
   id: string
   name: string
-  baseRate: Decimal
-  casualLoading: Decimal
-  overtimeRules: OvertimeRules
+  baseRate: Decimal // Hourly base rate (e.g., 30)
+  minimumShiftHours?: number // e.g., 3 for 3 hours minimum shift
+  maximumShiftHours?: number // e.g., 11 for 11 hours maximum shift
   description?: string
   effectiveFrom: Date
-  effectiveTo?: Date
+  effectiveTo?: Date // null means ongoing
+  timezone: string // IANA timezone string
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -31,11 +32,26 @@ export interface PenaltyTimeFrame {
   id: string
   payGuideId: string
   name: string
-  multiplier: Decimal
+  multiplier: Decimal // e.g., 1.25 for 25% extra
   dayOfWeek?: number // 0=Sunday, 1=Monday, ..., 6=Saturday
-  startTime?: string // "18:00"
-  endTime?: string   // "06:00"
-  isPublicHoliday: boolean
+  startTime?: string // "HH:MM" local (half-open)
+  endTime?: string // "HH:MM" local (exclusive)
+  description?: string
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface OvertimeTimeFrame {
+  id: string
+  payGuideId: string
+  name: string
+  firstThreeHoursMult: Decimal // e.g., 1.25 for 25% extra (first 3 hours)
+  afterThreeHoursMult: Decimal // e.g., 1.5 for 50% extra (beyond 3 hours)
+  dayOfWeek?: number // 0=Sunday, 1=Monday, ..., 6=Saturday
+  isPublicHoliday?: boolean
+  startTime?: string // "HH:MM" local (half-open)
+  endTime?: string // "HH:MM" local (exclusive)
   description?: string
   isActive: boolean
   createdAt: Date
@@ -53,7 +69,6 @@ export interface Shift {
   basePay?: Decimal
   overtimePay?: Decimal
   penaltyPay?: Decimal
-  casualPay?: Decimal
   totalPay?: Decimal
   notes?: string
   payPeriodId?: string
@@ -76,21 +91,8 @@ export interface PayPeriod {
 }
 
 // =============================================================================
-// BUSINESS LOGIC TYPES  
+// BUSINESS LOGIC TYPES
 // =============================================================================
-
-export interface OvertimeRules {
-  daily?: {
-    regularHours: number      // 8 hours
-    firstOvertimeRate: number // 1.5x
-    firstOvertimeHours: number // up to 12 hours
-    secondOvertimeRate: number // 2.0x  
-  }
-  weekly?: {
-    regularHours: number      // 38 hours
-    overtimeRate: number      // 1.5x
-  }
-}
 
 export type PayPeriodStatus = 'open' | 'processing' | 'paid' | 'verified'
 
@@ -99,7 +101,7 @@ export interface PayCalculationResult {
     id?: string
     startTime: Date
     endTime: Date
-    breakMinutes: number
+    breakPeriods: BreakPeriod[]
     totalHours: Decimal
   }
   breakdown: {
@@ -109,14 +111,13 @@ export interface PayCalculationResult {
     overtimePay: Decimal
     penaltyHours: Decimal
     penaltyPay: Decimal
-    casualPay: Decimal
     totalPay: Decimal
   }
   penalties: AppliedPenalty[]
+  overtimes: AppliedOvertime[]
   payGuide: {
     name: string
     baseRate: Decimal
-    casualLoading: Decimal
   }
 }
 
@@ -138,7 +139,7 @@ export interface AppliedPenalty {
 export interface CreateShiftRequest {
   payGuideId: string
   startTime: string // ISO string
-  endTime: string   // ISO string
+  endTime: string // ISO string
   breakMinutes: number
   notes?: string
 }
@@ -151,12 +152,15 @@ export interface UpdateShiftRequest {
   notes?: string
 }
 
-export interface ShiftResponse extends Omit<Shift, 'totalHours' | 'basePay' | 'overtimePay' | 'penaltyPay' | 'casualPay' | 'totalPay'> {
+export interface ShiftResponse
+  extends Omit<
+    Shift,
+    'totalHours' | 'basePay' | 'overtimePay' | 'penaltyPay' | 'totalPay'
+  > {
   totalHours?: string
   basePay?: string
   overtimePay?: string
   penaltyPay?: string
-  casualPay?: string
   totalPay?: string
   payGuide?: PayGuideResponse
   payPeriod?: PayPeriodResponse
@@ -188,8 +192,6 @@ export interface ShiftsListResponse {
 export interface CreatePayGuideRequest {
   name: string
   baseRate: string // Decimal as string
-  casualLoading: string // Decimal as string
-  overtimeRules: OvertimeRules
   description?: string
   effectiveFrom: string // ISO string
 }
@@ -197,17 +199,14 @@ export interface CreatePayGuideRequest {
 export interface UpdatePayGuideRequest {
   name?: string
   baseRate?: string
-  casualLoading?: string
-  overtimeRules?: OvertimeRules
   description?: string
   effectiveFrom?: string
   effectiveTo?: string
   isActive?: boolean
 }
 
-export interface PayGuideResponse extends Omit<PayGuide, 'baseRate' | 'casualLoading'> {
+export interface PayGuideResponse extends Omit<PayGuide, 'baseRate'> {
   baseRate: string
-  casualLoading: string
   penaltyTimeFrames?: PenaltyTimeFrameResponse[]
 }
 
@@ -229,7 +228,6 @@ export interface CreatePenaltyTimeFrameRequest {
   dayOfWeek?: number
   startTime?: string
   endTime?: string
-  isPublicHoliday?: boolean
   description?: string
 }
 
@@ -239,18 +237,19 @@ export interface UpdatePenaltyTimeFrameRequest {
   dayOfWeek?: number
   startTime?: string
   endTime?: string
-  isPublicHoliday?: boolean
   description?: string
   isActive?: boolean
 }
 
-export interface PenaltyTimeFrameResponse extends Omit<PenaltyTimeFrame, 'multiplier'> {
+export interface PenaltyTimeFrameResponse
+  extends Omit<PenaltyTimeFrame, 'multiplier'> {
   multiplier: string
   payGuide?: PayGuideResponse
 }
 
 // Pay Period API Types
-export interface PayPeriodResponse extends Omit<PayPeriod, 'totalHours' | 'totalPay' | 'actualPay'> {
+export interface PayPeriodResponse
+  extends Omit<PayPeriod, 'totalHours' | 'totalPay' | 'actualPay'> {
   totalHours?: string
   totalPay?: string
   actualPay?: string
@@ -272,7 +271,6 @@ export interface ShiftFormData {
 export interface PayGuideFormData {
   name: string
   baseRate: string
-  casualLoading: string
   description: string
   effectiveFrom: string
   overtimeRules: {
@@ -291,7 +289,6 @@ export interface PenaltyTimeFrameFormData {
   dayOfWeek: string
   startTime: string
   endTime: string
-  isPublicHoliday: boolean
   description: string
 }
 
@@ -333,8 +330,8 @@ export interface ApiValidationResponse {
 // TIMEZONE TYPES
 // =============================================================================
 
-export type AustralianTimezone = 
-  | 'Australia/Sydney' 
+export type AustralianTimezone =
+  | 'Australia/Sydney'
   | 'Australia/Melbourne'
   | 'Australia/Brisbane'
   | 'Australia/Adelaide'
@@ -349,7 +346,7 @@ export interface TimezoneInfo {
 }
 
 // =============================================================================
-// CURRENCY TYPES  
+// CURRENCY TYPES
 // =============================================================================
 
 export interface CurrencyAmount {
@@ -364,7 +361,35 @@ export interface PayBreakdownDisplay {
   overtimePay: CurrencyAmount
   penaltyHours: string
   penaltyPay: CurrencyAmount
-  casualPay: CurrencyAmount
   totalHours: string
   totalPay: CurrencyAmount
+}
+
+export interface Period {
+  start: Date
+  end: Date
+}
+
+export interface BreakPeriod {
+  startTime: Date
+  endTime: Date
+}
+
+export interface RuleTimeFrame {
+  id: string
+  name: string
+  dayOfWeek?: number
+  startTime?: string
+  endTime?: string
+  isPublicHoliday?: boolean
+}
+
+export interface AppliedOvertime {
+  timeFrameId: string
+  name: string
+  multiplier: Decimal
+  hours: Decimal
+  pay: Decimal
+  startTime: Date
+  endTime: Date
 }
