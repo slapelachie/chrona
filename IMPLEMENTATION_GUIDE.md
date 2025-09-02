@@ -1,143 +1,212 @@
-# Chrona Implementation Guide - Starting From Scratch
+# Chrona Implementation Checklist
 
-## Overview
-Rebuild Chrona as a mobile-first Australian casual pay tracker using **test-first development** with black box testing. Focus on core MVP functionality without over-engineering.
+**YOU HAVE ACCESS TO CONTEXT7**
 
-## Core Architecture
+## Project Overview
+Mobile-first Australian casual pay tracker using **strict test-first development**. Track implementation progress with this checklist.
 
-### Tech Stack
-- **Frontend**: Next.js 15+ with App Router, TypeScript, React Bootstrap 5
-- **Database**: Prisma ORM with SQLite (dev) / PostgreSQL (prod)
-- **Pay Calculations**: Decimal.js for financial precision
-- **Testing**: Vitest with test-first approach
+## 🧪 MANDATORY TEST-FIRST DEVELOPMENT PROCESS
 
-### Database Schema (Core MVP)
+**⚠️ CRITICAL: NO FEATURE IMPLEMENTATION WITHOUT TESTS FIRST ⚠️**
 
-**User Model** (Single user app)
-```
-- id, name, email
-- Tax settings: tfnDeclared, claimsTaxFreeThreshold, hasHECSDebt
-- Pay period preferences: frequency (fortnightly), startDay
-- Default pay guide reference
-```
+### Test-First Development Workflow
+1. **Write Tests First** - Always write comprehensive tests before implementing any feature
+2. **Red Phase** - Run tests and ensure they fail (proving they test the right thing)
+3. **Green Phase** - Implement minimal code to make tests pass
+4. **Refactor Phase** - Clean up code while keeping tests passing
+5. **Validate** - Run full test suite before considering feature complete
 
-**PayGuide Model** (Award rates & penalties)
-```
-- id, name, effectiveFrom, effectiveTo, isActive
-- baseHourlyRate (includes casual loading for retail)
-- Overtime rates: overtimeRate1_5x (175%), overtimeRate2x (225%)
-- Daily/weekly overtime thresholds: dailyOvertimeHours (9h), weeklyOvertimeHours (38h)
-```
+### Blackbox Testing Requirements
+All features must be tested using **blackbox testing principles**:
+- Test from the user's perspective without knowledge of internal implementation
+- Focus on inputs, outputs, and expected behavior
+- Test API endpoints as complete request/response cycles
+- Test UI components through user interactions (clicks, form submissions)
+- Verify calculated results without testing internal calculation steps
 
-**PenaltyTimeFrame Model** (Flexible penalty system)
-```
-- id, payGuideId, name, description
-- startTime, endTime (HH:MM format)
-- penaltyRate (multiplier), dayOfWeek (optional), priority
-```
+### Testing Standards
+- **Unit Tests**: Every calculation function, utility, and service
+- **Integration Tests**: API endpoints tested as complete workflows
+- **Component Tests**: UI interactions and user flows
+- **E2E Tests**: Critical user journeys from start to finish
+- **Edge Case Tests**: Boundary conditions, error states, invalid inputs
 
-**Shift Model** (Core shift tracking)
-```
-- id, userId, payGuideId
-- startTime, endTime, breakMinutes
-- shiftType, status, notes, location
-- Calculated fields: totalMinutes, regularHours, overtimeHours, penaltyHours, grossPay
-```
+### Test Coverage Requirements
+- Minimum 95% code coverage for all new features
+- 100% coverage for pay calculation logic (financial accuracy critical)
+- All API endpoints must have request/response tests
+- All UI components must have interaction tests
 
-**PayPeriod Model** (Pay period management)
-```
-- id, userId, startDate, endDate, payDate, status
-- Calculated totals: weeklyHours, totalGrossPay, totalTax, totalNetPay
-```
+---
 
-## Implementation Phases
+## 📋 Core Infrastructure (PENDING)
 
-### Phase 1: Core Shift Management (MVP)
+### Database Schema
+- [ ] User Model (single user app)
+- [ ] PayGuide Model (award rates & penalties) 
+- [ ] PenaltyTimeFrame Model (flexible penalty system)
+- [ ] Shift Model (core shift tracking)
+- [ ] PayPeriod Model (pay period management)
 
-**Test-First Approach:**
-1. Write black box tests for shift creation, calculation, and display
-2. Test Australian retail award calculations (overtime, penalties, casual loading)
-3. Test timezone handling for Australian users
+### Tech Stack Setup
+- [x] Next.js 15+ with App Router, TypeScript
+- [x] React Bootstrap 5
+- [x] Vitest testing framework with React Testing Library
+- [x] Playwright for E2E testing
+- [ ] Prisma ORM with SQLite (dev)
+- [ ] Decimal.js for financial precision
 
-**Key Components:**
-- Enhanced Shift Form: Date/time input with timezone handling
-- Pay Calculator: Australian retail award logic with configurable penalties
-- Shift List: Mobile-friendly display with pay breakdowns
-- Real-time Preview: Server-side calculation preview during form input
+---
 
-**Critical Features:**
-- Accurate pay calculations using Decimal.js
-- Flexible penalty time frame system
-- Mobile-first responsive design
-- Server-side shift preview API
+## 📋 Phase 1: Core Shift Management
+**Status**: In Progress | **File**: [PHASE_1_TASKS.md](./PHASE_1_TASKS.md)
 
-### Phase 2: Pay Period Management
+### Overview
+Core MVP functionality for shift tracking, pay calculations, and mobile-first UI. Focus on test-first development with blackbox testing methodology.
 
-**Test-First Approach:**
-1. Test automatic pay period assignment based on shift dates
-2. Test fortnightly pay period calculations
-3. Test pay period status transitions
+### 5 Key Goal Areas (152 Tasks Total)
+1. 🗄️ **Database & API** (30 tasks) - Models, migrations, seeding, CRUD endpoints
+2. ⚙️ **Pay Calculation Engine** (42 tasks) - Decimal.js, penalties, overtime, validation  
+3. 🎨 **UI Components** (35 tasks) - Forms, selectors, previews, mobile optimization
+4. 🧪 **Testing** (45 tasks) - Blackbox tests, integration tests, E2E workflows
+5. 📱 **Mobile-First Design** (30 tasks) - Responsive grid, touch interfaces, performance
 
-**Key Components:**
-- Pay Period Service: Automatic period creation and assignment
-- Pay Period Display: Summary cards with totals
-- Period Calculations: Aggregate shift data with tax calculations
+### Success Criteria
+- All tests pass with 95%+ coverage (100% for pay calculations)
+- End-to-end shift creation works on mobile (320px+)
+- Pay calculations accurate to the cent for all Australian retail award scenarios
+- Real-time preview <100ms response time
+- Mobile interface fully functional with touch-friendly interactions
 
-### Phase 3: Australian Tax Calculations
+### Critical Requirements
+- **Test-First Development**: Write comprehensive blackbox tests BEFORE implementing features
+- **Single Source of Truth**: Pay calculation engine handles all calculations server-side
+- **Timezone Handling**: Store data in UTC, convert on frontend for consistency
+- **Mobile-First**: Progressive enhancement from 320px to desktop
 
-**Test-First Approach:**
-1. Test current Australian tax brackets
-2. Test HECS-HELP repayment calculations
-3. Test Medicare levy calculations
+→ **[View Detailed Tasks](./PHASE_1_TASKS.md)** (152 specific, actionable tasks)
 
-**Key Components:**
-- Tax Calculator: Australian tax system with current rates
-- Tax Bracket Management: Configurable tax rates
-- Net Pay Calculations: Accurate deductions
+---
 
-## Key Implementation Guidelines
+## 📋 Phase 2: Pay Period Management (PENDING)
 
-### Mobile-First Design
-- Use Bootstrap responsive grid (xs, sm, md, lg breakpoints)
-- Touch-friendly interfaces (44px minimum tap targets)
-- Bottom-aligned primary actions for thumb navigation
-- Progressive enhancement from 320px+ screens
+### Pay Period Service
+- [ ] Automatic pay period creation
+- [ ] Shift assignment to pay periods
+- [ ] Fortnightly pay period calculations
+- [ ] Pay period status management
 
-### Australian Pay Accuracy
-- Use Decimal.js for all financial calculations
-- Implement exact Australian retail award overtime rules
-- Support configurable penalty time frames
-- Handle public holiday calculations (250% rate)
-- Accurate rounding to the cent
+### Components
+- [ ] Pay Period Display component
+- [ ] Summary cards with totals
+- [ ] Period navigation interface
 
-### Test-First Development
-- Write comprehensive black box tests before implementation
-- Test edge cases: midnight shifts, public holidays, timezone boundaries
-- Test calculation accuracy against real pay scenarios
-- Use Vitest for fast test execution
+### Testing (WRITE TESTS FIRST)
+- [ ] **Blackbox tests for automatic pay period assignment** (test complete workflows)
+- [ ] **Fortnightly calculation tests** (test period boundaries and totals)
+- [ ] **Pay period status transition tests** (test state changes end-to-end)
+
+---
+
+## 💰 Phase 3: Australian Tax Calculations (PENDING)
+
+### Tax Engine
+- [ ] Australian tax bracket system
+- [ ] HECS-HELP repayment calculations
+- [ ] Medicare levy calculations
+- [ ] Tax-free threshold handling
+- [ ] Net pay calculations
+
+### Components
+- [ ] Tax Calculator component
+- [ ] Tax settings management
+- [ ] Net pay display
+
+### Testing (WRITE TESTS FIRST)
+- [ ] **Blackbox Australian tax bracket tests** (test tax calculations for various incomes)
+- [ ] **HECS-HELP calculation blackbox tests** (test repayment calculations end-to-end)
+- [ ] **Medicare levy blackbox tests** (test levy calculations with various scenarios)
+- [ ] **Tax accuracy validation tests** (test against ATO examples and edge cases)
+
+---
+
+## 🎯 Critical Features Status
+
+### Pay Calculation Accuracy
+- [ ] Decimal.js implementation
+- [ ] Australian retail award overtime rules
+- [ ] Configurable penalty time frames
+- [ ] Public holiday calculations (250% rate)
+- [ ] Accurate rounding to the cent
+
+### Mobile Experience
+- [ ] Bootstrap responsive design
+- [ ] Mobile-optimized navigation
+- [ ] Touch-friendly form controls
+- [ ] Mobile performance optimization
 
 ### API Design
-- RESTful endpoints with proper error handling
-- Server-side validation and calculations
-- Timezone-aware date/time handling
-- Cursor-based pagination for performance
+- [ ] RESTful endpoints
+- [ ] Server-side validation
+- [ ] Server-side calculations
+- [ ] Timezone-aware date/time handling
+- [ ] Error handling improvements
 
-## Critical Success Factors
+---
 
-1. **Accurate Calculations**: All pay calculations must be precise to the cent
-2. **Mobile Experience**: App must work seamlessly on mobile devices
-3. **Test Coverage**: Comprehensive test suite covering all calculation scenarios
-4. **Simple Architecture**: Focus on essential features, avoid over-engineering
-5. **Australian Compliance**: Accurate implementation of Australian award wages and tax system
+## 🧪 Testing Coverage
 
-## Development Commands
+### Test Infrastructure
+- [x] Vitest configuration with React Testing Library
+- [x] Test directory structure setup (`src/test/`, `tests/e2e/`)
+- [x] Test data fixtures and utilities
+- [x] Mock data and API testing setup
+
+### Test Categories (ALL BLACKBOX APPROACH)
+- [ ] **Unit tests for calculation functions** (test inputs/outputs, not implementation)
+- [ ] **Integration tests for API endpoints** (test complete request/response cycles)
+- [ ] **Component tests for UI interactions** (test user actions and visual results)
+- [ ] **E2E tests for critical workflows** (test complete user journeys)
+
+---
+
+## 🚀 Development Commands
 ```bash
 npm run dev          # Development server
-npm run test         # Run test suite
+npm run test         # Run test suite  
 npm run build        # Production build
 npm run type-check   # TypeScript validation
+npm run lint         # Code linting
 npx prisma migrate dev    # Database migrations
 npx prisma db seed       # Seed test data
 ```
 
-This guide prioritizes the MVP shift management system with accurate Australian pay calculations, using a test-first approach to ensure reliability and correctness.
+---
+
+## 📝 Implementation Notes
+
+### Recently Completed
+- ✅ **Testing Framework Setup**: Comprehensive testing infrastructure with Vitest and Playwright
+- ✅ **React Testing Library**: Component testing setup with utilities and helpers  
+- ✅ **E2E Testing**: Page object models, test fixtures, and cross-browser testing
+- ✅ **Mobile Testing**: Responsive design testing and mobile device emulation
+- ✅ **Australian Pay Testing**: Currency formatting and specialized test data
+
+### Implementation Priority
+1. **Phase 1**: Core Infrastructure and Shift Management (MVP)
+2. **Phase 2**: Pay Period Management
+3. **Phase 3**: Australian Tax Calculations
+
+### Focus Areas
+- **Mandatory test-first development approach** (no exceptions)
+- **Blackbox testing methodology** (test behavior, not implementation)
+- Mobile-first responsive design
+- Accurate Australian pay calculations
+- Clean, maintainable architecture
+
+### Test-First Implementation Rules
+1. **Never write production code without failing tests first**
+2. **Always use blackbox testing approach** - test what the feature does, not how it does it
+3. **Run `npm run test` before every commit** - all tests must pass
+4. **Achieve minimum 95% test coverage** for new features
+5. **Write tests for edge cases and error conditions** before implementing error handling

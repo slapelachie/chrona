@@ -80,3 +80,5 @@ tmp/
 temp/
 
 /generated/prisma
+
+/generated/prisma

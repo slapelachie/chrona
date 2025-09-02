@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Single user app - basic user information
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  timezone  String   @default("Australia/Sydney")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  shifts     Shift[]
+  payPeriods PayPeriod[]
+
+  @@map("users")
+}
+
+// Australian pay guides (retail award, hospitality award, etc.)
+model PayGuide {
+  id               String  @id @default(cuid())
+  name             String  @unique
+  baseRate         Decimal // $25.4123 per hour precision  
+  casualLoading    Decimal @default(0.25) // 25% default casual loading
+  overtimeRules    Json    // Flexible JSON for overtime rules (daily, weekly)
+  description      String?
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  isActive         Boolean @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations  
+  shifts           Shift[]
+  penaltyTimeFrames PenaltyTimeFrame[]
+
+  @@map("pay_guides")
+}
+
+// Flexible penalty system (weekends, evenings, nights, public holidays)
+model PenaltyTimeFrame {
+  id          String   @id @default(cuid())
+  payGuideId  String
+  name        String   // "Weekend", "Evening", "Night", "Public Holiday"
+  multiplier  Decimal  // 1.5 for 150%, 2.0 for 200%
+  
+  // Day-based penalties (null = applies to all days)
+  dayOfWeek   Int?     // 0=Sunday, 1=Monday, ..., 6=Saturday
+  
+  // Time-based penalties (null = all day)
+  startTime   String?  // "18:00" for evening penalty start
+  endTime     String?  // "06:00" for night penalty end
+  
+  // Special penalties
+  isPublicHoliday Boolean @default(false)
+  description String?
+  
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  payGuide    PayGuide @relation(fields: [payGuideId], references: [id], onDelete: Cascade)
+
+  @@map("penalty_time_frames")
+}
+
+// Core shift tracking
+model Shift {
+  id           String    @id @default(cuid())
+  userId       String
+  payGuideId   String
+  
+  // Shift timing (stored in UTC)
+  startTime    DateTime
+  endTime      DateTime
+  breakMinutes Int       @default(0)
+  
+  // Calculated fields (cached for performance)
+  totalHours   Decimal?  // 8.5 hours
+  basePay      Decimal?  // $215.50
+  overtimePay  Decimal?  // $45.75
+  penaltyPay   Decimal?  // $102.25
+  casualPay    Decimal?  // $53.88
+  totalPay     Decimal?  // $417.38
+  
+  // Optional fields
+  notes        String?
+  payPeriodId  String?
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payGuide     PayGuide  @relation(fields: [payGuideId], references: [id])
+  payPeriod    PayPeriod? @relation(fields: [payPeriodId], references: [id])
+
+  @@map("shifts")
+}
+
+// Pay period management (fortnightly Australian standard)
+model PayPeriod {
+  id          String   @id @default(cuid())
+  userId      String
+  startDate   DateTime // Start of pay period (midnight UTC)
+  endDate     DateTime // End of pay period (23:59:59 UTC)
+  
+  // Status tracking
+  status      String   @default("open") // "open", "processing", "paid", "verified"
+  
+  // Calculated totals (cached)
+  totalHours  Decimal? // 76.5 hours
+  totalPay    Decimal? // $2,145.75
+  
+  // Verification against actual pay
+  actualPay   Decimal? // What was actually paid
+  verified    Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shifts      Shift[]
+
+  @@unique([userId, startDate]) // Prevent duplicate pay periods
+  @@map("pay_periods")
+}
