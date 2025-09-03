@@ -698,7 +698,7 @@ describe('PayCalculator - Blackbox Tests', () => {
       })
 
       describe('Public Holiday Premium Rates', () => {
-        it.only('should apply public holiday premium rates for Christmas Day shifts', () => {
+        it('should apply public holiday premium rates for Christmas Day shifts', () => {
           const publicHolidays: PublicHoliday[] = [
             {
               id: 'christmas-day',
@@ -740,24 +740,152 @@ describe('PayCalculator - Blackbox Tests', () => {
           expect(result.penalties[0].multiplier.toString()).toBe('2.5')
         })
 
-        it.skip('should apply public holiday rates over weekend rates', () => {
-          // TODO: Test Christmas Day on Saturday/Sunday
-          // Should use public holiday rate, not weekend rate
+        it('should apply public holiday rates over weekend rates', () => {
+          const publicHolidays: PublicHoliday[] = [
+            {
+              id: 'holiday',
+              payGuideId: '',
+              name: 'Holiday',
+              date: new Date('2025-07-06T00:00:00+10:00'),
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ]
+
+          const calculator = new PayCalculator(
+            retailPayGuide,
+            retailPenaltyTimeFrames,
+            retailOvertimeTimeFrames,
+            publicHolidays
+          )
+
+          const breakPeriods: BreakPeriod[] = [
+            {
+              startTime: new Date('2025-07-06T12:00:00+10:00'),
+              endTime: new Date('2025-07-06T12:30:00+10:00'),
+            },
+          ]
+
+          const result = calculator.calculate(
+            new Date('2025-07-06T10:00:00+10:00'), // 10am
+            new Date('2025-07-06T18:00:00+10:00'), // 6pm
+            breakPeriods
+          )
+
+          expect(result.shift.totalHours.toString()).toBe('7.5')
+          expect(result.breakdown.penaltyHours.toString()).toBe('7.5')
+          expect(result.breakdown.penaltyPay.toString()).toBe('497.81') // 7.5 * 26.55 * 2.5
+
+          expect(result.penalties).toHaveLength(1)
+          expect(result.penalties[0].name).toBe('Public Holiday Penalty')
+          expect(result.penalties[0].multiplier.toString()).toBe('2.5')
         })
 
-        it.skip('should handle public holiday that falls on different days of week', () => {
-          // TODO: Test same public holiday on weekday vs weekend
-          // Should apply appropriate rates based on day context
+        it('should handle public holiday that falls on different days of week', () => {
+          const publicHolidays: PublicHoliday[] = [
+            {
+              id: 'anzac-day-weekday',
+              payGuideId: '',
+              name: 'Anzac Day',
+              date: new Date('2025-04-25T00:00:00+10:00'), // Friday
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+            {
+              id: 'anzac-day-weekend',
+              payGuideId: '',
+              name: 'Anzac Day',
+              date: new Date('2026-04-25T00:00:00+10:00'), // Saturday
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ]
+
+          const calculator = new PayCalculator(
+            retailPayGuide,
+            retailPenaltyTimeFrames,
+            retailOvertimeTimeFrames,
+            publicHolidays
+          )
+
+          // Test public holiday on a weekday (Friday)
+          const weekdayResult = calculator.calculate(
+            new Date('2025-04-25T10:00:00+10:00'), // Friday 10am
+            new Date('2025-04-25T18:00:00+10:00'), // Friday 6pm
+            []
+          )
+
+          expect(weekdayResult.shift.totalHours.toString()).toBe('8')
+          expect(weekdayResult.breakdown.penaltyHours.toString()).toBe('8')
+          expect(weekdayResult.breakdown.penaltyPay.toString()).toBe('531') // 8 * 26.55 * 2.5
+          expect(weekdayResult.penalties).toHaveLength(1)
+          expect(weekdayResult.penalties[0].name).toBe('Public Holiday Penalty')
+          expect(weekdayResult.penalties[0].multiplier.toString()).toBe('2.5')
+
+          // Test same public holiday on a weekend (Saturday)
+          const weekendResult = calculator.calculate(
+            new Date('2026-04-25T10:00:00+10:00'), // Saturday 10am
+            new Date('2026-04-25T18:00:00+10:00'), // Saturday 6pm
+            []
+          )
+
+          expect(weekendResult.shift.totalHours.toString()).toBe('8')
+          expect(weekendResult.breakdown.penaltyHours.toString()).toBe('8')
+          expect(weekendResult.breakdown.penaltyPay.toString()).toBe('531') // 8 * 26.55 * 2.5 (public holiday takes precedence)
+          expect(weekendResult.penalties).toHaveLength(1)
+          expect(weekendResult.penalties[0].name).toBe('Public Holiday Penalty')
+          expect(weekendResult.penalties[0].multiplier.toString()).toBe('2.5')
         })
 
-        it.skip('should handle state-specific public holidays', () => {
-          // TODO: Test state-specific holidays like Melbourne Cup Day
-          // Should only apply when configured for specific states
-        })
+        it('should handle public holiday shifts with overtime', () => {
+          const publicHolidays: PublicHoliday[] = [
+            {
+              id: 'holiday',
+              payGuideId: '',
+              name: 'Holiday',
+              date: new Date('2025-07-07T00:00:00+10:00'),
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ]
 
-        it.skip('should handle public holiday shifts with overtime', () => {
-          // TODO: Test extended public holiday shifts requiring overtime
-          // Should combine public holiday rates with overtime multipliers
+          const calculator = new PayCalculator(
+            retailPayGuide,
+            retailPenaltyTimeFrames,
+            retailOvertimeTimeFrames,
+            publicHolidays
+          )
+
+          const breakPeriods: BreakPeriod[] = [
+            {
+              startTime: new Date('2025-07-07T12:00:00+10:00'),
+              endTime: new Date('2025-07-07T13:00:00+10:00'),
+            },
+          ]
+
+          const result = calculator.calculate(
+            new Date('2025-07-07T07:00:00+10:00'), // 10am
+            new Date('2025-07-07T20:00:00+10:00'), // 6pm
+            breakPeriods
+          )
+
+          expect(result.shift.totalHours.toString()).toBe('12')
+
+          expect(result.breakdown.penaltyHours.toString()).toBe('11')
+          expect(result.breakdown.penaltyPay.toString()).toBe('730.13') // 11 * 26.55 * 2.5
+          expect(result.penalties).toHaveLength(1)
+          expect(result.penalties[0].name).toBe('Public Holiday Penalty')
+          expect(result.penalties[0].multiplier.toString()).toBe('2.5')
+
+          expect(result.breakdown.overtimeHours.toString()).toBe('1')
+          expect(result.breakdown.overtimePay.toString()).toBe('73.01') // 1 * 26.55 * 2.75
+          expect(result.overtimes).toHaveLength(1)
+          expect(result.overtimes[0].name).toBe('Overtime (Public Holiday)')
+          expect(result.overtimes[0].multiplier.toString()).toBe('2.75')
         })
       })
     })
@@ -1399,7 +1527,6 @@ describe('PayCalculator - Blackbox Tests', () => {
           new Date('2025-07-07T08:00:00+10:00') // Monday 8 AM AEST
         )
 
-        console.log('Midnight test result:', JSON.stringify(result, null, 2))
         expect(result.shift.totalHours.toString()).toBe('8')
         expect(result.breakdown.baseHours.toString()).toBe('8') // Monday - no Sunday penalty
         expect(result.breakdown.penaltyHours.toString()).toBe('0')
@@ -1906,8 +2033,6 @@ describe('PayCalculator - Blackbox Tests', () => {
           new Date('2025-07-07T16:30:00'), // Monday 4:30pm (8.5 hours)
           breakPeriods
         )
-
-        console.log(result)
 
         // Total shift: 8.5 hours, minus 45 minutes breaks = 7.75 worked hours
         expect(result.shift.totalHours.toString()).toBe('7.75')
