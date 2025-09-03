@@ -182,7 +182,7 @@ export class PayCalculator {
 
     // Calculate overtime hours as excess worked hours beyond maximum
     const overtimeHours = Decimal.max(0, totalWorkedHours.minus(maximumHours))
-    const regularHours = new Decimal(maximumHours)
+    const regularHours = totalWorkedHours.minus(overtimeHours)
 
     // Collect all rate rules (penalties and overtime) that could apply
     const allRateRules: Array<{
@@ -209,40 +209,16 @@ export class PayCalculator {
     if (overtimeHours.greaterThan(0)) {
       for (const timeFrame of this.overtimeTimeFrames) {
         if (this.doesOvertimeTimeFrameApply(startTime, endTime, timeFrame)) {
-          // Calculate overtime start by working backwards from end time
-          const overtimeMinutes = overtimeHours.times(60).toNumber()
-          const overtimeStart = new Date(
-            endTime.getTime() - overtimeMinutes * 60 * 1000
-          )
+          // Calculate overtime start by finding when exactly maximumHours of work have been completed
+          const overtimeStart = this.calculateOvertimeStart(startTime, endTime, breakPeriods, maximumHours)
 
-          if (overtimeHours.greaterThan(3)) {
-            // Split into two periods: first 3 hours and remaining hours
-            const firstThreeHoursEnd = addHours(overtimeStart, 3)
-            
-            // First 3 hours at first rate
-            allRateRules.push({
-              period: { start: overtimeStart, end: firstThreeHoursEnd },
-              type: 'overtime',
-              timeFrame,
-              multiplier: timeFrame.firstThreeHoursMult,
-            })
-
-            // Remaining hours at second rate
-            allRateRules.push({
-              period: { start: firstThreeHoursEnd, end: endTime },
-              type: 'overtime',
-              timeFrame,
-              multiplier: timeFrame.afterThreeHoursMult,
-            })
-          } else {
-            // All overtime hours at first rate
-            allRateRules.push({
-              period: { start: overtimeStart, end: endTime },
-              type: 'overtime',
-              timeFrame,
-              multiplier: timeFrame.firstThreeHoursMult,
-            })
-          }
+          // Create single overtime period - tier calculation handled in createOvertimeFromRule
+          allRateRules.push({
+            period: { start: overtimeStart, end: endTime },
+            type: 'overtime',
+            timeFrame,
+            multiplier: timeFrame.firstThreeHoursMult, // Will be handled properly in createOvertimeFromRule
+          })
         }
       }
     }
@@ -263,8 +239,8 @@ export class PayCalculator {
         )
         if (penaltyResult) appliedPenalties.push(penaltyResult)
       } else if (rule.type === 'overtime') {
-        const overtimeResult = this.createOvertimeFromRule(rule, breakPeriods)
-        if (overtimeResult) appliedOvertimePeriods.push(overtimeResult)
+        const overtimeResults = this.createOvertimeFromRule(rule, breakPeriods)
+        appliedOvertimePeriods.push(...overtimeResults)
       }
     }
 
@@ -522,7 +498,7 @@ export class PayCalculator {
       multiplier: Decimal
     },
     breakPeriods: BreakPeriod[]
-  ): AppliedOvertime | null {
+  ): AppliedOvertime[] {
     const timeFrame = rule.timeFrame as OvertimeTimeFrame
     const overtimeMinutes = differenceInMinutes(
       rule.period.end,
@@ -540,22 +516,58 @@ export class PayCalculator {
     )
     const overtimeHours = new Decimal(workedOvertimeMinutes).dividedBy(60)
 
-    if (overtimeHours.greaterThan(0)) {
-      const overtimeRate = this.payGuide.baseRate.times(rule.multiplier)
-      const overtimePay = overtimeHours.times(overtimeRate)
+    if (overtimeHours.lessThanOrEqualTo(0)) {
+      return []
+    }
 
-      return {
+    const results: AppliedOvertime[] = []
+
+    if (overtimeHours.greaterThan(3)) {
+      // Split into two tiers: first 3 hours and remaining hours
+      const firstTierHours = new Decimal(3)
+      const secondTierHours = overtimeHours.minus(3)
+
+      // First 3 hours at first rate
+      const firstTierRate = this.payGuide.baseRate.times(timeFrame.firstThreeHoursMult)
+      const firstTierPay = firstTierHours.times(firstTierRate)
+      results.push({
         timeFrameId: timeFrame.id,
         name: timeFrame.name,
-        multiplier: rule.multiplier,
+        multiplier: timeFrame.firstThreeHoursMult,
+        hours: firstTierHours,
+        pay: this.roundToCents(firstTierPay),
+        startTime: rule.period.start,
+        endTime: rule.period.end,
+      })
+
+      // Remaining hours at second rate
+      const secondTierRate = this.payGuide.baseRate.times(timeFrame.afterThreeHoursMult)
+      const secondTierPay = secondTierHours.times(secondTierRate)
+      results.push({
+        timeFrameId: timeFrame.id,
+        name: timeFrame.name,
+        multiplier: timeFrame.afterThreeHoursMult,
+        hours: secondTierHours,
+        pay: this.roundToCents(secondTierPay),
+        startTime: rule.period.start,
+        endTime: rule.period.end,
+      })
+    } else {
+      // All overtime hours at first rate
+      const overtimeRate = this.payGuide.baseRate.times(timeFrame.firstThreeHoursMult)
+      const overtimePay = overtimeHours.times(overtimeRate)
+      results.push({
+        timeFrameId: timeFrame.id,
+        name: timeFrame.name,
+        multiplier: timeFrame.firstThreeHoursMult,
         hours: overtimeHours,
         pay: this.roundToCents(overtimePay),
         startTime: rule.period.start,
         endTime: rule.period.end,
-      }
+      })
     }
 
-    return null
+    return results
   }
 
   /**
@@ -816,6 +828,41 @@ export class PayCalculator {
     if (totalBreakMinutes >= totalMinutes) {
       throw new Error('Total break time cannot exceed shift duration')
     }
+  }
+
+  /**
+   * Calculate the time when overtime should start (after maximumHours worked hours)
+   */
+  private calculateOvertimeStart(
+    startTime: Date,
+    endTime: Date,
+    breakPeriods: BreakPeriod[],
+    maximumHours: number
+  ): Date {
+    const maximumMinutes = maximumHours * 60
+    let workedMinutes = 0
+    let currentTime = new Date(startTime.getTime())
+    
+    while (currentTime < endTime && workedMinutes < maximumMinutes) {
+      const nextMinute = new Date(currentTime.getTime() + 60 * 1000)
+      
+      // Check if this minute is during a break
+      const isBreakTime = breakPeriods.some(
+        bp => currentTime >= bp.startTime && currentTime < bp.endTime
+      )
+      
+      if (!isBreakTime) {
+        workedMinutes++
+      }
+      
+      currentTime = nextMinute
+      
+      if (workedMinutes >= maximumMinutes) {
+        return currentTime
+      }
+    }
+    
+    return endTime // Fallback if we never reach maximum hours
   }
 
   /**
