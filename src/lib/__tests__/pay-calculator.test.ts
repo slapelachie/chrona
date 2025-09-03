@@ -999,49 +999,256 @@ describe('PayCalculator - Blackbox Tests', () => {
   })
 
   describe('Input Validation and Utility Functions', () => {
-    describe.skip('Invalid Shift Times', () => {
+    describe('Invalid Shift Times', () => {
       it('should reject shifts where end time is before start time', () => {
-        // TODO: Test PayCalculator.calculate() with endTime < startTime
-        // Should throw descriptive error
+        const calculator = new PayCalculator(
+          retailPayGuide,
+          retailPenaltyTimeFrames,
+          retailOvertimeTimeFrames
+        )
+
+        expect(() => {
+          calculator.calculate(
+            new Date('2025-07-07T15:00:00'), // Monday 3pm
+            new Date('2025-07-07T09:00:00'), // Monday 9am (before start)
+            []
+          )
+        }).toThrow('End time must be after start time')
       })
 
       it('should reject shifts with zero duration', () => {
-        // TODO: Test PayCalculator.calculate() with startTime === endTime
-        // Should throw descriptive error
+        const calculator = new PayCalculator(
+          retailPayGuide,
+          retailPenaltyTimeFrames,
+          retailOvertimeTimeFrames
+        )
+
+        expect(() => {
+          calculator.calculate(
+            new Date('2025-07-07T09:00:00'), // Monday 9am
+            new Date('2025-07-07T09:00:00'), // Monday 9am (same time)
+            []
+          )
+        }).toThrow('Shift must be at least 1 minute long')
       })
 
       it('should handle shifts with invalid date objects', () => {
-        // TODO: Test PayCalculator.calculate() with invalid Date objects
-        // Should throw descriptive error
+        const calculator = new PayCalculator(
+          retailPayGuide,
+          retailPenaltyTimeFrames,
+          retailOvertimeTimeFrames
+        )
+
+        expect(() => {
+          calculator.calculate(
+            new Date('invalid-date'), // Invalid date
+            new Date('2025-07-07T15:00:00'), // Valid end time
+            []
+          )
+        }).toThrow()
+
+        expect(() => {
+          calculator.calculate(
+            new Date('2025-07-07T09:00:00'), // Valid start time
+            new Date('invalid-date'), // Invalid date
+            []
+          )
+        }).toThrow()
       })
     })
 
-    describe.skip('Invalid Break Periods', () => {
+    describe('Invalid Break Periods', () => {
       it('should reject break periods outside shift boundaries', () => {
-        // TODO: Test break periods that start before shift or end after shift
-        // Should throw descriptive error
+        const calculator = new PayCalculator(
+          retailPayGuide,
+          retailPenaltyTimeFrames,
+          retailOvertimeTimeFrames
+        )
+
+        // Break starts before shift
+        expect(() => {
+          calculator.calculate(
+            new Date('2025-07-07T09:00:00'), // Monday 9am
+            new Date('2025-07-07T17:00:00'), // Monday 5pm
+            [
+              {
+                startTime: new Date('2025-07-07T08:30:00'), // 8:30am (before shift)
+                endTime: new Date('2025-07-07T09:30:00'), // 9:30am
+              },
+            ]
+          )
+        }).toThrow('Break periods must be within shift duration')
+
+        // Break ends after shift
+        expect(() => {
+          calculator.calculate(
+            new Date('2025-07-07T09:00:00'), // Monday 9am
+            new Date('2025-07-07T17:00:00'), // Monday 5pm
+            [
+              {
+                startTime: new Date('2025-07-07T16:30:00'), // 4:30pm
+                endTime: new Date('2025-07-07T17:30:00'), // 5:30pm (after shift)
+              },
+            ]
+          )
+        }).toThrow('Break periods must be within shift duration')
       })
 
       it('should reject break periods with negative duration', () => {
-        // TODO: Test break periods where endTime <= startTime
-        // Should throw descriptive error
+        const calculator = new PayCalculator(
+          retailPayGuide,
+          retailPenaltyTimeFrames,
+          retailOvertimeTimeFrames
+        )
+
+        // Break with end time before start time
+        expect(() => {
+          calculator.calculate(
+            new Date('2025-07-07T09:00:00'), // Monday 9am
+            new Date('2025-07-07T17:00:00'), // Monday 5pm
+            [
+              {
+                startTime: new Date('2025-07-07T12:30:00'), // 12:30pm
+                endTime: new Date('2025-07-07T12:00:00'), // 12:00pm (before start)
+              },
+            ]
+          )
+        }).toThrow('Break end time must be after break start time')
+
+        // Break with same start and end time
+        expect(() => {
+          calculator.calculate(
+            new Date('2025-07-07T09:00:00'), // Monday 9am
+            new Date('2025-07-07T17:00:00'), // Monday 5pm
+            [
+              {
+                startTime: new Date('2025-07-07T12:00:00'), // 12:00pm
+                endTime: new Date('2025-07-07T12:00:00'), // 12:00pm (same time)
+              },
+            ]
+          )
+        }).toThrow('Break end time must be after break start time')
       })
 
       it('should reject break periods that exceed total shift duration', () => {
-        // TODO: Test when sum of all break periods >= shift duration
-        // Should throw descriptive error
+        const calculator = new PayCalculator(
+          retailPayGuide,
+          retailPenaltyTimeFrames,
+          retailOvertimeTimeFrames
+        )
+
+        // Single break that equals shift duration
+        expect(() => {
+          calculator.calculate(
+            new Date('2025-07-07T09:00:00'), // Monday 9am
+            new Date('2025-07-07T17:00:00'), // Monday 5pm (8 hours)
+            [
+              {
+                startTime: new Date('2025-07-07T09:00:00'), // 9am
+                endTime: new Date('2025-07-07T17:00:00'), // 5pm (8 hours break)
+              },
+            ]
+          )
+        }).toThrow('Total break time cannot exceed shift duration')
+
+        // Multiple breaks that exceed shift duration
+        expect(() => {
+          calculator.calculate(
+            new Date('2025-07-07T09:00:00'), // Monday 9am
+            new Date('2025-07-07T11:00:00'), // Monday 11am (2 hours)
+            [
+              {
+                startTime: new Date('2025-07-07T09:00:00'), // 9am
+                endTime: new Date('2025-07-07T10:00:00'), // 10am (1 hour)
+              },
+              {
+                startTime: new Date('2025-07-07T10:00:00'), // 10am
+                endTime: new Date('2025-07-07T10:30:00'), // 10:30am (30 minutes)
+              },
+              {
+                startTime: new Date('2025-07-07T10:30:00'), // 10:30am
+                endTime: new Date('2025-07-07T11:00:00'), // 11am (30 minutes)
+              },
+            ]
+          )
+        }).toThrow('Total break time cannot exceed shift duration')
       })
     })
 
-    describe.skip('Invalid PayGuide Configuration', () => {
+    describe('Invalid PayGuide Configuration', () => {
       it('should handle missing or invalid base rates', () => {
-        // TODO: Test PayCalculator with zero or negative base rates
-        // Should throw descriptive error or handle gracefully
+        // Test with zero base rate
+        const zeroRatePayGuide: PayGuide = {
+          ...retailPayGuide,
+          baseRate: new Decimal('0'),
+        }
+
+        expect(() => {
+          new PayCalculator(
+            zeroRatePayGuide,
+            retailPenaltyTimeFrames,
+            retailOvertimeTimeFrames
+          )
+        }).toThrow('Base rate must be greater than zero')
+
+        // Test with negative base rate
+        const negativeRatePayGuide: PayGuide = {
+          ...retailPayGuide,
+          baseRate: new Decimal('-10.50'),
+        }
+
+        expect(() => {
+          new PayCalculator(
+            negativeRatePayGuide,
+            retailPenaltyTimeFrames,
+            retailOvertimeTimeFrames
+          )
+        }).toThrow('Base rate must be greater than zero')
       })
 
       it('should handle invalid minimum/maximum shift hours', () => {
-        // TODO: Test PayGuide with negative or conflicting min/max hours
-        // Should throw descriptive error or handle gracefully
+        // Test with negative minimum shift hours
+        const negativeMinPayGuide: PayGuide = {
+          ...retailPayGuide,
+          minimumShiftHours: -2,
+        }
+
+        expect(() => {
+          new PayCalculator(
+            negativeMinPayGuide,
+            retailPenaltyTimeFrames,
+            retailOvertimeTimeFrames
+          )
+        }).toThrow('Minimum shift hours cannot be negative')
+
+        // Test with negative maximum shift hours
+        const negativeMaxPayGuide: PayGuide = {
+          ...retailPayGuide,
+          maximumShiftHours: -5,
+        }
+
+        expect(() => {
+          new PayCalculator(
+            negativeMaxPayGuide,
+            retailPenaltyTimeFrames,
+            retailOvertimeTimeFrames
+          )
+        }).toThrow('Maximum shift hours cannot be negative')
+
+        // Test with minimum hours exceeding maximum hours
+        const conflictingHoursPayGuide: PayGuide = {
+          ...retailPayGuide,
+          minimumShiftHours: 15,
+          maximumShiftHours: 8,
+        }
+
+        expect(() => {
+          new PayCalculator(
+            conflictingHoursPayGuide,
+            retailPenaltyTimeFrames,
+            retailOvertimeTimeFrames
+          )
+        }).toThrow('Minimum shift hours cannot exceed maximum shift hours')
       })
     })
 
@@ -1080,19 +1287,78 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(hours3.toString()).toBe('8.25')
       })
 
-      it.skip('should format currency for edge case amounts', () => {
-        // TODO: Test formatAustralianCurrency with $0.00, very large amounts
-        // Should handle edge cases consistently
+      it('should format currency for edge case amounts', () => {
+        // Test zero amount
+        expect(formatAustralianCurrency(new Decimal('0.00'))).toBe('$0.00')
+        expect(formatAustralianCurrency(new Decimal('0'))).toBe('$0.00')
+
+        // Test very large amounts
+        expect(formatAustralianCurrency(new Decimal('999999.99'))).toBe('$999999.99')
+        expect(formatAustralianCurrency(new Decimal('1000000.00'))).toBe('$1000000.00')
+
+        // Test amounts with many decimal places (should round to 2)
+        expect(formatAustralianCurrency(new Decimal('25.999'))).toBe('$26.00')
+        expect(formatAustralianCurrency(new Decimal('25.001'))).toBe('$25.00')
+        expect(formatAustralianCurrency(new Decimal('25.995'))).toBe('$26.00')
       })
 
-      it.skip('should calculate hours with zero break time', () => {
-        // TODO: Test calculateTotalHours with breakMinutes = 0
-        // Should return exact time difference in hours
+      it('should calculate hours with zero break time', () => {
+        // Test standard 8-hour shift with no breaks
+        const hours1 = calculateTotalHours(
+          new Date('2024-01-15T09:00:00Z'),
+          new Date('2024-01-15T17:00:00Z'),
+          0
+        )
+        expect(hours1.toString()).toBe('8')
+
+        // Test with explicit zero break minutes
+        const hours2 = calculateTotalHours(
+          new Date('2024-01-15T10:30:00Z'),
+          new Date('2024-01-15T15:30:00Z')
+        )
+        expect(hours2.toString()).toBe('5')
+
+        // Test fractional hours with no breaks
+        const hours3 = calculateTotalHours(
+          new Date('2024-01-15T09:00:00Z'),
+          new Date('2024-01-15T12:30:00Z'),
+          0
+        )
+        expect(hours3.toString()).toBe('3.5')
       })
 
-      it.skip('should handle very long shift hour calculations', () => {
-        // TODO: Test calculateTotalHours for 20+ hour shifts
-        // Should maintain precision for extended shifts
+      it('should handle very long shift hour calculations', () => {
+        // Test 20-hour shift with 2-hour break
+        const hours1 = calculateTotalHours(
+          new Date('2024-01-15T06:00:00Z'),
+          new Date('2024-01-16T02:00:00Z'),
+          120
+        )
+        expect(hours1.toString()).toBe('18')
+
+        // Test 24-hour shift with no breaks
+        const hours2 = calculateTotalHours(
+          new Date('2024-01-15T00:00:00Z'),
+          new Date('2024-01-16T00:00:00Z'),
+          0
+        )
+        expect(hours2.toString()).toBe('24')
+
+        // Test 30-hour shift with 3-hour break (very long emergency shift)
+        const hours3 = calculateTotalHours(
+          new Date('2024-01-15T08:00:00Z'),
+          new Date('2024-01-16T14:00:00Z'),
+          180
+        )
+        expect(hours3.toString()).toBe('27')
+
+        // Test precision with fractional time in long shift
+        const hours4 = calculateTotalHours(
+          new Date('2024-01-15T09:15:00Z'),
+          new Date('2024-01-16T05:45:00Z'),
+          90
+        )
+        expect(hours4.toString()).toBe('19')
       })
     })
   })

@@ -37,9 +37,35 @@ export class PayCalculator {
     penaltyTimeFrames: PenaltyTimeFrame[] = [],
     overtimeTimeFrames: OvertimeTimeFrame[] = []
   ) {
+    this.validatePayGuide(payGuide)
     this.payGuide = payGuide
     this.penaltyTimeFrames = penaltyTimeFrames.filter((ptf) => ptf.isActive)
     this.overtimeTimeFrames = overtimeTimeFrames.filter((otf) => otf.isActive)
+  }
+
+  /**
+   * Validate PayGuide configuration
+   */
+  private validatePayGuide(payGuide: PayGuide): void {
+    if (payGuide.baseRate.lessThanOrEqualTo(0)) {
+      throw new Error('Base rate must be greater than zero')
+    }
+
+    if (payGuide.minimumShiftHours !== undefined && payGuide.minimumShiftHours < 0) {
+      throw new Error('Minimum shift hours cannot be negative')
+    }
+
+    if (payGuide.maximumShiftHours !== undefined && payGuide.maximumShiftHours < 0) {
+      throw new Error('Maximum shift hours cannot be negative')
+    }
+
+    if (
+      payGuide.minimumShiftHours !== undefined &&
+      payGuide.maximumShiftHours !== undefined &&
+      payGuide.minimumShiftHours > payGuide.maximumShiftHours
+    ) {
+      throw new Error('Minimum shift hours cannot exceed maximum shift hours')
+    }
   }
 
   /**
