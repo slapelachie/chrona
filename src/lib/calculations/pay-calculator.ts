@@ -768,14 +768,34 @@ export class PayCalculator {
         if (b > a) out.push({ start: a, end: b })
       }
 
-      // Advance to next local day: convert cursor to local, add 1 day, back to UTC at its midnight
+      // Advance to next local day using a more robust approach
+      const originalCursor = dayCursorUtc.getTime()
+      
+      // Method 1: Try the standard timezone advancement
       const nextLocalMidnight = addDays(localMidnight, 1)
       const nextYmd = formatInTimeZone(
         nextLocalMidnight,
         timeZone,
         'yyyy-MM-dd'
       )
-      dayCursorUtc = fromZonedTime(`${nextYmd}T00:00:00`, timeZone)
+      let newDayCursorUtc = fromZonedTime(`${nextYmd}T00:00:00`, timeZone)
+      
+      // Safety check: ensure we actually advanced to prevent infinite loops
+      if (newDayCursorUtc.getTime() <= originalCursor) {
+        // Method 2: Fallback to UTC advancement while preserving timezone midnight alignment
+        // Find the next day by adding 25 hours in UTC (to handle DST) and then snapping to local midnight
+        const roughNextDay = new Date(originalCursor + 25 * 60 * 60 * 1000)
+        const roughNextYmd = formatInTimeZone(roughNextDay, timeZone, 'yyyy-MM-dd')
+        newDayCursorUtc = fromZonedTime(`${roughNextYmd}T00:00:00`, timeZone)
+        
+        // Final safety check
+        if (newDayCursorUtc.getTime() <= originalCursor) {
+          // Method 3: Simple UTC advancement as absolute last resort
+          newDayCursorUtc = new Date(originalCursor + 24 * 60 * 60 * 1000)
+        }
+      }
+      
+      dayCursorUtc = newDayCursorUtc
     }
 
     return out
