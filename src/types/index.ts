@@ -376,6 +376,26 @@ export interface RuleTimeFrame {
   isPublicHoliday?: boolean
 }
 
+export type RateRuleType = 'penalty' | 'overtime'
+
+export interface BaseRateRule {
+  period: Period
+  timeFrame: PenaltyTimeFrame | OvertimeTimeFrame
+  multiplier: Decimal
+}
+
+export interface PenaltyRateRule extends BaseRateRule {
+  type: 'penalty'
+  timeFrame: PenaltyTimeFrame
+}
+
+export interface OvertimeRateRule extends BaseRateRule {
+  type: 'overtime'
+  timeFrame: OvertimeTimeFrame
+}
+
+export type RateRule = PenaltyRateRule | OvertimeRateRule
+
 export interface AppliedOvertime {
   timeFrameId: string
   name: string
