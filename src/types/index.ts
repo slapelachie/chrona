@@ -34,6 +34,7 @@ export interface PenaltyTimeFrame {
   name: string
   multiplier: Decimal // e.g., 1.25 for 25% extra
   dayOfWeek?: number // 0=Sunday, 1=Monday, ..., 6=Saturday
+  isPublicHoliday?: boolean
   startTime?: string // "HH:MM" local (half-open)
   endTime?: string // "HH:MM" local (exclusive)
   description?: string
@@ -53,6 +54,16 @@ export interface OvertimeTimeFrame {
   startTime?: string // "HH:MM" local (half-open)
   endTime?: string // "HH:MM" local (exclusive)
   description?: string
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface PublicHoliday {
+  id: string
+  payGuideId: string
+  name: string
+  date: Date // Date only, does not care for time?
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -324,25 +335,6 @@ export interface ValidationError {
 export interface ApiValidationResponse {
   errors: ValidationError[]
   message: string
-}
-
-// =============================================================================
-// TIMEZONE TYPES
-// =============================================================================
-
-export type AustralianTimezone =
-  | 'Australia/Sydney'
-  | 'Australia/Melbourne'
-  | 'Australia/Brisbane'
-  | 'Australia/Adelaide'
-  | 'Australia/Perth'
-  | 'Australia/Hobart'
-  | 'Australia/Darwin'
-
-export interface TimezoneInfo {
-  timezone: AustralianTimezone
-  displayName: string
-  offset: string
 }
 
 // =============================================================================

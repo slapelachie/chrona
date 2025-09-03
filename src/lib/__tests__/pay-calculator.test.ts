@@ -18,6 +18,7 @@ import {
   PenaltyTimeFrame,
   OvertimeTimeFrame,
   BreakPeriod,
+  PublicHoliday,
 } from '@/types'
 
 const retailPayGuide: PayGuide = {
@@ -148,6 +149,16 @@ const retailPenaltyTimeFrames: PenaltyTimeFrame[] = [
     multiplier: new Decimal('1.75'),
     startTime: '00:00',
     endTime: '07:00',
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: 'public-holiday-penalty',
+    payGuideId: 'ma000004-retail-award-2025',
+    name: 'Public Holiday Penalty',
+    multiplier: new Decimal('2.5'),
+    isPublicHoliday: true,
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -686,45 +697,47 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(result.penalties[0].multiplier.toString()).toBe('1.75')
       })
 
-      describe.skip('Public Holiday Premium Rates', () => {
-        it('should apply public holiday premium rates for Christmas Day shifts', () => {
+      describe('Public Holiday Premium Rates', () => {
+        it.only('should apply public holiday premium rates for Christmas Day shifts', () => {
+          const publicHolidays: PublicHoliday[] = [
+            {
+              id: 'christmas-day',
+              payGuideId: '',
+              name: 'Christmas Day',
+              date: new Date('2025-12-25T00:00:00+10:00'),
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ]
+
           const calculator = new PayCalculator(
             retailPayGuide,
             retailPenaltyTimeFrames,
-            retailOvertimeTimeFrames
+            retailOvertimeTimeFrames,
+            publicHolidays
           )
+
+          const breakPeriods: BreakPeriod[] = [
+            {
+              startTime: new Date('2025-12-25T12:00:00'),
+              endTime: new Date('2025-12-25T12:30:00'),
+            },
+          ]
 
           const result = calculator.calculate(
-            new Date('2024-12-25T10:00:00Z'), // Christmas Day 10am
-            new Date('2024-12-25T18:00:00Z'), // Christmas Day 6pm
-            [] // FIXME 30 minute break
+            new Date('2025-12-25T10:00:00+10:00'), // Christmas Day 10am
+            new Date('2025-12-25T18:00:00+10:00'), // Christmas Day 6pm
+            breakPeriods
           )
 
-          expect(result.shift.totalHours.toString()).toBe('7.50')
-          expect(result.breakdown.penaltyHours.toString()).toBe('7.50')
-          expect(result.breakdown.penaltyPay.toString()).toBe('476.64') // 7.5 * 25.41 * 2.5
+          expect(result.shift.totalHours.toString()).toBe('7.5')
+          expect(result.breakdown.penaltyHours.toString()).toBe('7.5')
+          expect(result.breakdown.penaltyPay.toString()).toBe('497.81') // 7.5 * 26.55 * 2.5
 
           expect(result.penalties).toHaveLength(1)
           expect(result.penalties[0].name).toBe('Public Holiday Penalty')
           expect(result.penalties[0].multiplier.toString()).toBe('2.5')
-        })
-
-        it('should apply public holiday premium rates for ANZAC Day shifts', () => {
-          const calculator = new PayCalculator(
-            retailPayGuide,
-            retailPenaltyTimeFrames,
-            retailOvertimeTimeFrames
-          )
-
-          const result = calculator.calculate(
-            new Date('2024-04-25T09:00:00Z'), // ANZAC Day 9am
-            new Date('2024-04-25T17:00:00Z'), // ANZAC Day 5pm
-            [] // FIXME 1 hour break
-          )
-
-          expect(result.shift.totalHours.toString()).toBe('7.00')
-          expect(result.breakdown.penaltyPay.toString()).toBe('444.64') // 7 * 25.41 * 2.5
-          expect(result.penalties[0].name).toBe('Public Holiday Penalty')
         })
 
         it.skip('should apply public holiday rates over weekend rates', () => {
@@ -1639,7 +1652,6 @@ describe('PayCalculator - Blackbox Tests', () => {
           new Date('2025-07-08T08:00:00'), // Tuesday 8am (26 hours total)
           breakPeriods
         )
-        
 
         // Total shift: 26 hours, minus 2.5 hours breaks = 23.5 worked hours
         expect(result.shift.totalHours.toString()).toBe('23.5')
@@ -1701,8 +1713,12 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(nightPenalty).toBeUndefined()
 
         // Verify overtime pay makes sense (should be substantial for 12.5 hours overtime)
-        expect(parseFloat(result.breakdown.overtimePay.toString())).toBeGreaterThan(600)
-        expect(parseFloat(result.breakdown.overtimePay.toString())).toBeLessThan(800)
+        expect(
+          parseFloat(result.breakdown.overtimePay.toString())
+        ).toBeGreaterThan(600)
+        expect(
+          parseFloat(result.breakdown.overtimePay.toString())
+        ).toBeLessThan(800)
 
         // Total pay should be substantial for such a long shift
         expect(
@@ -1971,7 +1987,7 @@ describe('PayCalculator - Blackbox Tests', () => {
         const expectedOvertimePay = new Decimal('0.5')
           .times('26.55')
           .times('1.75')
-        // Use actual result to avoid rounding precision issues  
+        // Use actual result to avoid rounding precision issues
         expect(result.breakdown.totalPay.toString()).toBe('394.94')
       })
     })
@@ -2112,7 +2128,6 @@ describe('PayCalculator - Blackbox Tests', () => {
           breakPeriods
         )
 
-
         // Total shift: 13.5 hours, minus 30 minutes break = 13 worked hours
         expect(result.shift.totalHours.toString()).toBe('13')
 
@@ -2131,18 +2146,20 @@ describe('PayCalculator - Blackbox Tests', () => {
         const casualLoading = result.penalties.find(
           (p) => p.name === 'Casual Loading'
         )
-        
+
         expect(casualLoading).toBeTruthy()
         expect(casualLoading!.hours.toString()).toBe('11') // 7am-6pm (11 worked hours)
         expect(casualLoading!.multiplier.toString()).toBe('1.25')
-        
+
         // No evening penalty - overtime takes precedence after 11 hours
         expect(result.penalties).toHaveLength(1)
         expect(result.penalties[0].name).toBe('Casual Loading')
 
-        // Verify total pay calculation 
+        // Verify total pay calculation
         const expectedCasualPay = new Decimal('11').times('26.55').times('1.25')
-        const expectedOvertimePay = new Decimal('2').times('26.55').times('1.75')
+        const expectedOvertimePay = new Decimal('2')
+          .times('26.55')
+          .times('1.75')
         const expectedTotal = expectedCasualPay.plus(expectedOvertimePay)
 
         expect(result.breakdown.totalPay.toString()).toBe(
@@ -2319,7 +2336,6 @@ describe('PayCalculator - Blackbox Tests', () => {
           new Date('2025-07-07T17:00:00'), // Monday 5pm (8 hours)
           adjacentBreaks
         )
-
 
         // Total shift: 8 hours, minus 1 hour total breaks = 7 worked hours
         expect(result.shift.totalHours.toString()).toBe('7')

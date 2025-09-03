@@ -9,16 +9,9 @@ import {
   Period,
   RuleTimeFrame,
   BreakPeriod,
+  PublicHoliday,
 } from '@/types'
-import {
-  format,
-  parseISO,
-  differenceInMinutes,
-  startOfDay,
-  addHours,
-  addDays,
-  isBefore,
-} from 'date-fns'
+import { differenceInMinutes, addHours, addDays, isBefore } from 'date-fns'
 import { formatInTimeZone, toZonedTime, fromZonedTime } from 'date-fns-tz'
 
 /**
@@ -31,16 +24,19 @@ export class PayCalculator {
   private payGuide: PayGuide
   private penaltyTimeFrames: PenaltyTimeFrame[]
   private overtimeTimeFrames: OvertimeTimeFrame[]
+  private publicHolidays: PublicHoliday[]
 
   constructor(
     payGuide: PayGuide,
     penaltyTimeFrames: PenaltyTimeFrame[] = [],
-    overtimeTimeFrames: OvertimeTimeFrame[] = []
+    overtimeTimeFrames: OvertimeTimeFrame[] = [],
+    publicHolidays: PublicHoliday[] = []
   ) {
     this.validatePayGuide(payGuide)
     this.payGuide = payGuide
     this.penaltyTimeFrames = penaltyTimeFrames.filter((ptf) => ptf.isActive)
     this.overtimeTimeFrames = overtimeTimeFrames.filter((otf) => otf.isActive)
+    this.publicHolidays = publicHolidays.filter((ph) => ph.isActive)
   }
 
   /**
@@ -51,11 +47,17 @@ export class PayCalculator {
       throw new Error('Base rate must be greater than zero')
     }
 
-    if (payGuide.minimumShiftHours !== undefined && payGuide.minimumShiftHours < 0) {
+    if (
+      payGuide.minimumShiftHours !== undefined &&
+      payGuide.minimumShiftHours < 0
+    ) {
       throw new Error('Minimum shift hours cannot be negative')
     }
 
-    if (payGuide.maximumShiftHours !== undefined && payGuide.maximumShiftHours < 0) {
+    if (
+      payGuide.maximumShiftHours !== undefined &&
+      payGuide.maximumShiftHours < 0
+    ) {
       throw new Error('Maximum shift hours cannot be negative')
     }
 
@@ -210,7 +212,12 @@ export class PayCalculator {
       for (const timeFrame of this.overtimeTimeFrames) {
         if (this.doesOvertimeTimeFrameApply(startTime, endTime, timeFrame)) {
           // Calculate overtime start by finding when exactly maximumHours of work have been completed
-          const overtimeStart = this.calculateOvertimeStart(startTime, endTime, breakPeriods, maximumHours)
+          const overtimeStart = this.calculateOvertimeStart(
+            startTime,
+            endTime,
+            breakPeriods,
+            maximumHours
+          )
 
           // Create single overtime period - tier calculation handled in createOvertimeFromRule
           allRateRules.push({
@@ -528,7 +535,9 @@ export class PayCalculator {
       const secondTierHours = overtimeHours.minus(3)
 
       // First 3 hours at first rate
-      const firstTierRate = this.payGuide.baseRate.times(timeFrame.firstThreeHoursMult)
+      const firstTierRate = this.payGuide.baseRate.times(
+        timeFrame.firstThreeHoursMult
+      )
       const firstTierPay = firstTierHours.times(firstTierRate)
       results.push({
         timeFrameId: timeFrame.id,
@@ -541,7 +550,9 @@ export class PayCalculator {
       })
 
       // Remaining hours at second rate
-      const secondTierRate = this.payGuide.baseRate.times(timeFrame.afterThreeHoursMult)
+      const secondTierRate = this.payGuide.baseRate.times(
+        timeFrame.afterThreeHoursMult
+      )
       const secondTierPay = secondTierHours.times(secondTierRate)
       results.push({
         timeFrameId: timeFrame.id,
@@ -554,7 +565,9 @@ export class PayCalculator {
       })
     } else {
       // All overtime hours at first rate
-      const overtimeRate = this.payGuide.baseRate.times(timeFrame.firstThreeHoursMult)
+      const overtimeRate = this.payGuide.baseRate.times(
+        timeFrame.firstThreeHoursMult
+      )
       const overtimePay = overtimeHours.times(overtimeRate)
       results.push({
         timeFrameId: timeFrame.id,
@@ -632,19 +645,14 @@ export class PayCalculator {
   ): Period[] {
     const periods: Period[] = []
 
-    // Public holiday penalty applies to entire shift
     if (timeFrame.isPublicHoliday) {
-      if (this.isPublicHoliday(shiftStart)) {
-        periods.push({ start: shiftStart, end: shiftEnd })
-        return periods
-      } else {
-        // Not a public holiday, so this timeframe doesn't apply
-        return periods
-      }
-    }
-
-    // Combined day-of-week and time-based penalty
-    if (
+      const publicHolidayPeriods = this.findLocalRulePeriods(
+        shiftStart,
+        shiftEnd,
+        { isPublicHoliday: true }
+      )
+      periods.push(...publicHolidayPeriods)
+    } else if (
       timeFrame.dayOfWeek !== null &&
       timeFrame.dayOfWeek !== undefined &&
       timeFrame.startTime &&
@@ -690,7 +698,12 @@ export class PayCalculator {
   findLocalRulePeriods(
     shiftStartUtc: Date,
     shiftEndUtc: Date,
-    opts: { dayOfWeek?: number; startTime?: string; endTime?: string }
+    opts: {
+      dayOfWeek?: number
+      startTime?: string
+      endTime?: string
+      isPublicHoliday?: boolean
+    }
   ): Period[] {
     const startTime = opts.startTime ?? '00:00'
     const endTime = opts.endTime ?? '24:00'
@@ -724,19 +737,21 @@ export class PayCalculator {
 
     while (dayCursorUtc <= lastDayUtc) {
       // Local DOW for this cursor (ISO 1..7; map 7→0 for Sunday)
+      const localMidnight = toZonedTime(dayCursorUtc, timeZone)
       const isoDow = Number(formatInTimeZone(dayCursorUtc, timeZone, 'i')) // 1=Mon..7=Sun
       const localDow = isoDow % 7 // 0=Sun..6=Sat
 
-      if (opts.dayOfWeek == null || opts.dayOfWeek === localDow) {
+      const dowOk = opts.dayOfWeek == null || opts.dayOfWeek === localDow
+      const holidayOk =
+        opts.isPublicHoliday == null ||
+        (opts.isPublicHoliday && this.isPublicHoliday(localMidnight))
+
+      if (dowOk && holidayOk) {
         const ymd = formatInTimeZone(dayCursorUtc, timeZone, 'yyyy-MM-dd')
-
-        // Build UTC bounds for this local-day rule window
         const startUtc = fromZonedTime(`${ymd}T${startTime}:00`, timeZone)
-
         const endUtc = wraps
           ? (() => {
-              // next local day’s ymd
-              const nextLocal = addDays(toZonedTime(dayCursorUtc, timeZone), 1)
+              const nextLocal = addDays(localMidnight, 1)
               const nextYmd = formatInTimeZone(
                 nextLocal,
                 timeZone,
@@ -747,14 +762,14 @@ export class PayCalculator {
             })()
           : fromZonedTime(`${ymd}T${endTime}:00`, timeZone)
 
-        // Intersect with the shift [shiftStartUtc, shiftEndUtc)
+        // intersect with [shiftStartUtc, shiftEndUtc)
         const a = startUtc > shiftStartUtc ? startUtc : shiftStartUtc
         const b = endUtc < shiftEndUtc ? endUtc : shiftEndUtc
         if (b > a) out.push({ start: a, end: b })
       }
 
       // Advance to next local day: convert cursor to local, add 1 day, back to UTC at its midnight
-      const nextLocalMidnight = addDays(toZonedTime(dayCursorUtc, timeZone), 1)
+      const nextLocalMidnight = addDays(localMidnight, 1)
       const nextYmd = formatInTimeZone(
         nextLocalMidnight,
         timeZone,
@@ -767,26 +782,12 @@ export class PayCalculator {
   }
 
   /**
-   * Check if a date is a public holiday (simplified implementation)
+   * Check if a date is a public holiday
    */
   private isPublicHoliday(date: Date): boolean {
-    // This is a simplified implementation
-    // In a real application, you would check against a comprehensive public holiday database
-    const month = date.getMonth() + 1
-    const day = date.getDate()
-
-    // Common Australian public holidays (simplified)
-    const holidays = [
-      { month: 1, day: 1 }, // New Year's Day
-      { month: 1, day: 26 }, // Australia Day
-      { month: 4, day: 25 }, // ANZAC Day
-      { month: 12, day: 25 }, // Christmas Day
-      { month: 12, day: 26 }, // Boxing Day
-    ]
-
-    return holidays.some(
-      (holiday) => holiday.month === month && holiday.day === day
-    )
+    return this.publicHolidays.some((ph) => {
+      return ph.isActive && ph.date.toDateString() == date.toDateString()
+    })
   }
 
   /**
@@ -842,26 +843,26 @@ export class PayCalculator {
     const maximumMinutes = maximumHours * 60
     let workedMinutes = 0
     let currentTime = new Date(startTime.getTime())
-    
+
     while (currentTime < endTime && workedMinutes < maximumMinutes) {
       const nextMinute = new Date(currentTime.getTime() + 60 * 1000)
-      
+
       // Check if this minute is during a break
       const isBreakTime = breakPeriods.some(
-        bp => currentTime >= bp.startTime && currentTime < bp.endTime
+        (bp) => currentTime >= bp.startTime && currentTime < bp.endTime
       )
-      
+
       if (!isBreakTime) {
         workedMinutes++
       }
-      
+
       currentTime = nextMinute
-      
+
       if (workedMinutes >= maximumMinutes) {
         return currentTime
       }
     }
-    
+
     return endTime // Fallback if we never reach maximum hours
   }
 
