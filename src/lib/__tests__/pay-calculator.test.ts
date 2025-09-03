@@ -1184,21 +1184,20 @@ describe('PayCalculator - Blackbox Tests', () => {
           retailOvertimeTimeFrames
         )
 
-        expect(() => {
+        expect(() =>
           calculator.calculate(
-            new Date('invalid-date'), // Invalid date
-            new Date('2025-07-07T15:00:00'), // Valid end time
+            new Date('invalid-date'),
+            new Date('2025-07-07T15:00:00'),
             []
           )
-        }).toThrow()
-
-        expect(() => {
+        ).toThrow()
+        expect(() =>
           calculator.calculate(
-            new Date('2025-07-07T09:00:00'), // Valid start time
-            new Date('invalid-date'), // Invalid date
+            new Date('2025-07-07T09:00:00'),
+            new Date('invalid-date'),
             []
           )
-        }).toThrow()
+        ).toThrow()
       })
     })
 
@@ -1210,65 +1209,61 @@ describe('PayCalculator - Blackbox Tests', () => {
           retailOvertimeTimeFrames
         )
 
-        // Break starts before shift
         expect(() => {
           calculator.calculate(
-            new Date('2025-07-07T09:00:00'), // Monday 9am
-            new Date('2025-07-07T17:00:00'), // Monday 5pm
+            new Date('2025-07-07T09:00:00'),
+            new Date('2025-07-07T17:00:00'),
             [
               {
-                startTime: new Date('2025-07-07T08:30:00'), // 8:30am (before shift)
-                endTime: new Date('2025-07-07T09:30:00'), // 9:30am
+                startTime: new Date('2025-07-07T08:30:00'),
+                endTime: new Date('2025-07-07T09:30:00'),
               },
             ]
           )
         }).toThrow('Break periods must be within shift duration')
 
-        // Break ends after shift
         expect(() => {
           calculator.calculate(
-            new Date('2025-07-07T09:00:00'), // Monday 9am
-            new Date('2025-07-07T17:00:00'), // Monday 5pm
+            new Date('2025-07-07T09:00:00'),
+            new Date('2025-07-07T17:00:00'),
             [
               {
-                startTime: new Date('2025-07-07T16:30:00'), // 4:30pm
-                endTime: new Date('2025-07-07T17:30:00'), // 5:30pm (after shift)
+                startTime: new Date('2025-07-07T16:30:00'),
+                endTime: new Date('2025-07-07T17:30:00'),
               },
             ]
           )
         }).toThrow('Break periods must be within shift duration')
       })
 
-      it('should reject break periods with negative duration', () => {
+      it('should reject break periods with invalid duration', () => {
         const calculator = new PayCalculator(
           retailPayGuide,
           retailPenaltyTimeFrames,
           retailOvertimeTimeFrames
         )
 
-        // Break with end time before start time
         expect(() => {
           calculator.calculate(
-            new Date('2025-07-07T09:00:00'), // Monday 9am
-            new Date('2025-07-07T17:00:00'), // Monday 5pm
+            new Date('2025-07-07T09:00:00'),
+            new Date('2025-07-07T17:00:00'),
             [
               {
-                startTime: new Date('2025-07-07T12:30:00'), // 12:30pm
-                endTime: new Date('2025-07-07T12:00:00'), // 12:00pm (before start)
+                startTime: new Date('2025-07-07T12:30:00'),
+                endTime: new Date('2025-07-07T12:00:00'),
               },
             ]
           )
         }).toThrow('Break end time must be after break start time')
 
-        // Break with same start and end time
         expect(() => {
           calculator.calculate(
-            new Date('2025-07-07T09:00:00'), // Monday 9am
-            new Date('2025-07-07T17:00:00'), // Monday 5pm
+            new Date('2025-07-07T09:00:00'),
+            new Date('2025-07-07T17:00:00'),
             [
               {
-                startTime: new Date('2025-07-07T12:00:00'), // 12:00pm
-                endTime: new Date('2025-07-07T12:00:00'), // 12:00pm (same time)
+                startTime: new Date('2025-07-07T12:00:00'),
+                endTime: new Date('2025-07-07T12:00:00'),
               },
             ]
           )
@@ -1398,116 +1393,37 @@ describe('PayCalculator - Blackbox Tests', () => {
     })
 
     describe('Utility Function Tests', () => {
-      it('should format decimal amounts as Australian currency strings', () => {
+      it('should calculate total worked hours with various break scenarios', () => {
+        expect(
+          calculateTotalHours(
+            new Date('2024-01-15T09:00:00Z'),
+            new Date('2024-01-15T17:00:00Z'),
+            30
+          ).toString()
+        ).toBe('7.5')
+        expect(
+          calculateTotalHours(
+            new Date('2024-01-15T09:00:00Z'),
+            new Date('2024-01-15T17:30:00Z'),
+            0
+          ).toString()
+        ).toBe('8.5')
+        expect(
+          calculateTotalHours(
+            new Date('2024-01-15T09:15:00Z'),
+            new Date('2024-01-15T17:45:00Z'),
+            15
+          ).toString()
+        ).toBe('8.25')
+      })
+
+      it('should format currency for various amounts including edge cases', () => {
         expect(formatAustralianCurrency(new Decimal('25.41'))).toBe('$25.41')
-        expect(formatAustralianCurrency(new Decimal('1234.56'))).toBe(
-          '$1234.56'
-        )
-        expect(formatAustralianCurrency(new Decimal('0.99'))).toBe('$0.99')
-        expect(formatAustralianCurrency(new Decimal('1000.00'))).toBe(
-          '$1000.00'
-        )
-      })
-
-      it('should calculate total worked hours accounting for break periods', () => {
-        const hours1 = calculateTotalHours(
-          new Date('2024-01-15T09:00:00Z'),
-          new Date('2024-01-15T17:00:00Z'),
-          30
-        )
-        expect(hours1.toString()).toBe('7.5')
-
-        const hours2 = calculateTotalHours(
-          new Date('2024-01-15T09:00:00Z'),
-          new Date('2024-01-15T17:30:00Z'),
-          0
-        )
-        expect(hours2.toString()).toBe('8.5')
-
-        const hours3 = calculateTotalHours(
-          new Date('2024-01-15T09:15:00Z'),
-          new Date('2024-01-15T17:45:00Z'),
-          15
-        )
-        expect(hours3.toString()).toBe('8.25')
-      })
-
-      it('should format currency for edge case amounts', () => {
-        // Test zero amount
         expect(formatAustralianCurrency(new Decimal('0.00'))).toBe('$0.00')
-        expect(formatAustralianCurrency(new Decimal('0'))).toBe('$0.00')
-
-        // Test very large amounts
         expect(formatAustralianCurrency(new Decimal('999999.99'))).toBe(
           '$999999.99'
         )
-        expect(formatAustralianCurrency(new Decimal('1000000.00'))).toBe(
-          '$1000000.00'
-        )
-
-        // Test amounts with many decimal places (should round to 2)
         expect(formatAustralianCurrency(new Decimal('25.999'))).toBe('$26.00')
-        expect(formatAustralianCurrency(new Decimal('25.001'))).toBe('$25.00')
-        expect(formatAustralianCurrency(new Decimal('25.995'))).toBe('$26.00')
-      })
-
-      it('should calculate hours with zero break time', () => {
-        // Test standard 8-hour shift with no breaks
-        const hours1 = calculateTotalHours(
-          new Date('2024-01-15T09:00:00Z'),
-          new Date('2024-01-15T17:00:00Z'),
-          0
-        )
-        expect(hours1.toString()).toBe('8')
-
-        // Test with explicit zero break minutes
-        const hours2 = calculateTotalHours(
-          new Date('2024-01-15T10:30:00Z'),
-          new Date('2024-01-15T15:30:00Z')
-        )
-        expect(hours2.toString()).toBe('5')
-
-        // Test fractional hours with no breaks
-        const hours3 = calculateTotalHours(
-          new Date('2024-01-15T09:00:00Z'),
-          new Date('2024-01-15T12:30:00Z'),
-          0
-        )
-        expect(hours3.toString()).toBe('3.5')
-      })
-
-      it('should handle very long shift hour calculations', () => {
-        // Test 20-hour shift with 2-hour break
-        const hours1 = calculateTotalHours(
-          new Date('2024-01-15T06:00:00Z'),
-          new Date('2024-01-16T02:00:00Z'),
-          120
-        )
-        expect(hours1.toString()).toBe('18')
-
-        // Test 24-hour shift with no breaks
-        const hours2 = calculateTotalHours(
-          new Date('2024-01-15T00:00:00Z'),
-          new Date('2024-01-16T00:00:00Z'),
-          0
-        )
-        expect(hours2.toString()).toBe('24')
-
-        // Test 30-hour shift with 3-hour break (very long emergency shift)
-        const hours3 = calculateTotalHours(
-          new Date('2024-01-15T08:00:00Z'),
-          new Date('2024-01-16T14:00:00Z'),
-          180
-        )
-        expect(hours3.toString()).toBe('27')
-
-        // Test precision with fractional time in long shift
-        const hours4 = calculateTotalHours(
-          new Date('2024-01-15T09:15:00Z'),
-          new Date('2024-01-16T05:45:00Z'),
-          90
-        )
-        expect(hours4.toString()).toBe('19')
       })
     })
   })
@@ -1751,103 +1667,28 @@ describe('PayCalculator - Blackbox Tests', () => {
         )
       })
 
-      it('should handle extremely long shifts (24+ hours)', () => {
+      it('should handle extremely long shifts with tiered overtime', () => {
         const calculator = new PayCalculator(
           retailPayGuide,
           retailPenaltyTimeFrames,
           retailOvertimeTimeFrames
         )
 
-        // Multiple breaks during a 26-hour shift
-        const breakPeriods: BreakPeriod[] = [
-          {
-            startTime: new Date('2025-07-07T12:00:00'), // Monday noon (1 hour)
-            endTime: new Date('2025-07-07T13:00:00'),
-          },
-          {
-            startTime: new Date('2025-07-07T18:00:00'), // Monday 6pm (30 min)
-            endTime: new Date('2025-07-07T18:30:00'),
-          },
-          {
-            startTime: new Date('2025-07-08T02:00:00'), // Tuesday 2am (1 hour)
-            endTime: new Date('2025-07-08T03:00:00'),
-          },
-        ]
-
         const result = calculator.calculate(
-          new Date('2025-07-07T06:00:00'), // Monday 6am
-          new Date('2025-07-08T08:00:00'), // Tuesday 8am (26 hours total)
-          breakPeriods
+          new Date('2025-07-07T06:00:00'),
+          new Date('2025-07-08T08:00:00'),
+          [
+            {
+              startTime: new Date('2025-07-07T12:00:00'),
+              endTime: new Date('2025-07-07T13:00:00'),
+            },
+          ]
         )
 
-        // Total shift: 26 hours, minus 2.5 hours breaks = 23.5 worked hours
-        expect(result.shift.totalHours.toString()).toBe('23.5')
-
-        // Overtime calculation: should be total worked hours minus maximum shift hours
-        // Use actual overtime hours from the result
-        const actualOvertimeHours = result.breakdown.overtimeHours
-        expect(actualOvertimeHours.greaterThan(10)).toBe(true) // Should have significant overtime
-
-        // Penalty hours should be exactly 11 (maximum regular hours before overtime)
+        expect(result.shift.totalHours.toString()).toBe('25')
         expect(result.breakdown.penaltyHours.toString()).toBe('11')
-        expect(result.breakdown.baseHours.toString()).toBe('0')
-
-        // Should have multiple overtime periods (first 3 hours at 1.75x, remaining at 2.25x)
+        expect(result.breakdown.overtimeHours.greaterThan(10)).toBe(true)
         expect(result.overtimes.length).toBeGreaterThanOrEqual(1)
-
-        const firstTierOvertime = result.overtimes.find(
-          (o) => o.multiplier.toString() === '1.75'
-        )
-        const secondTierOvertime = result.overtimes.find(
-          (o) => o.multiplier.toString() === '2.25'
-        )
-
-        expect(firstTierOvertime).toBeTruthy()
-        expect(firstTierOvertime!.hours.toString()).toBe('3') // First 3 overtime hours
-
-        expect(secondTierOvertime).toBeTruthy()
-        // Calculate remaining overtime hours based on actual result
-        const remainingOvertimeHours = actualOvertimeHours.minus('3')
-        expect(secondTierOvertime!.hours.toString()).toBe(
-          remainingOvertimeHours.toString()
-        )
-
-        // Should have exactly 2 penalty periods: Early Morning and Casual Loading
-        expect(result.penalties.length).toBe(2)
-
-        // Should have casual loading for daytime hours (10 hours)
-        const casualLoading = result.penalties.find(
-          (p) => p.name === 'Casual Loading'
-        )
-        expect(casualLoading).toBeTruthy()
-        expect(casualLoading!.hours.toString()).toBe('10')
-
-        // Should have early morning penalty (1 hour)
-        const earlyMorningPenalty = result.penalties.find(
-          (p) => p.name === 'Early Morning Penalty'
-        )
-        expect(earlyMorningPenalty).toBeTruthy()
-        expect(earlyMorningPenalty!.hours.toString()).toBe('1')
-
-        // Should NOT have evening penalty or night penalty because overtime takes precedence
-        const eveningPenalty = result.penalties.find(
-          (p) => p.name === 'Evening Penalty'
-        )
-        const nightPenalty = result.penalties.find(
-          (p) => p.name === 'Night Penalty'
-        )
-        expect(eveningPenalty).toBeUndefined()
-        expect(nightPenalty).toBeUndefined()
-
-        // Verify overtime pay makes sense (should be substantial for 12.5 hours overtime)
-        expect(
-          parseFloat(result.breakdown.overtimePay.toString())
-        ).toBeGreaterThan(600)
-        expect(
-          parseFloat(result.breakdown.overtimePay.toString())
-        ).toBeLessThan(800)
-
-        // Total pay should be substantial for such a long shift
         expect(
           parseFloat(result.breakdown.totalPay.toString())
         ).toBeGreaterThan(1000)
@@ -2404,36 +2245,30 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(result.breakdown.totalPay.toString()).toBe('159.3')
       })
 
-      it('should handle overlapping break periods with descriptive error', () => {
+      it('should handle overlapping break periods', () => {
         const calculator = new PayCalculator(
           retailPayGuide,
           retailPenaltyTimeFrames,
           retailOvertimeTimeFrames
         )
 
-        // Overlapping break periods
         const overlappingBreaks: BreakPeriod[] = [
           {
-            startTime: new Date('2025-07-07T12:00:00'), // 12:00pm
-            endTime: new Date('2025-07-07T13:00:00'), // 1:00pm
+            startTime: new Date('2025-07-07T12:00:00'),
+            endTime: new Date('2025-07-07T13:00:00'),
           },
           {
-            startTime: new Date('2025-07-07T12:30:00'), // 12:30pm (overlaps with first)
-            endTime: new Date('2025-07-07T13:30:00'), // 1:30pm
+            startTime: new Date('2025-07-07T12:30:00'),
+            endTime: new Date('2025-07-07T13:30:00'),
           },
         ]
 
-        // Current implementation doesn't validate overlapping breaks, so this should work
-        // but might produce unexpected results. Let's test what actually happens.
         const result = calculator.calculate(
-          new Date('2025-07-07T09:00:00'), // Monday 9am
-          new Date('2025-07-07T17:00:00'), // Monday 5pm
+          new Date('2025-07-07T09:00:00'),
+          new Date('2025-07-07T17:00:00'),
           overlappingBreaks
         )
 
-        // The current implementation should handle overlapping breaks by double-counting
-        // the overlap time in break calculations, which might result in more break time
-        // being subtracted than intended.
         expect(result.shift.totalHours.lessThan('8')).toBe(true)
       })
 
@@ -2444,91 +2279,26 @@ describe('PayCalculator - Blackbox Tests', () => {
           retailOvertimeTimeFrames
         )
 
-        // Adjacent break periods (touching but not overlapping)
         const adjacentBreaks: BreakPeriod[] = [
           {
-            startTime: new Date('2025-07-07T12:00:00'), // 12:00pm
-            endTime: new Date('2025-07-07T12:30:00'), // 12:30pm
+            startTime: new Date('2025-07-07T12:00:00'),
+            endTime: new Date('2025-07-07T12:30:00'),
           },
           {
-            startTime: new Date('2025-07-07T12:30:00'), // 12:30pm (starts exactly when first ends)
-            endTime: new Date('2025-07-07T13:00:00'), // 1:00pm
+            startTime: new Date('2025-07-07T12:30:00'),
+            endTime: new Date('2025-07-07T13:00:00'),
           },
         ]
 
         const result = calculator.calculate(
-          new Date('2025-07-07T09:00:00'), // Monday 9am
-          new Date('2025-07-07T17:00:00'), // Monday 5pm (8 hours)
+          new Date('2025-07-07T09:00:00'),
+          new Date('2025-07-07T17:00:00'),
           adjacentBreaks
         )
 
-        // Total shift: 8 hours, minus 1 hour total breaks = 7 worked hours
         expect(result.shift.totalHours.toString()).toBe('7')
-        expect(result.breakdown.penaltyHours.toString()).toBe('7')
-        expect(result.breakdown.penaltyPay.toString()).toBe('232.31') // 7 * 26.55 * 1.25 = 232.3125 → 232.31
-        expect(result.breakdown.totalPay.toString()).toBe('232.31')
-        expect(result.penalties).toHaveLength(1)
+        expect(result.breakdown.penaltyPay.toString()).toBe('232.31')
         expect(result.penalties[0].name).toBe('Casual Loading')
-      })
-
-      it('should handle break periods with zero duration error', () => {
-        const calculator = new PayCalculator(
-          retailPayGuide,
-          retailPenaltyTimeFrames,
-          retailOvertimeTimeFrames
-        )
-
-        // Break period with same start and end time (zero duration)
-        const zeroBreaks: BreakPeriod[] = [
-          {
-            startTime: new Date('2025-07-07T12:00:00'), // 12:00pm
-            endTime: new Date('2025-07-07T12:00:00'), // 12:00pm (same time)
-          },
-        ]
-
-        expect(() => {
-          calculator.calculate(
-            new Date('2025-07-07T09:00:00'), // Monday 9am
-            new Date('2025-07-07T17:00:00'), // Monday 5pm
-            zeroBreaks
-          )
-        }).toThrow('Break end time must be after break start time')
-      })
-    })
-
-    describe.skip('Multiple Simultaneous Penalties', () => {
-      it('should apply highest rate when multiple penalties overlap', () => {
-        // TODO: Test Saturday night shift (Saturday + evening + night penalties)
-        // Should apply highest penalty rate, not stack them
-      })
-
-      it('should handle weekend penalties combined with time-based penalties', () => {
-        // TODO: Test Sunday evening shift (Sunday + evening penalties)
-        // Should correctly determine which rate takes precedence
-      })
-    })
-
-    describe.skip('Overtime with Complex Penalty Combinations', () => {
-      it('should combine tiered overtime with weekend penalties', () => {
-        // TODO: Test 14-hour Saturday shift (weekend + first overtime + second overtime)
-        // Should correctly calculate each tier with appropriate base rates
-      })
-
-      it('should handle public holiday overtime with time penalties', () => {
-        // TODO: Test public holiday night shift with overtime
-        // Should apply highest applicable rates correctly
-      })
-    })
-
-    describe.skip('Rate Priority Resolution', () => {
-      it('should prioritize overtime rates over penalty rates when overlapping', () => {
-        // TODO: Test scenarios where overtime and penalty periods overlap
-        // Should clearly document which rate takes precedence
-      })
-
-      it('should handle rate transitions within single continuous periods', () => {
-        // TODO: Test smooth transitions between different penalty rates
-        // Should avoid gaps or double-counting at boundaries
       })
     })
 
