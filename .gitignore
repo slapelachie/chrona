@@ -82,3 +82,5 @@ temp/
 /generated/prisma
 
 /generated/prisma
+
+*.db
