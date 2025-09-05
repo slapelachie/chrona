@@ -27,7 +27,7 @@ async function verifySeededData() {
     })
     console.log(`\n💰 Pay Guides: ${payGuides.length}`)
     payGuides.forEach(guide => {
-      console.log(`   - ${guide.name}: $${guide.baseRate}/hr, ${guide.casualLoading * 100}% casual loading`)
+      console.log(`   - ${guide.name}: $${guide.baseRate}/hr (${guide.timezone})`)
       console.log(`     Penalty time frames: ${guide.penaltyTimeFrames.length}`)
       console.log(`     Shifts using this guide: ${guide._count.shifts}`)
     })
@@ -107,24 +107,40 @@ async function verifySeededData() {
       
       const payGuide = await prisma.payGuide.findUnique({
         where: { id: testShift.payGuideId },
-        include: { penaltyTimeFrames: true }
+        include: { 
+          penaltyTimeFrames: true,
+          overtimeTimeFrames: true,
+          publicHolidays: true
+        }
+      })
+
+      // Get break periods for this shift
+      const breakPeriods = await prisma.breakPeriod.findMany({
+        where: { shiftId: testShift.id }
       })
 
       if (payGuide) {
-        const calculator = new PayCalculator(payGuide as any, payGuide.penaltyTimeFrames as any)
+        const calculator = new PayCalculator(
+          payGuide as any, 
+          payGuide.penaltyTimeFrames as any,
+          payGuide.overtimeTimeFrames as any,
+          payGuide.publicHolidays as any
+        )
         const result = calculator.calculate(
           testShift.startTime,
           testShift.endTime,
-          testShift.breakMinutes
+          breakPeriods as any
         )
 
         console.log(`Test calculation for shift: ${testShift.startTime.toLocaleString()} - ${testShift.endTime.toLocaleString()}`)
-        console.log(`Total hours: ${result.breakdown.totalPay.toString()}`)
+        console.log(`Total hours: ${result.shift.totalHours.toString()}`)
         console.log(`Base pay: $${result.breakdown.basePay.toString()}`)
         console.log(`Penalty pay: $${result.breakdown.penaltyPay.toString()}`)
-        console.log(`Casual pay: $${result.breakdown.casualPay.toString()}`)
+        console.log(`Overtime pay: $${result.breakdown.overtimePay.toString()}`)
         console.log(`Total pay: $${result.breakdown.totalPay.toString()}`)
         console.log(`Applied penalties: ${result.penalties.length}`)
+        console.log(`Applied overtimes: ${result.overtimes.length}`)
+        console.log(`Break periods: ${breakPeriods.length}`)
       }
     }
 

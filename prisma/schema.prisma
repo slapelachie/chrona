@@ -28,21 +28,24 @@ model User {
 
 // Australian pay guides (retail award, hospitality award, etc.)
 model PayGuide {
-  id               String  @id @default(cuid())
-  name             String  @unique
-  baseRate         Decimal // $25.4123 per hour precision  
-  casualLoading    Decimal @default(0.25) // 25% default casual loading
-  overtimeRules    Json    // Flexible JSON for overtime rules (daily, weekly)
-  description      String?
-  effectiveFrom    DateTime
-  effectiveTo      DateTime?
-  isActive         Boolean @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                 String  @id @default(cuid())
+  name               String  @unique
+  baseRate           Decimal // $25.4123 per hour precision  
+  minimumShiftHours  Int?    // e.g., 3 for 3-hour minimum
+  maximumShiftHours  Int?    // e.g., 11 for overtime threshold
+  timezone           String  @default("Australia/Sydney") // IANA timezone
+  description        String?
+  effectiveFrom      DateTime
+  effectiveTo        DateTime?
+  isActive           Boolean @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   // Relations  
-  shifts           Shift[]
-  penaltyTimeFrames PenaltyTimeFrame[]
+  shifts             Shift[]
+  penaltyTimeFrames  PenaltyTimeFrame[]
+  overtimeTimeFrames OvertimeTimeFrame[]
+  publicHolidays     PublicHoliday[]
 
   @@map("pay_guides")
 }
@@ -105,8 +108,65 @@ model Shift {
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   payGuide     PayGuide  @relation(fields: [payGuideId], references: [id])
   payPeriod    PayPeriod? @relation(fields: [payPeriodId], references: [id])
+  breakPeriods BreakPeriod[]
 
   @@map("shifts")
+}
+
+// Break periods for shifts - source of truth for break timing
+model BreakPeriod {
+  id        String   @id @default(cuid())
+  shiftId   String
+  startTime DateTime
+  endTime   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@map("break_periods")
+}
+
+// Structured overtime rules with tiered multipliers
+model OvertimeTimeFrame {
+  id                    String   @id @default(cuid())
+  payGuideId            String
+  name                  String   // "Daily Overtime", "Sunday Overtime", etc.
+  firstThreeHoursMult   Decimal  // e.g., 1.75 for first 3 overtime hours
+  afterThreeHoursMult   Decimal  // e.g., 2.25 for hours beyond first 3
+  
+  // Conditions (null = applies to all)
+  dayOfWeek             Int?     // 0=Sunday, 1=Monday, ..., 6=Saturday
+  startTime             String?  // "HH:MM" local time
+  endTime               String?  // "HH:MM" local time
+  isPublicHoliday       Boolean  @default(false)
+  description           String?
+  
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  payGuide              PayGuide @relation(fields: [payGuideId], references: [id], onDelete: Cascade)
+
+  @@map("overtime_time_frames")
+}
+
+// Public holidays for pay calculations
+model PublicHoliday {
+  id         String   @id @default(cuid())
+  payGuideId String
+  name       String   // "Christmas Day", "Boxing Day", etc.
+  date       DateTime // Date only (time ignored)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  payGuide   PayGuide @relation(fields: [payGuideId], references: [id], onDelete: Cascade)
+
+  @@map("public_holidays")
 }
 
 // Pay period management (fortnightly Australian standard)

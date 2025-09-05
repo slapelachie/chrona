@@ -26,23 +26,13 @@ async function main() {
     update: {},
     create: {
       name: 'General Retail Industry Award 2020',
-      baseRate: new Decimal('25.41'), // Current adult minimum wage as of 2024
-      casualLoading: new Decimal('0.25'), // 25% casual loading
+      baseRate: new Decimal('26.55'), // Updated rate per test data
+      minimumShiftHours: 3,
+      maximumShiftHours: 11,
+      timezone: 'Australia/Brisbane', // Per test data
       description: 'General Retail Industry Award 2020 - Adult casual employee minimum rates',
-      effectiveFrom: new Date('2024-07-01'),
+      effectiveFrom: new Date('2025-07-01'), // Updated to match test data
       isActive: true,
-      overtimeRules: {
-        daily: {
-          regularHours: 8,
-          firstOvertimeRate: 1.5,
-          firstOvertimeHours: 12,
-          secondOvertimeRate: 2.0
-        },
-        weekly: {
-          regularHours: 38,
-          overtimeRate: 1.5
-        }
-      }
     },
   })
   console.log(`✅ Created pay guide: ${retailPayGuide.name} (${retailPayGuide.id})`)
@@ -54,23 +44,13 @@ async function main() {
     update: {},
     create: {
       name: 'Hospitality Industry (General) Award 2020',
-      baseRate: new Decimal('25.41'), // Current adult minimum wage
-      casualLoading: new Decimal('0.25'), // 25% casual loading
+      baseRate: new Decimal('26.55'), // Updated to match retail
+      minimumShiftHours: 3,
+      maximumShiftHours: 11,
+      timezone: 'Australia/Sydney',
       description: 'Hospitality Industry (General) Award 2020 - Adult casual employee minimum rates',
-      effectiveFrom: new Date('2024-07-01'),
+      effectiveFrom: new Date('2025-07-01'), // Updated date
       isActive: true,
-      overtimeRules: {
-        daily: {
-          regularHours: 8,
-          firstOvertimeRate: 1.5,
-          firstOvertimeHours: 12,
-          secondOvertimeRate: 2.0
-        },
-        weekly: {
-          regularHours: 38,
-          overtimeRate: 1.5
-        }
-      }
     },
   })
   console.log(`✅ Created pay guide: ${hospitalityPayGuide.name} (${hospitalityPayGuide.id})`)
@@ -78,6 +58,17 @@ async function main() {
   // Create Penalty Time Frames for Retail Award
   console.log('⏰ Creating penalty time frames for retail award...')
   
+  // Casual loading (125% - applies to all hours)
+  const casualLoading = await prisma.penaltyTimeFrame.create({
+    data: {
+      payGuideId: retailPayGuide.id,
+      name: 'Casual Loading',
+      multiplier: new Decimal('1.25'),
+      description: '25% casual loading rate',
+      isActive: true,
+    },
+  })
+
   // Saturday penalty (150%)
   const saturdayPenalty = await prisma.penaltyTimeFrame.create({
     data: {
@@ -140,7 +131,7 @@ async function main() {
     },
   })
 
-  console.log(`✅ Created ${5} penalty time frames for retail award`)
+  console.log(`✅ Created ${6} penalty time frames for retail award`)
 
   // Create similar penalty time frames for hospitality award
   console.log('🍽️ Creating penalty time frames for hospitality award...')
@@ -193,6 +184,66 @@ async function main() {
   })
 
   console.log(`✅ Created penalty time frames for hospitality award`)
+
+  // Create overtime time frames for retail award
+  console.log('⏰ Creating overtime time frames for retail award...')
+  await prisma.overtimeTimeFrame.createMany({
+    data: [
+      {
+        payGuideId: retailPayGuide.id,
+        name: 'Daily Overtime - Weekdays',
+        firstThreeHoursMult: new Decimal('1.75'),
+        afterThreeHoursMult: new Decimal('2.25'),
+        description: 'Daily overtime for weekdays (1.75x first 3hrs, 2.25x after)',
+        isActive: true,
+      },
+      {
+        payGuideId: retailPayGuide.id,
+        name: 'Daily Overtime - Sunday',
+        firstThreeHoursMult: new Decimal('2.25'),
+        afterThreeHoursMult: new Decimal('2.25'),
+        dayOfWeek: 0, // Sunday
+        description: 'Daily overtime for Sunday (2.25x all hours)',
+        isActive: true,
+      },
+      {
+        payGuideId: retailPayGuide.id,
+        name: 'Public Holiday Overtime',
+        firstThreeHoursMult: new Decimal('2.75'),
+        afterThreeHoursMult: new Decimal('2.75'),
+        isPublicHoliday: true,
+        description: 'Overtime on public holidays (2.75x all hours)',
+        isActive: true,
+      },
+    ],
+  })
+  console.log(`✅ Created overtime time frames for retail award`)
+
+  // Create sample public holidays
+  console.log('🎉 Creating sample public holidays...')
+  await prisma.publicHoliday.createMany({
+    data: [
+      {
+        payGuideId: retailPayGuide.id,
+        name: 'Christmas Day',
+        date: new Date('2025-12-25'),
+        isActive: true,
+      },
+      {
+        payGuideId: retailPayGuide.id,
+        name: 'Boxing Day',
+        date: new Date('2025-12-26'),
+        isActive: true,
+      },
+      {
+        payGuideId: retailPayGuide.id,
+        name: 'New Year\'s Day',
+        date: new Date('2025-01-01'),
+        isActive: true,
+      },
+    ],
+  })
+  console.log(`✅ Created sample public holidays`)
 
   // Create current pay period (fortnightly)
   console.log('📅 Creating current pay period...')
@@ -281,10 +332,63 @@ async function main() {
     },
   ]
 
+  const createdShifts = []
   for (const shiftData of shifts) {
     const shift = await prisma.shift.create({ data: shiftData })
+    createdShifts.push(shift)
     console.log(`✅ Created shift: ${shift.startTime.toLocaleString()} - ${shift.endTime.toLocaleString()}`)
   }
+
+  // Create sample break periods for shifts
+  console.log('☕ Creating sample break periods...')
+  const breakPeriods = [
+    // Regular weekday shift - lunch break
+    {
+      shiftId: createdShifts[0].id,
+      startTime: new Date('2024-09-02T13:00:00Z'), // 1pm lunch
+      endTime: new Date('2024-09-02T13:30:00Z'),   // 1:30pm
+    },
+    // Weekend shift - lunch break
+    {
+      shiftId: createdShifts[1].id,
+      startTime: new Date('2024-09-07T13:30:00Z'), // 1:30pm lunch  
+      endTime: new Date('2024-09-07T14:00:00Z'),   // 2pm
+    },
+    // Evening shift - dinner break
+    {
+      shiftId: createdShifts[2].id,
+      startTime: new Date('2024-09-03T19:00:00Z'), // 7pm dinner
+      endTime: new Date('2024-09-03T19:30:00Z'),   // 7:30pm
+    },
+    // Long shift - lunch + dinner break
+    {
+      shiftId: createdShifts[3].id,
+      startTime: new Date('2024-09-04T12:00:00Z'), // 12pm lunch
+      endTime: new Date('2024-09-04T12:30:00Z'),   // 12:30pm
+    },
+    {
+      shiftId: createdShifts[3].id,
+      startTime: new Date('2024-09-04T16:00:00Z'), // 4pm break
+      endTime: new Date('2024-09-04T16:15:00Z'),   // 4:15pm
+    },
+    // Sunday shift - afternoon break
+    {
+      shiftId: createdShifts[4].id,
+      startTime: new Date('2024-09-08T14:00:00Z'), // 2pm break
+      endTime: new Date('2024-09-08T14:15:00Z'),   // 2:15pm
+    },
+    // Night shift - midnight break
+    {
+      shiftId: createdShifts[5].id,
+      startTime: new Date('2024-09-06T01:00:00Z'), // 1am break
+      endTime: new Date('2024-09-06T01:30:00Z'),   // 1:30am
+    },
+  ]
+
+  for (const breakData of breakPeriods) {
+    await prisma.breakPeriod.create({ data: breakData })
+  }
+  console.log(`✅ Created ${breakPeriods.length} break periods`)
 
   // Create previous pay period with completed status
   console.log('📊 Creating previous pay period...')
@@ -313,8 +417,11 @@ async function main() {
   console.log('\n📈 Seeded data summary:')
   console.log(`   👤 Users: ${1}`)
   console.log(`   💰 Pay Guides: ${2}`)
-  console.log(`   ⏰ Penalty Time Frames: ${10}`)
+  console.log(`   ⏰ Penalty Time Frames: ${11}`)
+  console.log(`   🔄 Overtime Time Frames: ${3}`)
+  console.log(`   🎉 Public Holidays: ${3}`)
   console.log(`   🕒 Shifts: ${6}`)
+  console.log(`   ☕ Break Periods: ${7}`)
   console.log(`   📅 Pay Periods: ${2}`)
 }
 

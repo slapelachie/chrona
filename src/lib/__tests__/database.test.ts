@@ -1,6 +1,6 @@
 /**
  * Blackbox Database Tests
- * 
+ *
  * These tests verify database operations from a user perspective without knowledge
  * of internal implementation. Tests focus on inputs, outputs, and expected behavior.
  */
@@ -13,9 +13,9 @@ import { Decimal } from 'decimal.js'
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: 'file:./test.db'
-    }
-  }
+      url: 'file:./test.db',
+    },
+  },
 })
 
 describe('Database Models - Blackbox Tests', () => {
@@ -43,7 +43,7 @@ describe('Database Models - Blackbox Tests', () => {
       const userData = {
         name: 'Test User',
         email: 'test@example.com',
-        timezone: 'Australia/Sydney'
+        timezone: 'Australia/Sydney',
       }
 
       const user = await prisma.user.create({ data: userData })
@@ -51,7 +51,7 @@ describe('Database Models - Blackbox Tests', () => {
       expect(user).toMatchObject({
         name: 'Test User',
         email: 'test@example.com',
-        timezone: 'Australia/Sydney'
+        timezone: 'Australia/Sydney',
       })
       expect(user.id).toBeTruthy()
       expect(user.createdAt).toBeInstanceOf(Date)
@@ -62,14 +62,14 @@ describe('Database Models - Blackbox Tests', () => {
       const userData = {
         name: 'Test User',
         email: 'test@example.com',
-        timezone: 'Australia/Sydney'
+        timezone: 'Australia/Sydney',
       }
 
       await prisma.user.create({ data: userData })
 
       await expect(
-        prisma.user.create({ 
-          data: { ...userData, name: 'Another User' }
+        prisma.user.create({
+          data: { ...userData, name: 'Another User' },
         })
       ).rejects.toThrow()
     })
@@ -78,8 +78,8 @@ describe('Database Models - Blackbox Tests', () => {
       const user = await prisma.user.create({
         data: {
           name: 'Test User',
-          email: 'test@example.com'
-        }
+          email: 'test@example.com',
+        },
       })
 
       expect(user.timezone).toBe('Australia/Sydney')
@@ -91,57 +91,50 @@ describe('Database Models - Blackbox Tests', () => {
       const payGuideData = {
         name: 'General Retail Industry Award 2020',
         baseRate: new Decimal('25.41'),
-        casualLoading: new Decimal('0.25'),
+        minimumShiftHours: 3,
+        maximumShiftHours: 11,
+        timezone: 'Australia/Sydney',
         effectiveFrom: new Date('2024-01-01'),
         description: 'Adult casual minimum wage',
-        overtimeRules: {
-          daily: {
-            regularHours: 8,
-            firstOvertimeRate: 1.5,
-            firstOvertimeHours: 12,
-            secondOvertimeRate: 2.0
-          }
-        }
       }
 
       const payGuide = await prisma.payGuide.create({ data: payGuideData })
 
       expect(payGuide.name).toBe('General Retail Industry Award 2020')
       expect(payGuide.baseRate.toString()).toBe('25.41')
-      expect(payGuide.casualLoading.toString()).toBe('0.25')
+      expect(payGuide.minimumShiftHours).toBe(3)
+      expect(payGuide.maximumShiftHours).toBe(11)
+      expect(payGuide.timezone).toBe('Australia/Sydney')
       expect(payGuide.isActive).toBe(true)
-      expect(payGuide.overtimeRules).toEqual(payGuideData.overtimeRules)
     })
 
     it('should enforce unique pay guide names', async () => {
       const payGuideData = {
         name: 'Test Award',
         baseRate: new Decimal('25.00'),
-        casualLoading: new Decimal('0.25'),
         effectiveFrom: new Date('2024-01-01'),
-        overtimeRules: {}
       }
 
       await prisma.payGuide.create({ data: payGuideData })
 
       await expect(
-        prisma.payGuide.create({ 
-          data: { ...payGuideData, baseRate: new Decimal('30.00') }
+        prisma.payGuide.create({
+          data: { ...payGuideData, baseRate: new Decimal('30.00') },
         })
       ).rejects.toThrow()
     })
 
-    it('should use default casual loading when not provided', async () => {
+    it('should create pay guide with effective date', async () => {
       const payGuide = await prisma.payGuide.create({
         data: {
           name: 'Test Award',
           baseRate: new Decimal('25.00'),
           effectiveFrom: new Date('2024-01-01'),
-          overtimeRules: {}
-        }
+        },
       })
 
-      expect(payGuide.casualLoading.toString()).toBe('0.25')
+      expect(payGuide.effectiveFrom).toEqual(new Date('2024-01-01'))
+      expect(payGuide.isActive).toBe(true)
     })
   })
 
@@ -153,10 +146,8 @@ describe('Database Models - Blackbox Tests', () => {
         data: {
           name: 'Test Award',
           baseRate: new Decimal('25.00'),
-          casualLoading: new Decimal('0.25'),
           effectiveFrom: new Date('2024-01-01'),
-          overtimeRules: {}
-        }
+        },
       })
     })
 
@@ -166,10 +157,12 @@ describe('Database Models - Blackbox Tests', () => {
         name: 'Saturday Penalty',
         multiplier: new Decimal('1.5'),
         dayOfWeek: 6, // Saturday
-        description: '150% penalty for Saturday work'
+        description: '150% penalty for Saturday work',
       }
 
-      const penalty = await prisma.penaltyTimeFrame.create({ data: penaltyData })
+      const penalty = await prisma.penaltyTimeFrame.create({
+        data: penaltyData,
+      })
 
       expect(penalty.name).toBe('Saturday Penalty')
       expect(penalty.multiplier.toString()).toBe('1.5')
@@ -185,10 +178,12 @@ describe('Database Models - Blackbox Tests', () => {
         multiplier: new Decimal('1.25'),
         startTime: '18:00',
         endTime: '23:59',
-        description: 'Evening penalty rate'
+        description: 'Evening penalty rate',
       }
 
-      const penalty = await prisma.penaltyTimeFrame.create({ data: penaltyData })
+      const penalty = await prisma.penaltyTimeFrame.create({
+        data: penaltyData,
+      })
 
       expect(penalty.startTime).toBe('18:00')
       expect(penalty.endTime).toBe('23:59')
@@ -201,10 +196,12 @@ describe('Database Models - Blackbox Tests', () => {
         name: 'Public Holiday Penalty',
         multiplier: new Decimal('2.5'),
         isPublicHoliday: true,
-        description: '250% penalty for public holidays'
+        description: '250% penalty for public holidays',
       }
 
-      const penalty = await prisma.penaltyTimeFrame.create({ data: penaltyData })
+      const penalty = await prisma.penaltyTimeFrame.create({
+        data: penaltyData,
+      })
 
       expect(penalty.isPublicHoliday).toBe(true)
       expect(penalty.multiplier.toString()).toBe('2.5')
@@ -215,14 +212,14 @@ describe('Database Models - Blackbox Tests', () => {
         data: {
           payGuideId: payGuide.id,
           name: 'Test Penalty',
-          multiplier: new Decimal('1.5')
-        }
+          multiplier: new Decimal('1.5'),
+        },
       })
 
       await prisma.payGuide.delete({ where: { id: payGuide.id } })
 
       const deletedPenalty = await prisma.penaltyTimeFrame.findUnique({
-        where: { id: penalty.id }
+        where: { id: penalty.id },
       })
       expect(deletedPenalty).toBeNull()
     })
@@ -237,26 +234,24 @@ describe('Database Models - Blackbox Tests', () => {
       user = await prisma.user.create({
         data: {
           name: 'Test User',
-          email: 'test@example.com'
-        }
+          email: 'test@example.com',
+        },
       })
 
       payGuide = await prisma.payGuide.create({
         data: {
           name: 'Test Award',
           baseRate: new Decimal('25.00'),
-          casualLoading: new Decimal('0.25'),
           effectiveFrom: new Date('2024-01-01'),
-          overtimeRules: {}
-        }
+        },
       })
 
       payPeriod = await prisma.payPeriod.create({
         data: {
           userId: user.id,
           startDate: new Date('2024-01-01T00:00:00Z'),
-          endDate: new Date('2024-01-14T23:59:59Z')
-        }
+          endDate: new Date('2024-01-14T23:59:59Z'),
+        },
       })
     })
 
@@ -267,7 +262,7 @@ describe('Database Models - Blackbox Tests', () => {
         startTime: new Date('2024-01-02T09:00:00Z'),
         endTime: new Date('2024-01-02T17:00:00Z'),
         breakMinutes: 30,
-        payPeriodId: payPeriod.id
+        payPeriodId: payPeriod.id,
       }
 
       const shift = await prisma.shift.create({ data: shiftData })
@@ -286,8 +281,8 @@ describe('Database Models - Blackbox Tests', () => {
           userId: user.id,
           payGuideId: payGuide.id,
           startTime: new Date('2024-01-02T09:00:00Z'),
-          endTime: new Date('2024-01-02T17:00:00Z')
-        }
+          endTime: new Date('2024-01-02T17:00:00Z'),
+        },
       })
 
       expect(shift.breakMinutes).toBe(0)
@@ -305,13 +300,13 @@ describe('Database Models - Blackbox Tests', () => {
           overtimePay: new Decimal('0.00'),
           penaltyPay: new Decimal('0.00'),
           casualPay: new Decimal('50.00'),
-          totalPay: new Decimal('250.00')
-        }
+          totalPay: new Decimal('250.00'),
+        },
       })
 
-      expect(shift.totalHours?.toString()).toBe('8.00')
-      expect(shift.basePay?.toString()).toBe('200.00')
-      expect(shift.totalPay?.toString()).toBe('250.00')
+      expect(shift.totalHours?.toString()).toBe('8')
+      expect(shift.basePay?.toString()).toBe('200')
+      expect(shift.totalPay?.toString()).toBe('250')
     })
 
     it('should cascade delete shifts when user is deleted', async () => {
@@ -320,14 +315,14 @@ describe('Database Models - Blackbox Tests', () => {
           userId: user.id,
           payGuideId: payGuide.id,
           startTime: new Date('2024-01-02T09:00:00Z'),
-          endTime: new Date('2024-01-02T17:00:00Z')
-        }
+          endTime: new Date('2024-01-02T17:00:00Z'),
+        },
       })
 
       await prisma.user.delete({ where: { id: user.id } })
 
       const deletedShift = await prisma.shift.findUnique({
-        where: { id: shift.id }
+        where: { id: shift.id },
       })
       expect(deletedShift).toBeNull()
     })
@@ -340,8 +335,8 @@ describe('Database Models - Blackbox Tests', () => {
       user = await prisma.user.create({
         data: {
           name: 'Test User',
-          email: 'test@example.com'
-        }
+          email: 'test@example.com',
+        },
       })
     })
 
@@ -349,7 +344,7 @@ describe('Database Models - Blackbox Tests', () => {
       const payPeriodData = {
         userId: user.id,
         startDate: new Date('2024-01-01T00:00:00Z'),
-        endDate: new Date('2024-01-14T23:59:59Z')
+        endDate: new Date('2024-01-14T23:59:59Z'),
       }
 
       const payPeriod = await prisma.payPeriod.create({ data: payPeriodData })
@@ -369,11 +364,11 @@ describe('Database Models - Blackbox Tests', () => {
           endDate: new Date('2024-01-14T23:59:59Z'),
           totalHours: new Decimal('76.5'),
           totalPay: new Decimal('2145.75'),
-          actualPay: new Decimal('2145.75')
-        }
+          actualPay: new Decimal('2145.75'),
+        },
       })
 
-      expect(payPeriod.totalHours?.toString()).toBe('76.50')
+      expect(payPeriod.totalHours?.toString()).toBe('76.5')
       expect(payPeriod.totalPay?.toString()).toBe('2145.75')
       expect(payPeriod.actualPay?.toString()).toBe('2145.75')
     })
@@ -382,14 +377,14 @@ describe('Database Models - Blackbox Tests', () => {
       const payPeriodData = {
         userId: user.id,
         startDate: new Date('2024-01-01T00:00:00Z'),
-        endDate: new Date('2024-01-14T23:59:59Z')
+        endDate: new Date('2024-01-14T23:59:59Z'),
       }
 
       await prisma.payPeriod.create({ data: payPeriodData })
 
       await expect(
-        prisma.payPeriod.create({ 
-          data: { ...payPeriodData, endDate: new Date('2024-01-15T23:59:59Z') }
+        prisma.payPeriod.create({
+          data: { ...payPeriodData, endDate: new Date('2024-01-15T23:59:59Z') },
         })
       ).rejects.toThrow()
     })
@@ -398,8 +393,8 @@ describe('Database Models - Blackbox Tests', () => {
       const anotherUser = await prisma.user.create({
         data: {
           name: 'Another User',
-          email: 'another@example.com'
-        }
+          email: 'another@example.com',
+        },
       })
 
       const startDate = new Date('2024-01-01T00:00:00Z')
@@ -409,16 +404,16 @@ describe('Database Models - Blackbox Tests', () => {
         data: {
           userId: user.id,
           startDate,
-          endDate
-        }
+          endDate,
+        },
       })
 
       const payPeriod2 = await prisma.payPeriod.create({
         data: {
           userId: anotherUser.id,
           startDate,
-          endDate
-        }
+          endDate,
+        },
       })
 
       expect(payPeriod1.userId).toBe(user.id)
@@ -436,26 +431,24 @@ describe('Database Models - Blackbox Tests', () => {
       user = await prisma.user.create({
         data: {
           name: 'Test User',
-          email: 'test@example.com'
-        }
+          email: 'test@example.com',
+        },
       })
 
       payGuide = await prisma.payGuide.create({
         data: {
           name: 'Test Award',
           baseRate: new Decimal('25.00'),
-          casualLoading: new Decimal('0.25'),
           effectiveFrom: new Date('2024-01-01'),
-          overtimeRules: {}
-        }
+        },
       })
 
       payPeriod = await prisma.payPeriod.create({
         data: {
           userId: user.id,
           startDate: new Date('2024-01-01T00:00:00Z'),
-          endDate: new Date('2024-01-14T23:59:59Z')
-        }
+          endDate: new Date('2024-01-14T23:59:59Z'),
+        },
       })
     })
 
@@ -466,8 +459,8 @@ describe('Database Models - Blackbox Tests', () => {
           payGuideId: payGuide.id,
           startTime: new Date('2024-01-02T09:00:00Z'),
           endTime: new Date('2024-01-02T17:00:00Z'),
-          payPeriodId: payPeriod.id
-        }
+          payPeriodId: payPeriod.id,
+        },
       })
 
       const userWithRelations = await prisma.user.findUnique({
@@ -476,10 +469,10 @@ describe('Database Models - Blackbox Tests', () => {
           payPeriods: true,
           shifts: {
             include: {
-              payGuide: true
-            }
-          }
-        }
+              payGuide: true,
+            },
+          },
+        },
       })
 
       expect(userWithRelations?.payPeriods).toHaveLength(1)
@@ -493,19 +486,21 @@ describe('Database Models - Blackbox Tests', () => {
           payGuideId: payGuide.id,
           name: 'Weekend Penalty',
           multiplier: new Decimal('1.5'),
-          dayOfWeek: 6
-        }
+          dayOfWeek: 6,
+        },
       })
 
       const payGuideWithPenalties = await prisma.payGuide.findUnique({
         where: { id: payGuide.id },
         include: {
-          penaltyTimeFrames: true
-        }
+          penaltyTimeFrames: true,
+        },
       })
 
       expect(payGuideWithPenalties?.penaltyTimeFrames).toHaveLength(1)
-      expect(payGuideWithPenalties?.penaltyTimeFrames[0].name).toBe('Weekend Penalty')
+      expect(payGuideWithPenalties?.penaltyTimeFrames[0].name).toBe(
+        'Weekend Penalty'
+      )
     })
 
     it('should retrieve pay period with associated shifts', async () => {
@@ -516,16 +511,16 @@ describe('Database Models - Blackbox Tests', () => {
             payGuideId: payGuide.id,
             startTime: new Date('2024-01-02T09:00:00Z'),
             endTime: new Date('2024-01-02T17:00:00Z'),
-            payPeriodId: payPeriod.id
+            payPeriodId: payPeriod.id,
           },
           {
             userId: user.id,
             payGuideId: payGuide.id,
             startTime: new Date('2024-01-03T09:00:00Z'),
             endTime: new Date('2024-01-03T17:00:00Z'),
-            payPeriodId: payPeriod.id
-          }
-        ]
+            payPeriodId: payPeriod.id,
+          },
+        ],
       })
 
       const payPeriodWithShifts = await prisma.payPeriod.findUnique({
@@ -533,14 +528,18 @@ describe('Database Models - Blackbox Tests', () => {
         include: {
           shifts: {
             include: {
-              payGuide: true
-            }
-          }
-        }
+              payGuide: true,
+            },
+          },
+        },
       })
 
       expect(payPeriodWithShifts?.shifts).toHaveLength(2)
-      expect(payPeriodWithShifts?.shifts.every(s => s.payGuide.name === 'Test Award')).toBe(true)
+      expect(
+        payPeriodWithShifts?.shifts.every(
+          (s) => s.payGuide.name === 'Test Award'
+        )
+      ).toBe(true)
     })
   })
 })
