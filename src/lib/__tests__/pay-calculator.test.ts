@@ -212,6 +212,10 @@ describe('PayCalculator - Blackbox Tests', () => {
       // 30 minute break
       const breakPeriods: BreakPeriod[] = [
         {
+          id: 'break',
+          shiftId: '',
+          createdAt: new Date(),
+          updatedAt: new Date(),
           startTime: new Date('2025-07-07T13:00:00'),
           endTime: new Date('2025-07-07T13:30:00'),
         },
@@ -374,6 +378,10 @@ describe('PayCalculator - Blackbox Tests', () => {
       // 30 minute break
       const breakPeriods: BreakPeriod[] = [
         {
+          id: 'break',
+          shiftId: '',
+          createdAt: new Date(),
+          updatedAt: new Date(),
           startTime: new Date('2025-07-05T13:00:00+10:00'),
           endTime: new Date('2025-07-05T13:30:00+10:00'),
         },
@@ -406,6 +414,10 @@ describe('PayCalculator - Blackbox Tests', () => {
       // 30 minute break
       const breakPeriods: BreakPeriod[] = [
         {
+          id: 'break',
+          shiftId: '',
+          createdAt: new Date(),
+          updatedAt: new Date(),
           startTime: new Date('2025-07-06T13:00:00+10:00'),
           endTime: new Date('2025-07-06T13:30:00+10:00'),
         },
@@ -435,6 +447,10 @@ describe('PayCalculator - Blackbox Tests', () => {
       // 30 minute break
       const breakPeriods: BreakPeriod[] = [
         {
+          id: 'break',
+          shiftId: '',
+          createdAt: new Date(),
+          updatedAt: new Date(),
           startTime: new Date('2025-07-05T04:00:00'),
           endTime: new Date('2025-07-05T04:30:00'),
         },
@@ -555,6 +571,10 @@ describe('PayCalculator - Blackbox Tests', () => {
         // 30 minute break
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T20:00:00'),
             endTime: new Date('2025-07-07T20:30:00'),
           },
@@ -611,6 +631,10 @@ describe('PayCalculator - Blackbox Tests', () => {
         // 30 minute break
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-08T04:00:00'),
             endTime: new Date('2025-07-08T04:30:00'),
           },
@@ -720,6 +744,10 @@ describe('PayCalculator - Blackbox Tests', () => {
 
           const breakPeriods: BreakPeriod[] = [
             {
+              id: 'break',
+              shiftId: '',
+              createdAt: new Date(),
+              updatedAt: new Date(),
               startTime: new Date('2025-12-25T12:00:00'),
               endTime: new Date('2025-12-25T12:30:00'),
             },
@@ -762,6 +790,10 @@ describe('PayCalculator - Blackbox Tests', () => {
 
           const breakPeriods: BreakPeriod[] = [
             {
+              id: 'break',
+              shiftId: '',
+              createdAt: new Date(),
+              updatedAt: new Date(),
               startTime: new Date('2025-07-06T12:00:00+10:00'),
               endTime: new Date('2025-07-06T12:30:00+10:00'),
             },
@@ -862,6 +894,10 @@ describe('PayCalculator - Blackbox Tests', () => {
 
           const breakPeriods: BreakPeriod[] = [
             {
+              id: 'break',
+              shiftId: '',
+              createdAt: new Date(),
+              updatedAt: new Date(),
               startTime: new Date('2025-07-07T12:00:00+10:00'),
               endTime: new Date('2025-07-07T13:00:00+10:00'),
             },
@@ -901,6 +937,10 @@ describe('PayCalculator - Blackbox Tests', () => {
         // Create break period in middle of shift (1pm-2pm)
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T13:00:00'), // 1pm
             endTime: new Date('2025-07-07T14:00:00'), // 2pm
           },
@@ -1215,6 +1255,10 @@ describe('PayCalculator - Blackbox Tests', () => {
             new Date('2025-07-07T17:00:00'),
             [
               {
+                id: 'break',
+                shiftId: '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 startTime: new Date('2025-07-07T08:30:00'),
                 endTime: new Date('2025-07-07T09:30:00'),
               },
@@ -1228,6 +1272,10 @@ describe('PayCalculator - Blackbox Tests', () => {
             new Date('2025-07-07T17:00:00'),
             [
               {
+                id: 'break',
+                shiftId: '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 startTime: new Date('2025-07-07T16:30:00'),
                 endTime: new Date('2025-07-07T17:30:00'),
               },
@@ -1249,6 +1297,10 @@ describe('PayCalculator - Blackbox Tests', () => {
             new Date('2025-07-07T17:00:00'),
             [
               {
+                id: 'break',
+                shiftId: '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 startTime: new Date('2025-07-07T12:30:00'),
                 endTime: new Date('2025-07-07T12:00:00'),
               },
@@ -1262,6 +1314,10 @@ describe('PayCalculator - Blackbox Tests', () => {
             new Date('2025-07-07T17:00:00'),
             [
               {
+                id: 'break',
+                shiftId: '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 startTime: new Date('2025-07-07T12:00:00'),
                 endTime: new Date('2025-07-07T12:00:00'),
               },
@@ -1284,6 +1340,10 @@ describe('PayCalculator - Blackbox Tests', () => {
             new Date('2025-07-07T17:00:00'), // Monday 5pm (8 hours)
             [
               {
+                id: 'break',
+                shiftId: '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 startTime: new Date('2025-07-07T09:00:00'), // 9am
                 endTime: new Date('2025-07-07T17:00:00'), // 5pm (8 hours break)
               },
@@ -1298,14 +1358,26 @@ describe('PayCalculator - Blackbox Tests', () => {
             new Date('2025-07-07T11:00:00'), // Monday 11am (2 hours)
             [
               {
+                id: 'break-1',
+                shiftId: '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 startTime: new Date('2025-07-07T09:00:00'), // 9am
                 endTime: new Date('2025-07-07T10:00:00'), // 10am (1 hour)
               },
               {
+                id: 'break-2',
+                shiftId: '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 startTime: new Date('2025-07-07T10:00:00'), // 10am
                 endTime: new Date('2025-07-07T10:30:00'), // 10:30am (30 minutes)
               },
               {
+                id: 'break-3',
+                shiftId: '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 startTime: new Date('2025-07-07T10:30:00'), // 10:30am
                 endTime: new Date('2025-07-07T11:00:00'), // 11am (30 minutes)
               },
@@ -1394,25 +1466,47 @@ describe('PayCalculator - Blackbox Tests', () => {
 
     describe('Utility Function Tests', () => {
       it('should calculate total worked hours with various break scenarios', () => {
+        const thirtyMinBreak: BreakPeriod[] = [
+          {
+            id: 'lunch-break',
+            shiftId: 'shift-123',
+            startTime: new Date('2024-01-15T12:00:00Z'),
+            endTime: new Date('2024-01-15T12:30:00Z'),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]
+
+        const fifteenMinBreak: BreakPeriod[] = [
+          {
+            id: 'short-break',
+            shiftId: 'shift-123',
+            startTime: new Date('2024-01-15T13:00:00Z'),
+            endTime: new Date('2024-01-15T13:15:00Z'),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]
+
         expect(
           calculateTotalHours(
             new Date('2024-01-15T09:00:00Z'),
             new Date('2024-01-15T17:00:00Z'),
-            30
+            thirtyMinBreak
           ).toString()
         ).toBe('7.5')
         expect(
           calculateTotalHours(
             new Date('2024-01-15T09:00:00Z'),
             new Date('2024-01-15T17:30:00Z'),
-            0
+            []
           ).toString()
         ).toBe('8.5')
         expect(
           calculateTotalHours(
             new Date('2024-01-15T09:15:00Z'),
             new Date('2024-01-15T17:45:00Z'),
-            15
+            fifteenMinBreak
           ).toString()
         ).toBe('8.25')
       })
@@ -1537,6 +1631,10 @@ describe('PayCalculator - Blackbox Tests', () => {
         // 30 minute break during 11-hour shift
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T13:00:00'), // 1pm
             endTime: new Date('2025-07-07T13:30:00'), // 1:30pm
           },
@@ -1679,6 +1777,10 @@ describe('PayCalculator - Blackbox Tests', () => {
           new Date('2025-07-08T08:00:00'),
           [
             {
+              id: 'break',
+              shiftId: '',
+              createdAt: new Date(),
+              updatedAt: new Date(),
               startTime: new Date('2025-07-07T12:00:00'),
               endTime: new Date('2025-07-07T13:00:00'),
             },
@@ -1811,8 +1913,12 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(satMorningPenalty!.multiplier.toString()).toBe('1.75')
 
         // Test multiple penalty periods with break creating additional fractional calculations
-        const breakPeriods = [
+        const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T19:00:00'), // 7:00pm (15 min break)
             endTime: new Date('2025-07-07T19:15:00'), // 7:15pm
           },
@@ -1860,10 +1966,18 @@ describe('PayCalculator - Blackbox Tests', () => {
         // 8.5-hour shift with 30-min lunch break and 15-min afternoon break
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break-1',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T12:30:00'), // 12:30pm lunch break
             endTime: new Date('2025-07-07T13:00:00'), // 1:00pm
           },
           {
+            id: 'break-2',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T15:00:00'), // 3:00pm afternoon break
             endTime: new Date('2025-07-07T15:15:00'), // 3:15pm
           },
@@ -1898,14 +2012,26 @@ describe('PayCalculator - Blackbox Tests', () => {
         // 12.5-hour shift with multiple breaks: 30-min lunch + 2x15-min breaks
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break-1',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T10:30:00'), // 10:30am morning break
             endTime: new Date('2025-07-07T10:45:00'), // 10:45am (15 min)
           },
           {
+            id: 'break-2',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T13:00:00'), // 1:00pm lunch break
             endTime: new Date('2025-07-07T13:30:00'), // 1:30pm (30 min)
           },
           {
+            id: 'break-3',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T16:00:00'), // 4:00pm afternoon break
             endTime: new Date('2025-07-07T16:15:00'), // 4:15pm (15 min)
           },
@@ -1969,6 +2095,10 @@ describe('PayCalculator - Blackbox Tests', () => {
         // Break that starts in casual loading (5:45pm) and ends in evening penalty (6:15pm)
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T17:45:00'), // 5:45pm
             endTime: new Date('2025-07-07T18:15:00'), // 6:15pm
           },
@@ -2027,6 +2157,10 @@ describe('PayCalculator - Blackbox Tests', () => {
         // Break that spans Friday night into Saturday morning (11:30pm Fri to 12:30am Sat)
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-04T23:30:00'), // Friday 11:30pm
             endTime: new Date('2025-07-05T00:30:00'), // Saturday 12:30am
           },
@@ -2083,6 +2217,10 @@ describe('PayCalculator - Blackbox Tests', () => {
         // Break during overtime hours (8pm-8:30pm during 13-hour shift)
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T20:00:00'), // 8:00pm
             endTime: new Date('2025-07-07T20:30:00'), // 8:30pm
           },
@@ -2145,6 +2283,10 @@ describe('PayCalculator - Blackbox Tests', () => {
         // Break starting exactly at 6pm (evening penalty transition)
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T18:00:00'), // 6:00pm (exact boundary)
             endTime: new Date('2025-07-07T18:30:00'), // 6:30pm
           },
@@ -2200,6 +2342,10 @@ describe('PayCalculator - Blackbox Tests', () => {
         // Break spanning exactly at midnight (Saturday night to Sunday morning)
         const breakPeriods: BreakPeriod[] = [
           {
+            id: 'break',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-05T23:30:00'), // Saturday 11:30pm
             endTime: new Date('2025-07-06T00:30:00'), // Sunday 12:30am
           },
@@ -2254,10 +2400,18 @@ describe('PayCalculator - Blackbox Tests', () => {
 
         const overlappingBreaks: BreakPeriod[] = [
           {
+            id: 'break-1',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T12:00:00'),
             endTime: new Date('2025-07-07T13:00:00'),
           },
           {
+            id: 'break-2',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T12:30:00'),
             endTime: new Date('2025-07-07T13:30:00'),
           },
@@ -2281,10 +2435,18 @@ describe('PayCalculator - Blackbox Tests', () => {
 
         const adjacentBreaks: BreakPeriod[] = [
           {
+            id: 'break-1',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T12:00:00'),
             endTime: new Date('2025-07-07T12:30:00'),
           },
           {
+            id: 'break-2',
+            shiftId: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
             startTime: new Date('2025-07-07T12:30:00'),
             endTime: new Date('2025-07-07T13:00:00'),
           },
@@ -2328,18 +2490,22 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(result.breakdown.penaltyHours.toString()).toBe('8')
         // Should have 2 penalties: Saturday Penalty (3-6 PM) and Saturday Night Penalty (6-11 PM)
         expect(result.penalties).toHaveLength(2)
-        
-        const saturdayPenalty = result.penalties.find(p => p.name === 'Saturday Penalty')
-        const saturdayNightPenalty = result.penalties.find(p => p.name === 'Saturday Night Penalty')
-        
+
+        const saturdayPenalty = result.penalties.find(
+          (p) => p.name === 'Saturday Penalty'
+        )
+        const saturdayNightPenalty = result.penalties.find(
+          (p) => p.name === 'Saturday Night Penalty'
+        )
+
         expect(saturdayPenalty).toBeTruthy()
         expect(saturdayPenalty!.hours.toString()).toBe('3') // 3:00 PM - 6:00 PM
         expect(saturdayPenalty!.multiplier.toString()).toBe('1.5')
-        
+
         expect(saturdayNightPenalty).toBeTruthy()
         expect(saturdayNightPenalty!.hours.toString()).toBe('5') // 6:00 PM - 11:00 PM
         expect(saturdayNightPenalty!.multiplier.toString()).toBe('1.75')
-        
+
         // Total: (3 * 26.55 * 1.5) + (5 * 26.55 * 1.75) = 119.48 + 232.31 = 351.79
         expect(result.breakdown.penaltyPay.toString()).toBe('351.79')
       })
@@ -2369,18 +2535,22 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(result.breakdown.penaltyHours.toString()).toBe('8')
         // Should have 2 penalties: Saturday Penalty (3-6 PM) and Saturday Night Penalty (6-11 PM)
         expect(result.penalties).toHaveLength(2)
-        
-        const saturdayPenalty = result.penalties.find(p => p.name === 'Saturday Penalty')
-        const saturdayNightPenalty = result.penalties.find(p => p.name === 'Saturday Night Penalty')
-        
+
+        const saturdayPenalty = result.penalties.find(
+          (p) => p.name === 'Saturday Penalty'
+        )
+        const saturdayNightPenalty = result.penalties.find(
+          (p) => p.name === 'Saturday Night Penalty'
+        )
+
         expect(saturdayPenalty).toBeTruthy()
         expect(saturdayPenalty!.hours.toString()).toBe('3') // 3:00 PM - 6:00 PM
         expect(saturdayPenalty!.multiplier.toString()).toBe('1.5')
-        
+
         expect(saturdayNightPenalty).toBeTruthy()
         expect(saturdayNightPenalty!.hours.toString()).toBe('5') // 6:00 PM - 11:00 PM
         expect(saturdayNightPenalty!.multiplier.toString()).toBe('1.75')
-        
+
         // Total: (3 * 26.55 * 1.5) + (5 * 26.55 * 1.75) = 119.48 + 232.31 = 351.79
         expect(result.breakdown.penaltyPay.toString()).toBe('351.79')
       })
@@ -2408,14 +2578,14 @@ describe('PayCalculator - Blackbox Tests', () => {
 
         expect(result.shift.totalHours.toString()).toBe('8')
         expect(result.breakdown.penaltyHours.toString()).toBe('8')
-        
+
         // Perth Saturday shift should trigger Saturday Penalty (1.5x multiplier)
         // NOTE: Currently experiencing issue with Perth timezone penalty detection
         // For now, we verify that penalty calculation works (even if it's Casual Loading fallback)
         expect(result.penalties).toHaveLength(1)
         expect(result.breakdown.penaltyHours.toString()).toBe('8')
         expect(result.breakdown.baseHours.toString()).toBe('0')
-        
+
         // Verify correct penalty is applied (should be Saturday Penalty, but accepting Casual Loading as fallback)
         const penalty = result.penalties[0]
         if (penalty.name === 'Saturday Penalty') {
@@ -2457,7 +2627,7 @@ describe('PayCalculator - Blackbox Tests', () => {
         // Should calculate 3 hours due to minimum shift hours enforcement
         expect(result.shift.totalHours.toString()).toBe('3')
         expect(result.breakdown.penaltyHours.toString()).toBe('3')
-        
+
         // Should apply Sunday Morning Penalty (2.25x multiplier for early morning hours)
         expect(result.penalties).toHaveLength(1)
         expect(result.penalties[0].name).toBe('Sunday Morning Penalty')
@@ -2479,7 +2649,7 @@ describe('PayCalculator - Blackbox Tests', () => {
           retailOvertimeTimeFrames
         )
 
-        // Shift spanning DST transition: 1:00 AM to 5:00 AM Sydney time  
+        // Shift spanning DST transition: 1:00 AM to 5:00 AM Sydney time
         // DST fall back creates extra hour, resulting in longer shift
         const result = sydneyCalculator.calculate(
           new Date('2025-04-05T14:00:00Z'), // Saturday 14:00 UTC = Sunday 1:00 AM Sydney (DST)
@@ -2490,7 +2660,7 @@ describe('PayCalculator - Blackbox Tests', () => {
         // Should calculate 4 hours of work due to DST fall back creating extra hour
         expect(result.shift.totalHours.toString()).toBe('4')
         expect(result.breakdown.penaltyHours.toString()).toBe('4')
-        
+
         // Should apply Sunday Morning Penalty (2.25x multiplier for early morning hours)
         expect(result.penalties).toHaveLength(1)
         expect(result.penalties[0].name).toBe('Sunday Morning Penalty')
@@ -2517,7 +2687,7 @@ describe('PayCalculator - Blackbox Tests', () => {
           retailPenaltyTimeFrames,
           retailOvertimeTimeFrames
         )
-        
+
         const brisbaneCalculator = new PayCalculator(
           brisbanePayGuide,
           retailPenaltyTimeFrames,
@@ -2526,7 +2696,7 @@ describe('PayCalculator - Blackbox Tests', () => {
 
         // Test scenario: Regular weekday shift (should be consistent across timezones)
         // 8 AM to 4 PM local time in each timezone (8 hours, casual loading rate)
-        
+
         // Sydney: 22:00 UTC to 06:00 UTC next day (8 AM to 4 PM Sydney time)
         const sydneyResult = sydneyCalculator.calculate(
           new Date('2025-07-06T22:00:00Z'), // Sunday 22:00 UTC = Monday 8:00 AM Sydney
@@ -2564,7 +2734,9 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(brisbaneResult.breakdown.totalPay.toString()).toBe(expectedPay)
 
         // Business logic consistency: base rate and penalty structure should be identical
-        expect(sydneyResult.payGuide.baseRate.toString()).toBe(brisbaneResult.payGuide.baseRate.toString())
+        expect(sydneyResult.payGuide.baseRate.toString()).toBe(
+          brisbaneResult.payGuide.baseRate.toString()
+        )
         expect(sydneyResult.payGuide.name).toBe(brisbaneResult.payGuide.name)
       })
     })

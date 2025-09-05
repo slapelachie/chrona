@@ -363,8 +363,12 @@ export interface Period {
 }
 
 export interface BreakPeriod {
+  id: string
+  shiftId: string
   startTime: Date
   endTime: Date
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface RuleTimeFrame {

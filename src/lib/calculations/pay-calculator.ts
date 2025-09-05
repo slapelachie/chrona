@@ -184,11 +184,11 @@ export { TimeCalculations } from './time-calculations'
 export function calculateTotalHours(
   startTime: Date,
   endTime: Date,
-  breakMinutes: number = 0
+  breakPeriods: BreakPeriod[] = []
 ): Decimal {
   return TimeCalculations.calculateWorkedHours(
     startTime,
     endTime,
-    []
-  ).totalHours.minus(new Decimal(breakMinutes).dividedBy(60))
+    breakPeriods
+  ).totalHours
 }
