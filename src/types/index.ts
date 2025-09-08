@@ -17,11 +17,11 @@ export interface PayGuide {
   id: string
   name: string
   baseRate: Decimal // Hourly base rate (e.g., 30)
-  minimumShiftHours?: number // e.g., 3 for 3 hours minimum shift
-  maximumShiftHours?: number // e.g., 11 for 11 hours maximum shift
-  description?: string
+  minimumShiftHours?: number | null // e.g., 3 for 3 hours minimum shift
+  maximumShiftHours?: number | null // e.g., 11 for 11 hours maximum shift
+  description?: string | null
   effectiveFrom: Date
-  effectiveTo?: Date // null means ongoing
+  effectiveTo?: Date | null // null means ongoing
   timezone: string // IANA timezone string
   isActive: boolean
   createdAt: Date
@@ -33,11 +33,11 @@ export interface PenaltyTimeFrame {
   payGuideId: string
   name: string
   multiplier: Decimal // e.g., 1.25 for 25% extra
-  dayOfWeek?: number // 0=Sunday, 1=Monday, ..., 6=Saturday
-  isPublicHoliday?: boolean
-  startTime?: string // "HH:MM" local (half-open)
-  endTime?: string // "HH:MM" local (exclusive)
-  description?: string
+  dayOfWeek?: number | null // 0=Sunday, 1=Monday, ..., 6=Saturday
+  isPublicHoliday?: boolean | null
+  startTime?: string | null // "HH:MM" local (half-open)
+  endTime?: string | null // "HH:MM" local (exclusive)
+  description?: string | null
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -49,11 +49,11 @@ export interface OvertimeTimeFrame {
   name: string
   firstThreeHoursMult: Decimal // e.g., 1.25 for 25% extra (first 3 hours)
   afterThreeHoursMult: Decimal // e.g., 1.5 for 50% extra (beyond 3 hours)
-  dayOfWeek?: number // 0=Sunday, 1=Monday, ..., 6=Saturday
-  isPublicHoliday?: boolean
-  startTime?: string // "HH:MM" local (half-open)
-  endTime?: string // "HH:MM" local (exclusive)
-  description?: string
+  dayOfWeek?: number | null // 0=Sunday, 1=Monday, ..., 6=Saturday
+  isPublicHoliday?: boolean | null
+  startTime?: string | null // "HH:MM" local (half-open)
+  endTime?: string | null // "HH:MM" local (exclusive)
+  description?: string | null
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -63,7 +63,7 @@ export interface PublicHoliday {
   id: string
   payGuideId: string
   name: string
-  date: Date // Date only, does not care for time?
+  date: Date
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -203,22 +203,29 @@ export interface ShiftsListResponse {
 export interface CreatePayGuideRequest {
   name: string
   baseRate: string // Decimal as string
+  minimumShiftHours?: number
+  maximumShiftHours?: number
   description?: string
   effectiveFrom: string // ISO string
+  effectiveTo?: string
+  timezone: string
+  isActive?: boolean
 }
 
 export interface UpdatePayGuideRequest {
   name?: string
   baseRate?: string
+  minimumShiftHours?: number
+  maximumShiftHours?: number
   description?: string
   effectiveFrom?: string
   effectiveTo?: string
+  timezone?: string
   isActive?: boolean
 }
 
 export interface PayGuideResponse extends Omit<PayGuide, 'baseRate'> {
   baseRate: string
-  penaltyTimeFrames?: PenaltyTimeFrameResponse[]
 }
 
 export interface PayGuidesListResponse {
@@ -237,15 +244,18 @@ export interface CreatePenaltyTimeFrameRequest {
   name: string
   multiplier: string // Decimal as string
   dayOfWeek?: number
+  isPublicHoliday?: boolean
   startTime?: string
   endTime?: string
   description?: string
+  isActive?: boolean
 }
 
 export interface UpdatePenaltyTimeFrameRequest {
   name?: string
   multiplier?: string
   dayOfWeek?: number
+  isPublicHoliday?: boolean
   startTime?: string
   endTime?: string
   description?: string
@@ -253,9 +263,68 @@ export interface UpdatePenaltyTimeFrameRequest {
 }
 
 export interface PenaltyTimeFrameResponse
-  extends Omit<PenaltyTimeFrame, 'multiplier'> {
+  extends Omit<PenaltyTimeFrame, 'multiplier' | 'createdAt' | 'updatedAt'> {
   multiplier: string
-  payGuide?: PayGuideResponse
+  createdAt: string
+  updatedAt: string
+}
+
+// Overtime Time Frame API Types
+export interface CreateOvertimeTimeFrameRequest {
+  payGuideId: string
+  name: string
+  firstThreeHoursMult: string // Decimal as string
+  afterThreeHoursMult: string // Decimal as string
+  dayOfWeek?: number
+  isPublicHoliday?: boolean
+  startTime?: string
+  endTime?: string
+  description?: string
+  isActive?: boolean
+}
+
+export interface UpdateOvertimeTimeFrameRequest {
+  name?: string
+  firstThreeHoursMult?: string
+  afterThreeHoursMult?: string
+  dayOfWeek?: number
+  isPublicHoliday?: boolean
+  startTime?: string
+  endTime?: string
+  description?: string
+  isActive?: boolean
+}
+
+export interface OvertimeTimeFrameResponse
+  extends Omit<
+    OvertimeTimeFrame,
+    'firstThreeHoursMult' | 'afterThreeHoursMult' | 'createdAt' | 'updatedAt'
+  > {
+  firstThreeHoursMult: string
+  afterThreeHoursMult: string
+  createdAt: string
+  updatedAt: string
+}
+
+// TODO: Public Holiday API Types
+export interface CreatePublicHolidayRequest {
+  payGuideId: string
+  name: string
+  date: string // ISO string
+  isActive?: boolean
+}
+
+export interface UpdatePublicHolidayRequest {
+  name?: string
+  date?: string // ISO string
+  isActive?: boolean
+}
+
+export interface PublicHolidayResponse
+  extends Omit<PublicHoliday, 'date' | 'createdAt' | 'updatedAt'> {
+  date: string // ISO string
+  createdAt: string
+  updatedAt: string
 }
 
 // Pay Period API Types

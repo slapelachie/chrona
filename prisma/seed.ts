@@ -30,14 +30,17 @@ async function main() {
       minimumShiftHours: 3,
       maximumShiftHours: 11,
       timezone: 'Australia/Brisbane', // Per test data
-      description: 'General Retail Industry Award 2020 - Adult casual employee minimum rates',
+      description:
+        'General Retail Industry Award 2020 - Adult casual employee minimum rates',
       effectiveFrom: new Date('2025-07-01'), // Updated to match test data
       isActive: true,
     },
   })
-  console.log(`✅ Created pay guide: ${retailPayGuide.name} (${retailPayGuide.id})`)
+  console.log(
+    `✅ Created pay guide: ${retailPayGuide.name} (${retailPayGuide.id})`
+  )
 
-  // Create Hospitality Award Pay Guide  
+  // Create Hospitality Award Pay Guide
   console.log('🍽️ Creating Hospitality Award pay guide...')
   const hospitalityPayGuide = await prisma.payGuide.upsert({
     where: { name: 'Hospitality Industry (General) Award 2020' },
@@ -48,26 +51,18 @@ async function main() {
       minimumShiftHours: 3,
       maximumShiftHours: 11,
       timezone: 'Australia/Sydney',
-      description: 'Hospitality Industry (General) Award 2020 - Adult casual employee minimum rates',
+      description:
+        'Hospitality Industry (General) Award 2020 - Adult casual employee minimum rates',
       effectiveFrom: new Date('2025-07-01'), // Updated date
       isActive: true,
     },
   })
-  console.log(`✅ Created pay guide: ${hospitalityPayGuide.name} (${hospitalityPayGuide.id})`)
+  console.log(
+    `✅ Created pay guide: ${hospitalityPayGuide.name} (${hospitalityPayGuide.id})`
+  )
 
   // Create Penalty Time Frames for Retail Award
   console.log('⏰ Creating penalty time frames for retail award...')
-  
-  // Casual loading (125% - applies to all hours)
-  const casualLoading = await prisma.penaltyTimeFrame.create({
-    data: {
-      payGuideId: retailPayGuide.id,
-      name: 'Casual Loading',
-      multiplier: new Decimal('1.25'),
-      description: '25% casual loading rate',
-      isActive: true,
-    },
-  })
 
   // Saturday penalty (150%)
   const saturdayPenalty = await prisma.penaltyTimeFrame.create({
@@ -81,7 +76,7 @@ async function main() {
     },
   })
 
-  // Sunday penalty (200%)  
+  // Sunday penalty (200%)
   const sundayPenalty = await prisma.penaltyTimeFrame.create({
     data: {
       payGuideId: retailPayGuide.id,
@@ -113,7 +108,7 @@ async function main() {
       name: 'Night Penalty',
       multiplier: new Decimal('1.3'),
       startTime: '00:00',
-      endTime: '06:00', 
+      endTime: '06:00',
       description: '130% penalty rate for night work (midnight-6am)',
       isActive: true,
     },
@@ -135,7 +130,7 @@ async function main() {
 
   // Create similar penalty time frames for hospitality award
   console.log('🍽️ Creating penalty time frames for hospitality award...')
-  
+
   await prisma.penaltyTimeFrame.createMany({
     data: [
       {
@@ -148,7 +143,7 @@ async function main() {
       },
       {
         payGuideId: hospitalityPayGuide.id,
-        name: 'Sunday Penalty', 
+        name: 'Sunday Penalty',
         multiplier: new Decimal('1.75'),
         dayOfWeek: 0,
         description: '175% penalty rate for Sunday work',
@@ -159,8 +154,9 @@ async function main() {
         name: 'Evening Penalty (Weekdays)',
         multiplier: new Decimal('1.1'),
         startTime: '19:00',
-        endTime: '23:59', 
-        description: '110% penalty rate for weekday evening work (7pm-midnight)',
+        endTime: '23:59',
+        description:
+          '110% penalty rate for weekday evening work (7pm-midnight)',
         isActive: true,
       },
       {
@@ -194,7 +190,8 @@ async function main() {
         name: 'Daily Overtime - Weekdays',
         firstThreeHoursMult: new Decimal('1.75'),
         afterThreeHoursMult: new Decimal('2.25'),
-        description: 'Daily overtime for weekdays (1.75x first 3hrs, 2.25x after)',
+        description:
+          'Daily overtime for weekdays (1.75x first 3hrs, 2.25x after)',
         isActive: true,
       },
       {
@@ -237,7 +234,7 @@ async function main() {
       },
       {
         payGuideId: retailPayGuide.id,
-        name: 'New Year\'s Day',
+        name: "New Year's Day",
         date: new Date('2025-01-01'),
         isActive: true,
       },
@@ -249,9 +246,9 @@ async function main() {
   console.log('📅 Creating current pay period...')
   const today = new Date()
   const payPeriodStart = new Date(today)
-  payPeriodStart.setDate(today.getDate() - (today.getDay() + 6) % 14) // Start of current fortnight
+  payPeriodStart.setDate(today.getDate() - ((today.getDay() + 6) % 14)) // Start of current fortnight
   payPeriodStart.setHours(0, 0, 0, 0)
-  
+
   const payPeriodEnd = new Date(payPeriodStart)
   payPeriodEnd.setDate(payPeriodStart.getDate() + 13)
   payPeriodEnd.setHours(23, 59, 59, 999)
@@ -264,18 +261,20 @@ async function main() {
       status: 'open',
     },
   })
-  console.log(`✅ Created current pay period: ${currentPayPeriod.startDate.toDateString()} - ${currentPayPeriod.endDate.toDateString()}`)
+  console.log(
+    `✅ Created current pay period: ${currentPayPeriod.startDate.toDateString()} - ${currentPayPeriod.endDate.toDateString()}`
+  )
 
   // Create sample shifts with various scenarios
   console.log('🕒 Creating sample shifts...')
-  
+
   const shifts = [
     // Regular weekday shift
     {
       userId: user.id,
       payGuideId: retailPayGuide.id,
       startTime: new Date('2024-09-02T09:00:00Z'), // Monday 9am
-      endTime: new Date('2024-09-02T17:00:00Z'),   // Monday 5pm  
+      endTime: new Date('2024-09-02T17:00:00Z'), // Monday 5pm
       breakMinutes: 30,
       notes: 'Regular weekday shift',
       payPeriodId: currentPayPeriod.id,
@@ -285,7 +284,7 @@ async function main() {
       userId: user.id,
       payGuideId: retailPayGuide.id,
       startTime: new Date('2024-09-07T10:00:00Z'), // Saturday 10am
-      endTime: new Date('2024-09-07T18:00:00Z'),   // Saturday 6pm
+      endTime: new Date('2024-09-07T18:00:00Z'), // Saturday 6pm
       breakMinutes: 30,
       notes: 'Weekend shift with Saturday penalty',
       payPeriodId: currentPayPeriod.id,
@@ -295,7 +294,7 @@ async function main() {
       userId: user.id,
       payGuideId: retailPayGuide.id,
       startTime: new Date('2024-09-03T16:00:00Z'), // Tuesday 4pm
-      endTime: new Date('2024-09-03T22:00:00Z'),   // Tuesday 10pm
+      endTime: new Date('2024-09-03T22:00:00Z'), // Tuesday 10pm
       breakMinutes: 30,
       notes: 'Evening shift crossing into penalty time',
       payPeriodId: currentPayPeriod.id,
@@ -305,7 +304,7 @@ async function main() {
       userId: user.id,
       payGuideId: retailPayGuide.id,
       startTime: new Date('2024-09-04T08:00:00Z'), // Wednesday 8am
-      endTime: new Date('2024-09-04T19:00:00Z'),   // Wednesday 7pm (11 hours)
+      endTime: new Date('2024-09-04T19:00:00Z'), // Wednesday 7pm (11 hours)
       breakMinutes: 60,
       notes: 'Long shift with overtime and evening penalty',
       payPeriodId: currentPayPeriod.id,
@@ -315,7 +314,7 @@ async function main() {
       userId: user.id,
       payGuideId: retailPayGuide.id,
       startTime: new Date('2024-09-08T11:00:00Z'), // Sunday 11am
-      endTime: new Date('2024-09-08T17:00:00Z'),   // Sunday 5pm
+      endTime: new Date('2024-09-08T17:00:00Z'), // Sunday 5pm
       breakMinutes: 30,
       notes: 'Sunday shift with 200% penalty rate',
       payPeriodId: currentPayPeriod.id,
@@ -325,7 +324,7 @@ async function main() {
       userId: user.id,
       payGuideId: hospitalityPayGuide.id,
       startTime: new Date('2024-09-05T22:00:00Z'), // Thursday 10pm
-      endTime: new Date('2024-09-06T04:00:00Z'),   // Friday 4am
+      endTime: new Date('2024-09-06T04:00:00Z'), // Friday 4am
       breakMinutes: 30,
       notes: 'Night shift crossing midnight',
       payPeriodId: currentPayPeriod.id,
@@ -336,7 +335,9 @@ async function main() {
   for (const shiftData of shifts) {
     const shift = await prisma.shift.create({ data: shiftData })
     createdShifts.push(shift)
-    console.log(`✅ Created shift: ${shift.startTime.toLocaleString()} - ${shift.endTime.toLocaleString()}`)
+    console.log(
+      `✅ Created shift: ${shift.startTime.toLocaleString()} - ${shift.endTime.toLocaleString()}`
+    )
   }
 
   // Create sample break periods for shifts
@@ -346,42 +347,42 @@ async function main() {
     {
       shiftId: createdShifts[0].id,
       startTime: new Date('2024-09-02T13:00:00Z'), // 1pm lunch
-      endTime: new Date('2024-09-02T13:30:00Z'),   // 1:30pm
+      endTime: new Date('2024-09-02T13:30:00Z'), // 1:30pm
     },
     // Weekend shift - lunch break
     {
       shiftId: createdShifts[1].id,
-      startTime: new Date('2024-09-07T13:30:00Z'), // 1:30pm lunch  
-      endTime: new Date('2024-09-07T14:00:00Z'),   // 2pm
+      startTime: new Date('2024-09-07T13:30:00Z'), // 1:30pm lunch
+      endTime: new Date('2024-09-07T14:00:00Z'), // 2pm
     },
     // Evening shift - dinner break
     {
       shiftId: createdShifts[2].id,
       startTime: new Date('2024-09-03T19:00:00Z'), // 7pm dinner
-      endTime: new Date('2024-09-03T19:30:00Z'),   // 7:30pm
+      endTime: new Date('2024-09-03T19:30:00Z'), // 7:30pm
     },
     // Long shift - lunch + dinner break
     {
       shiftId: createdShifts[3].id,
       startTime: new Date('2024-09-04T12:00:00Z'), // 12pm lunch
-      endTime: new Date('2024-09-04T12:30:00Z'),   // 12:30pm
+      endTime: new Date('2024-09-04T12:30:00Z'), // 12:30pm
     },
     {
       shiftId: createdShifts[3].id,
       startTime: new Date('2024-09-04T16:00:00Z'), // 4pm break
-      endTime: new Date('2024-09-04T16:15:00Z'),   // 4:15pm
+      endTime: new Date('2024-09-04T16:15:00Z'), // 4:15pm
     },
     // Sunday shift - afternoon break
     {
       shiftId: createdShifts[4].id,
       startTime: new Date('2024-09-08T14:00:00Z'), // 2pm break
-      endTime: new Date('2024-09-08T14:15:00Z'),   // 2:15pm
+      endTime: new Date('2024-09-08T14:15:00Z'), // 2:15pm
     },
     // Night shift - midnight break
     {
       shiftId: createdShifts[5].id,
       startTime: new Date('2024-09-06T01:00:00Z'), // 1am break
-      endTime: new Date('2024-09-06T01:30:00Z'),   // 1:30am
+      endTime: new Date('2024-09-06T01:30:00Z'), // 1:30am
     },
   ]
 
@@ -394,8 +395,8 @@ async function main() {
   console.log('📊 Creating previous pay period...')
   const previousPayPeriodStart = new Date(payPeriodStart)
   previousPayPeriodStart.setDate(payPeriodStart.getDate() - 14)
-  
-  const previousPayPeriodEnd = new Date(previousPayPeriodStart)  
+
+  const previousPayPeriodEnd = new Date(previousPayPeriodStart)
   previousPayPeriodEnd.setDate(previousPayPeriodStart.getDate() + 13)
   previousPayPeriodEnd.setHours(23, 59, 59, 999)
 
@@ -411,7 +412,9 @@ async function main() {
       verified: true,
     },
   })
-  console.log(`✅ Created previous pay period: ${previousPayPeriod.startDate.toDateString()} - ${previousPayPeriod.endDate.toDateString()}`)
+  console.log(
+    `✅ Created previous pay period: ${previousPayPeriod.startDate.toDateString()} - ${previousPayPeriod.endDate.toDateString()}`
+  )
 
   console.log('✨ Database seeding completed successfully!')
   console.log('\n📈 Seeded data summary:')
