@@ -793,44 +793,224 @@ describe('Pay Rates API', () => {
       })
     })
 
-    describe.skip('Combined Parameters', () => {
+    describe('Combined Parameters', () => {
       it('should handle pagination, sorting, and filtering together', async () => {
-        /**
-         * TODO: Test complex query combinations
-         *
-         * Setup:
-         * - Create multiple active and inactive pay guides with varying names and rates
-         *
-         * Implementation:
-         * - Request: GET /api/pay-rates?page=1&limit=3&sortBy=baseRate&sortOrder=desc&active=true
-         *
-         * Assertions to verify:
-         * - Only active pay guides are returned
-         * - Results are sorted by baseRate descending
-         * - Pagination is applied correctly (max 3 results)
-         * - All parameters work together without conflicts
-         */
+        // Create multiple active and inactive pay guides with varying rates
+        const testPayGuides = [
+          { name: 'High Rate Active', baseRate: '35.00', isActive: true },
+          { name: 'Medium Rate Active', baseRate: '28.00', isActive: true },
+          { name: 'Low Rate Active', baseRate: '22.00', isActive: true },
+          { name: 'Very High Active', baseRate: '40.00', isActive: true },
+          { name: 'High Rate Inactive', baseRate: '36.00', isActive: false },
+          { name: 'Medium Rate Inactive', baseRate: '29.00', isActive: false },
+          { name: 'Another Active', baseRate: '25.00', isActive: true },
+          { name: 'Another Inactive', baseRate: '32.00', isActive: false },
+        ]
+
+        // Create the test pay guides
+        for (const guide of testPayGuides) {
+          await prisma.payGuide.create({
+            data: {
+              name: guide.name,
+              baseRate: new Decimal(guide.baseRate),
+              effectiveFrom: new Date('2024-01-01'),
+              timezone: 'Australia/Sydney',
+              isActive: guide.isActive,
+            },
+          })
+        }
+
+        const { GET } = await import('@/app/api/pay-rates/route')
+        
+        // Test combined parameters: active=true, sorted by baseRate desc, page 1 with limit 3
+        const request = new MockRequest('http://localhost/api/pay-rates?page=1&limit=3&sortBy=baseRate&sortOrder=desc&active=true')
+        const response = await GET(request as any)
+        const result = await response.json()
+
+        expect(response.status).toBe(200)
+        expect(result.data.payGuides).toHaveLength(3) // Pagination limit
+
+        // Verify all returned pay guides are active
+        result.data.payGuides.forEach((payGuide: any) => {
+          expect(payGuide.isActive).toBe(true)
+        })
+
+        // Verify sorting by baseRate descending (only active guides should be considered)
+        const baseRates = result.data.payGuides.map((pg: any) => parseFloat(pg.baseRate))
+        const sortedRatesDesc = [...baseRates].sort((a, b) => b - a)
+        expect(baseRates).toEqual(sortedRatesDesc)
+
+        // Verify we got the highest 3 active rates
+        const activeGuides = testPayGuides.filter(g => g.isActive)
+        const expectedTopRates = activeGuides
+          .map(g => parseFloat(g.baseRate))
+          .sort((a, b) => b - a)
+          .slice(0, 3)
+        
+        expect(baseRates).toEqual(expectedTopRates)
+
+        // Verify pagination object reflects filtered results
+        const totalActiveGuides = activeGuides.length
+        expect(result.data.pagination.total).toBe(totalActiveGuides)
+        expect(result.data.pagination.page).toBe(1)
+        expect(result.data.pagination.limit).toBe(3)
+        expect(result.data.pagination.totalPages).toBe(Math.ceil(totalActiveGuides / 3))
+
+        // Verify no inactive guides are included
+        const returnedNames = result.data.payGuides.map((pg: any) => pg.name)
+        expect(returnedNames).not.toContain('High Rate Inactive')
+        expect(returnedNames).not.toContain('Medium Rate Inactive')
+        expect(returnedNames).not.toContain('Another Inactive')
       })
     })
 
-    describe.skip('Response Structure Validation', () => {
+    describe('Response Structure Validation', () => {
       it('should return properly structured response with all required fields', async () => {
-        /**
-         * TODO: Test complete response structure
-         *
-         * Implementation:
-         * - Make any valid GET request
-         *
-         * Assertions to verify response structure:
-         * - Top level has 'data' property
-         * - data.payGuides is array
-         * - data.pagination object has: page, limit, total, totalPages
-         * - Each pay guide has: id, name, baseRate (string), minimumShiftHours, maximumShiftHours,
-         *   description, effectiveFrom, effectiveTo, timezone, isActive, createdAt, updatedAt
-         * - Decimal fields are converted to strings
-         * - Date fields are ISO strings
-         * - Related penaltyTimeFrames are included if they exist
-         */
+        // Create a comprehensive test pay guide with all possible fields
+        const testPayGuide = await prisma.payGuide.create({
+          data: {
+            name: 'Structure Test Award',
+            baseRate: new Decimal('27.50'),
+            minimumShiftHours: 3, // Integer value as per schema
+            maximumShiftHours: 10,
+            description: 'Test pay guide for structure validation',
+            effectiveFrom: new Date('2024-01-01T00:00:00Z'),
+            effectiveTo: new Date('2024-12-31T23:59:59Z'),
+            timezone: 'Australia/Sydney',
+            isActive: true,
+          },
+          include: {
+            penaltyTimeFrames: true,
+          },
+        })
+
+        const { GET } = await import('@/app/api/pay-rates/route')
+        const request = new MockRequest('http://localhost/api/pay-rates')
+        const response = await GET(request as any)
+        const result = await response.json()
+
+        // Verify top-level response structure
+        expect(response.status).toBe(200)
+        expect(result).toHaveProperty('data')
+        expect(typeof result.data).toBe('object')
+
+        // Verify data.payGuides structure
+        expect(result.data).toHaveProperty('payGuides')
+        expect(Array.isArray(result.data.payGuides)).toBe(true)
+        expect(result.data.payGuides.length).toBeGreaterThan(0)
+
+        // Verify data.pagination structure
+        expect(result.data).toHaveProperty('pagination')
+        expect(typeof result.data.pagination).toBe('object')
+        expect(result.data.pagination).toHaveProperty('page')
+        expect(result.data.pagination).toHaveProperty('limit')
+        expect(result.data.pagination).toHaveProperty('total')
+        expect(result.data.pagination).toHaveProperty('totalPages')
+        expect(typeof result.data.pagination.page).toBe('number')
+        expect(typeof result.data.pagination.limit).toBe('number')
+        expect(typeof result.data.pagination.total).toBe('number')
+        expect(typeof result.data.pagination.totalPages).toBe('number')
+
+        // Find our test pay guide in the results
+        const payGuide = result.data.payGuides.find((pg: any) => pg.name === 'Structure Test Award')
+        expect(payGuide).toBeTruthy()
+
+        // Verify all required pay guide fields are present
+        expect(payGuide).toHaveProperty('id')
+        expect(payGuide).toHaveProperty('name')
+        expect(payGuide).toHaveProperty('baseRate')
+        expect(payGuide).toHaveProperty('minimumShiftHours')
+        expect(payGuide).toHaveProperty('maximumShiftHours')
+        expect(payGuide).toHaveProperty('description')
+        expect(payGuide).toHaveProperty('effectiveFrom')
+        expect(payGuide).toHaveProperty('effectiveTo')
+        expect(payGuide).toHaveProperty('timezone')
+        expect(payGuide).toHaveProperty('isActive')
+        expect(payGuide).toHaveProperty('createdAt')
+        expect(payGuide).toHaveProperty('updatedAt')
+
+        // Verify field data types
+        expect(typeof payGuide.id).toBe('string')
+        expect(typeof payGuide.name).toBe('string')
+        expect(typeof payGuide.baseRate).toBe('string') // Decimal converted to string
+        expect(typeof payGuide.minimumShiftHours).toBe('number') // Integer
+        expect(typeof payGuide.maximumShiftHours).toBe('number') // Integer
+        expect(typeof payGuide.description).toBe('string')
+        expect(typeof payGuide.effectiveFrom).toBe('string') // Date as ISO string
+        expect(typeof payGuide.effectiveTo).toBe('string') // Date as ISO string
+        expect(typeof payGuide.timezone).toBe('string')
+        expect(typeof payGuide.isActive).toBe('boolean')
+        expect(typeof payGuide.createdAt).toBe('string') // Date as ISO string
+        expect(typeof payGuide.updatedAt).toBe('string') // Date as ISO string
+
+        // Verify specific field values and formatting
+        expect(payGuide.name).toBe('Structure Test Award')
+        expect(payGuide.baseRate).toBe('27.5') // Decimal precision maintained as string
+        expect(payGuide.minimumShiftHours).toBe(3) // Integer as per schema
+        expect(Number.isInteger(payGuide.minimumShiftHours)).toBe(true)
+        expect(payGuide.maximumShiftHours).toBe(10)
+        expect(Number.isInteger(payGuide.maximumShiftHours)).toBe(true)
+        expect(payGuide.description).toBe('Test pay guide for structure validation')
+        expect(payGuide.timezone).toBe('Australia/Sydney')
+        expect(payGuide.isActive).toBe(true)
+
+        // Verify date formatting as valid ISO strings
+        expect(() => new Date(payGuide.effectiveFrom)).not.toThrow()
+        expect(() => new Date(payGuide.effectiveTo)).not.toThrow()
+        expect(() => new Date(payGuide.createdAt)).not.toThrow()
+        expect(() => new Date(payGuide.updatedAt)).not.toThrow()
+
+        // Verify date values are valid dates (not checking specific values since timezone handling can vary)
+        const effectiveFrom = new Date(payGuide.effectiveFrom)
+        const effectiveTo = new Date(payGuide.effectiveTo)
+        expect(effectiveFrom.getTime()).toBeGreaterThan(0) // Valid timestamp
+        expect(effectiveTo.getTime()).toBeGreaterThan(0) // Valid timestamp
+        expect(effectiveTo.getTime()).toBeGreaterThan(effectiveFrom.getTime()) // effectiveTo after effectiveFrom
+
+        // Verify all pay guides in the response follow the same structure
+        result.data.payGuides.forEach((pg: any) => {
+          // Check all required fields are present
+          expect(pg).toHaveProperty('id')
+          expect(pg).toHaveProperty('name')
+          expect(pg).toHaveProperty('baseRate')
+          expect(pg).toHaveProperty('effectiveFrom')
+          expect(pg).toHaveProperty('timezone')
+          expect(pg).toHaveProperty('isActive')
+          expect(pg).toHaveProperty('createdAt')
+          expect(pg).toHaveProperty('updatedAt')
+
+          // Check data types
+          expect(typeof pg.id).toBe('string')
+          expect(typeof pg.name).toBe('string')
+          expect(typeof pg.baseRate).toBe('string')
+          expect(typeof pg.effectiveFrom).toBe('string')
+          expect(typeof pg.timezone).toBe('string')
+          expect(typeof pg.isActive).toBe('boolean')
+          expect(typeof pg.createdAt).toBe('string')
+          expect(typeof pg.updatedAt).toBe('string')
+
+          // Verify dates are valid ISO strings
+          expect(() => new Date(pg.effectiveFrom)).not.toThrow()
+          expect(() => new Date(pg.createdAt)).not.toThrow()
+          expect(() => new Date(pg.updatedAt)).not.toThrow()
+          if (pg.effectiveTo) {
+            expect(typeof pg.effectiveTo).toBe('string')
+            expect(() => new Date(pg.effectiveTo)).not.toThrow()
+          }
+
+          // Verify optional fields have correct types when present
+          if (pg.minimumShiftHours !== null) {
+            expect(typeof pg.minimumShiftHours).toBe('number')
+            expect(Number.isInteger(pg.minimumShiftHours)).toBe(true) // Should be integer
+          }
+          if (pg.maximumShiftHours !== null) {
+            expect(typeof pg.maximumShiftHours).toBe('number')
+            expect(Number.isInteger(pg.maximumShiftHours)).toBe(true) // Should be integer
+          }
+          if (pg.description !== null) {
+            expect(typeof pg.description).toBe('string')
+          }
+        })
       })
     })
   })
