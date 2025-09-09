@@ -1,32 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { Decimal } from 'decimal.js'
 import {
   CreatePayGuideRequest,
   PayGuideResponse,
   PayGuidesListResponse,
   ApiValidationResponse,
 } from '@/types'
+import { ValidationResult } from '@/lib/validation'
 import {
-  ValidationResult,
-  validateString,
-  validateDecimal,
-  validateDate,
-  validateNumber,
-} from '@/lib/validation'
-
-const validateTimezone = (timezone: string, field: string, validator: ValidationResult) => {
-  if (!validateString(timezone, field, validator)) return false
-  
-  try {
-    // Test if timezone is valid by trying to create a DateTimeFormat
-    new Intl.DateTimeFormat('en-US', { timeZone: timezone })
-    return true
-  } catch {
-    validator.addError(field, `${field} must be a valid IANA timezone identifier`)
-    return false
-  }
-}
+  validatePayGuideFields,
+  validateDateRange,
+  transformPayGuideToResponse,
+} from '@/lib/pay-guide-validation'
+import {
+  checkPayGuideNameUniqueness,
+  createPayGuideData,
+} from '@/lib/pay-guide-utils'
 
 // GET /api/pay-rates - List all pay guides
 export async function GET(request: NextRequest) {
@@ -86,20 +75,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Transform to response format
-    const responsePayGuides: PayGuideResponse[] = payGuides.map((payGuide) => ({
-      id: payGuide.id,
-      name: payGuide.name,
-      baseRate: payGuide.baseRate.toString(),
-      minimumShiftHours: payGuide.minimumShiftHours,
-      maximumShiftHours: payGuide.maximumShiftHours,
-      description: payGuide.description,
-      effectiveFrom: payGuide.effectiveFrom,
-      effectiveTo: payGuide.effectiveTo,
-      timezone: payGuide.timezone,
-      isActive: payGuide.isActive,
-      createdAt: payGuide.createdAt,
-      updatedAt: payGuide.updatedAt,
-    }))
+    const responsePayGuides: PayGuideResponse[] = payGuides.map(transformPayGuideToResponse)
 
     const response: PayGuidesListResponse = {
       payGuides: responsePayGuides,
@@ -129,62 +105,8 @@ export async function POST(request: NextRequest) {
     // Validate request body
     const validator = ValidationResult.create()
 
-    validateString(body.name, 'name', validator, {
-      minLength: 3,
-      maxLength: 200,
-    })
-
-    validateDecimal(body.baseRate, 'baseRate', validator, {
-      min: new Decimal('0.01'),
-      max: new Decimal('1000.00'),
-    })
-
-    validateDate(body.effectiveFrom, 'effectiveFrom', validator)
-
-    if (body.effectiveTo !== undefined) {
-      validateDate(body.effectiveTo, 'effectiveTo', validator)
-    }
-
-    if (body.description !== undefined) {
-      validateString(body.description, 'description', validator, {
-        maxLength: 500,
-      })
-    }
-
-    // Validate timezone (required field)
-    validateTimezone(body.timezone, 'timezone', validator)
-
-    // Validate minimum and maximum shift hours
-    if (body.minimumShiftHours !== undefined) {
-      validateNumber(body.minimumShiftHours, 'minimumShiftHours', validator, {
-        min: 0.5,
-        max: 24,
-      })
-    }
-
-    if (body.maximumShiftHours !== undefined) {
-      validateNumber(body.maximumShiftHours, 'maximumShiftHours', validator, {
-        min: 1,
-        max: 24,
-      })
-    }
-
-    // Validate that minimum is less than maximum if both are provided
-    if (body.minimumShiftHours !== undefined && body.maximumShiftHours !== undefined) {
-      if (body.minimumShiftHours >= body.maximumShiftHours) {
-        validator.addError('maximumShiftHours', 'Maximum shift hours must be greater than minimum shift hours')
-      }
-    }
-
-    // Validate date range - effectiveTo must be after effectiveFrom
-    if (body.effectiveTo !== undefined) {
-      const effectiveFrom = new Date(body.effectiveFrom)
-      const effectiveTo = new Date(body.effectiveTo)
-      
-      if (effectiveTo <= effectiveFrom) {
-        validator.addError('effectiveTo', 'Effective end date must be after effective start date')
-      }
-    }
+    validatePayGuideFields(body, validator, false)
+    validateDateRange(body.effectiveFrom, body.effectiveTo, validator)
 
     if (!validator.isValid()) {
       return NextResponse.json(
@@ -197,11 +119,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for unique name
-    const existingPayGuide = await prisma.payGuide.findUnique({
-      where: { name: body.name },
-    })
-
-    if (existingPayGuide) {
+    const isNameUnique = await checkPayGuideNameUniqueness(body.name)
+    if (!isNameUnique) {
       return NextResponse.json(
         {
           errors: [
@@ -218,37 +137,11 @@ export async function POST(request: NextRequest) {
 
     // Create the pay guide
     const payGuide = await prisma.payGuide.create({
-      data: {
-        name: body.name,
-        baseRate: new Decimal(body.baseRate),
-        minimumShiftHours: body.minimumShiftHours,
-        maximumShiftHours: body.maximumShiftHours,
-        description: body.description,
-        effectiveFrom: new Date(body.effectiveFrom),
-        effectiveTo: body.effectiveTo ? new Date(body.effectiveTo) : null,
-        timezone: body.timezone,
-        isActive: body.isActive !== undefined ? body.isActive : true,
-      },
-      include: {
-        penaltyTimeFrames: true,
-      },
+      data: createPayGuideData(body)
     })
 
     // Transform to response format
-    const responsePayGuide: PayGuideResponse = {
-      id: payGuide.id,
-      name: payGuide.name,
-      baseRate: payGuide.baseRate.toString(),
-      minimumShiftHours: payGuide.minimumShiftHours,
-      maximumShiftHours: payGuide.maximumShiftHours,
-      description: payGuide.description,
-      effectiveFrom: payGuide.effectiveFrom,
-      effectiveTo: payGuide.effectiveTo,
-      timezone: payGuide.timezone,
-      isActive: payGuide.isActive,
-      createdAt: payGuide.createdAt,
-      updatedAt: payGuide.updatedAt,
-    }
+    const responsePayGuide = transformPayGuideToResponse(payGuide)
 
     return NextResponse.json(
       { data: responsePayGuide, message: 'Pay guide created successfully' },

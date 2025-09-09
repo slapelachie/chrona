@@ -172,3 +172,18 @@ export const validateUUID = (value: any, field: string, validator: ValidationRes
 
   return true
 }
+
+export const validateCuid = (value: any, field: string, validator: ValidationResult) => {
+  if (!validateRequired(value, field, validator)) return false
+  
+  // CUID format: c + timestamp (base36) + counter + machine fingerprint + random (base36)
+  // Example: clp0h701x00009mp7yamopejd
+  const cuidPattern = /^c[a-z0-9]{24}$/i
+  
+  if (typeof value !== 'string' || !cuidPattern.test(value)) {
+    validator.addError(field, `${field} must be a valid ID`)
+    return false
+  }
+
+  return true
+}
