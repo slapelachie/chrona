@@ -240,7 +240,6 @@ export interface PayGuidesListResponse {
 
 // Penalty Time Frame API Types
 export interface CreatePenaltyTimeFrameRequest {
-  payGuideId: string
   name: string
   multiplier: string // Decimal as string
   dayOfWeek?: number
@@ -271,7 +270,6 @@ export interface PenaltyTimeFrameResponse
 
 // Overtime Time Frame API Types
 export interface CreateOvertimeTimeFrameRequest {
-  payGuideId: string
   name: string
   firstThreeHoursMult: string // Decimal as string
   afterThreeHoursMult: string // Decimal as string
@@ -306,9 +304,8 @@ export interface OvertimeTimeFrameResponse
   updatedAt: string
 }
 
-// TODO: Public Holiday API Types
+// Public Holiday API Types
 export interface CreatePublicHolidayRequest {
-  payGuideId: string
   name: string
   date: string // ISO string
   isActive?: boolean
