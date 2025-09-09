@@ -590,55 +590,206 @@ describe('Pay Rates API', () => {
       })
     })
 
-    describe.skip('Filtering', () => {
+    describe('Filtering', () => {
       it('should filter by active status (active=true)', async () => {
-        /**
-         * TODO: Test active filtering
-         *
-         * Setup:
-         * - Create mix of active (isActive: true) and inactive (isActive: false) pay guides
-         *
-         * Implementation:
-         * - Request: GET /api/pay-rates?active=true
-         *
-         * Assertions to verify:
-         * - Response status is 200
-         * - All returned pay guides have isActive: true
-         * - Inactive pay guides are not included in results
-         * - Pagination reflects filtered count, not total count
-         */
+        // Create mix of active and inactive pay guides
+        const activeGuides = [
+          { name: 'Active Award 1', isActive: true },
+          { name: 'Active Award 2', isActive: true },
+        ]
+        
+        const inactiveGuides = [
+          { name: 'Inactive Award 1', isActive: false },
+          { name: 'Inactive Award 2', isActive: false },
+        ]
+
+        // Create active pay guides
+        for (const guide of activeGuides) {
+          await prisma.payGuide.create({
+            data: {
+              name: guide.name,
+              baseRate: new Decimal('25.00'),
+              effectiveFrom: new Date('2024-01-01'),
+              timezone: 'Australia/Sydney',
+              isActive: guide.isActive,
+            },
+          })
+        }
+
+        // Create inactive pay guides
+        for (const guide of inactiveGuides) {
+          await prisma.payGuide.create({
+            data: {
+              name: guide.name,
+              baseRate: new Decimal('25.00'),
+              effectiveFrom: new Date('2024-01-01'),
+              timezone: 'Australia/Sydney',
+              isActive: guide.isActive,
+            },
+          })
+        }
+
+        const { GET } = await import('@/app/api/pay-rates/route')
+        const request = new MockRequest('http://localhost/api/pay-rates?active=true')
+
+        const response = await GET(request as any)
+        const result = await response.json()
+
+        expect(response.status).toBe(200)
+        expect(result.data.payGuides).toBeInstanceOf(Array)
+        expect(result.data.payGuides.length).toBeGreaterThan(0)
+
+        // Verify all returned pay guides are active
+        result.data.payGuides.forEach((payGuide: any) => {
+          expect(payGuide.isActive).toBe(true)
+        })
+
+        // Verify that we have our active pay guides in the results
+        const returnedNames = result.data.payGuides.map((pg: any) => pg.name)
+        expect(returnedNames).toContain('Active Award 1')
+        expect(returnedNames).toContain('Active Award 2')
+
+        // Verify inactive guides are not included
+        expect(returnedNames).not.toContain('Inactive Award 1')
+        expect(returnedNames).not.toContain('Inactive Award 2')
+
+        // Verify pagination reflects filtered count
+        expect(result.data.pagination.total).toBeGreaterThanOrEqual(2) // At least our 2 active guides
+        expect(result.data.pagination.totalPages).toBeGreaterThan(0)
       })
 
       it('should filter by active status (active=false)', async () => {
-        /**
-         * TODO: Test inactive filtering
-         *
-         * Setup:
-         * - Ensure inactive pay guides exist in database
-         *
-         * Implementation:
-         * - Request: GET /api/pay-rates?active=false
-         *
-         * Assertions to verify:
-         * - All returned pay guides have isActive: false
-         * - Active pay guides are not included
-         */
+        // Create mix of active and inactive pay guides
+        const activeGuides = [
+          { name: 'Active Award A', isActive: true },
+          { name: 'Active Award B', isActive: true },
+        ]
+        
+        const inactiveGuides = [
+          { name: 'Inactive Award A', isActive: false },
+          { name: 'Inactive Award B', isActive: false },
+        ]
+
+        // Create active pay guides
+        for (const guide of activeGuides) {
+          await prisma.payGuide.create({
+            data: {
+              name: guide.name,
+              baseRate: new Decimal('25.00'),
+              effectiveFrom: new Date('2024-01-01'),
+              timezone: 'Australia/Sydney',
+              isActive: guide.isActive,
+            },
+          })
+        }
+
+        // Create inactive pay guides
+        for (const guide of inactiveGuides) {
+          await prisma.payGuide.create({
+            data: {
+              name: guide.name,
+              baseRate: new Decimal('25.00'),
+              effectiveFrom: new Date('2024-01-01'),
+              timezone: 'Australia/Sydney',
+              isActive: guide.isActive,
+            },
+          })
+        }
+
+        const { GET } = await import('@/app/api/pay-rates/route')
+        const request = new MockRequest('http://localhost/api/pay-rates?active=false')
+
+        const response = await GET(request as any)
+        const result = await response.json()
+
+        expect(response.status).toBe(200)
+        expect(result.data.payGuides).toBeInstanceOf(Array)
+        expect(result.data.payGuides.length).toBeGreaterThan(0)
+
+        // Verify all returned pay guides are inactive
+        result.data.payGuides.forEach((payGuide: any) => {
+          expect(payGuide.isActive).toBe(false)
+        })
+
+        // Verify that we have our inactive pay guides in the results
+        const returnedNames = result.data.payGuides.map((pg: any) => pg.name)
+        expect(returnedNames).toContain('Inactive Award A')
+        expect(returnedNames).toContain('Inactive Award B')
+
+        // Verify active guides are not included
+        expect(returnedNames).not.toContain('Active Award A')
+        expect(returnedNames).not.toContain('Active Award B')
+
+        // Verify pagination reflects filtered count
+        expect(result.data.pagination.total).toBeGreaterThanOrEqual(2) // At least our 2 inactive guides
+        expect(result.data.pagination.totalPages).toBeGreaterThan(0)
       })
 
       it('should return all pay guides when active filter is not specified', async () => {
-        /**
-         * TODO: Test no filtering (default behavior)
-         *
-         * Setup:
-         * - Ensure mix of active and inactive pay guides exist
-         *
-         * Implementation:
-         * - Request: GET /api/pay-rates (no active parameter)
-         *
-         * Assertions to verify:
-         * - Both active and inactive pay guides are returned
-         * - Total count includes all pay guides regardless of status
-         */
+        // Create mix of active and inactive pay guides
+        const activeGuides = [
+          { name: 'Mixed Active 1', isActive: true },
+          { name: 'Mixed Active 2', isActive: true },
+        ]
+        
+        const inactiveGuides = [
+          { name: 'Mixed Inactive 1', isActive: false },
+          { name: 'Mixed Inactive 2', isActive: false },
+        ]
+
+        // Create active pay guides
+        for (const guide of activeGuides) {
+          await prisma.payGuide.create({
+            data: {
+              name: guide.name,
+              baseRate: new Decimal('25.00'),
+              effectiveFrom: new Date('2024-01-01'),
+              timezone: 'Australia/Sydney',
+              isActive: guide.isActive,
+            },
+          })
+        }
+
+        // Create inactive pay guides
+        for (const guide of inactiveGuides) {
+          await prisma.payGuide.create({
+            data: {
+              name: guide.name,
+              baseRate: new Decimal('25.00'),
+              effectiveFrom: new Date('2024-01-01'),
+              timezone: 'Australia/Sydney',
+              isActive: guide.isActive,
+            },
+          })
+        }
+
+        const { GET } = await import('@/app/api/pay-rates/route')
+        const request = new MockRequest('http://localhost/api/pay-rates') // No active parameter
+
+        const response = await GET(request as any)
+        const result = await response.json()
+
+        expect(response.status).toBe(200)
+        expect(result.data.payGuides).toBeInstanceOf(Array)
+        expect(result.data.payGuides.length).toBeGreaterThan(0)
+
+        // Verify both active and inactive pay guides are included
+        const returnedNames = result.data.payGuides.map((pg: any) => pg.name)
+        const returnedActiveStates = result.data.payGuides.map((pg: any) => pg.isActive)
+
+        // Should contain our test guides
+        expect(returnedNames).toContain('Mixed Active 1')
+        expect(returnedNames).toContain('Mixed Active 2')
+        expect(returnedNames).toContain('Mixed Inactive 1')
+        expect(returnedNames).toContain('Mixed Inactive 2')
+
+        // Should have both true and false values for isActive
+        expect(returnedActiveStates).toContain(true)
+        expect(returnedActiveStates).toContain(false)
+
+        // Verify pagination reflects total count (all records)
+        expect(result.data.pagination.total).toBeGreaterThanOrEqual(4) // At least our 4 guides
+        expect(result.data.pagination.totalPages).toBeGreaterThan(0)
       })
     })
 
