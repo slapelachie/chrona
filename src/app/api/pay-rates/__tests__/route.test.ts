@@ -420,71 +420,173 @@ describe('Pay Rates API', () => {
       })
     })
 
-    describe.skip('Sorting', () => {
+    describe('Sorting', () => {
       it('should sort by name in ascending order', async () => {
-        /**
-         * TODO: Test name sorting functionality
-         *
-         * Setup:
-         * - Create pay guides with names that will sort differently: "Zebra Award", "Apple Award", "Beta Award"
-         *
-         * Implementation:
-         * - Request: GET /api/pay-rates?sortBy=name&sortOrder=asc
-         *
-         * Assertions to verify:
-         * - Response status is 200
-         * - Pay guides are returned in alphabetical order by name
-         * - Verify specific order: "Apple Award", "Beta Award", "Zebra Award"
-         */
+        // Create pay guides with names that will sort differently
+        const payGuides = [
+          { name: 'Zebra Award', baseRate: '25.00' },
+          { name: 'Apple Award', baseRate: '26.00' },
+          { name: 'Beta Award', baseRate: '27.00' },
+        ]
+
+        for (const guide of payGuides) {
+          await prisma.payGuide.create({
+            data: {
+              name: guide.name,
+              baseRate: new Decimal(guide.baseRate),
+              effectiveFrom: new Date('2024-01-01'),
+              timezone: 'Australia/Sydney',
+              isActive: true,
+            },
+          })
+        }
+
+        const { GET } = await import('@/app/api/pay-rates/route')
+        const request = new MockRequest('http://localhost/api/pay-rates?sortBy=name&sortOrder=asc')
+
+        const response = await GET(request as any)
+        const result = await response.json()
+
+        expect(response.status).toBe(200)
+        // We should have at least the 3 created guides
+        expect(result.data.payGuides.length).toBeGreaterThanOrEqual(3)
+        
+        // Verify alphabetical order by name
+        const names = result.data.payGuides.map((pg: any) => pg.name)
+        // Check that names are in alphabetical order
+        const sortedNames = [...names].sort()
+        expect(names).toEqual(sortedNames)
+        
+        // Verify the specific order includes our test guides
+        expect(names).toContain('Apple Award')
+        expect(names).toContain('Beta Award')
+        expect(names).toContain('Zebra Award')
       })
 
       it('should sort by baseRate in descending order', async () => {
-        /**
-         * TODO: Test baseRate sorting functionality
-         *
-         * Setup:
-         * - Create pay guides with different base rates: $25.00, $30.50, $22.75
-         *
-         * Implementation:
-         * - Request: GET /api/pay-rates?sortBy=baseRate&sortOrder=desc
-         *
-         * Assertions to verify:
-         * - Response status is 200
-         * - Pay guides are returned in descending order by baseRate
-         * - Verify order: $30.50, $25.00, $22.75
-         * - Base rates are returned as strings with proper formatting
-         */
+        // Create pay guides with different base rates
+        const payGuides = [
+          { name: 'Award A', baseRate: '25.00' },
+          { name: 'Award B', baseRate: '30.50' },
+          { name: 'Award C', baseRate: '22.75' },
+        ]
+
+        for (const guide of payGuides) {
+          await prisma.payGuide.create({
+            data: {
+              name: guide.name,
+              baseRate: new Decimal(guide.baseRate),
+              effectiveFrom: new Date('2024-01-01'),
+              timezone: 'Australia/Sydney',
+              isActive: true,
+            },
+          })
+        }
+
+        const { GET } = await import('@/app/api/pay-rates/route')
+        const request = new MockRequest('http://localhost/api/pay-rates?sortBy=baseRate&sortOrder=desc')
+
+        const response = await GET(request as any)
+        const result = await response.json()
+
+        expect(response.status).toBe(200)
+        // We should have at least the 3 created guides
+        expect(result.data.payGuides.length).toBeGreaterThanOrEqual(3)
+        
+        // Verify descending order by baseRate
+        const baseRates = result.data.payGuides.map((pg: any) => parseFloat(pg.baseRate))
+        // Check that rates are in descending order
+        const sortedRatesDesc = [...baseRates].sort((a, b) => b - a)
+        expect(baseRates).toEqual(sortedRatesDesc)
+        
+        // Verify we have our test rates
+        expect(baseRates).toContain(30.50)
+        expect(baseRates).toContain(25.00)
+        expect(baseRates).toContain(22.75)
+        
+        // Verify base rates are returned as strings
+        result.data.payGuides.forEach((pg: any) => {
+          expect(typeof pg.baseRate).toBe('string')
+        })
       })
 
       it('should sort by effectiveFrom date correctly', async () => {
-        /**
-         * TODO: Test date sorting functionality
-         *
-         * Setup:
-         * - Create pay guides with different effective dates: 2024-01-01, 2024-06-01, 2023-12-01
-         *
-         * Implementation:
-         * - Request: GET /api/pay-rates?sortBy=effectiveFrom&sortOrder=asc
-         *
-         * Assertions to verify:
-         * - Pay guides are returned in chronological order
-         * - Dates are properly formatted as ISO strings in response
-         */
+        // Create pay guides with different effective dates
+        const payGuides = [
+          { name: 'Award Jan 2024', effectiveFrom: new Date('2024-01-01') },
+          { name: 'Award Jun 2024', effectiveFrom: new Date('2024-06-01') },
+          { name: 'Award Dec 2023', effectiveFrom: new Date('2023-12-01') },
+        ]
+
+        for (const guide of payGuides) {
+          await prisma.payGuide.create({
+            data: {
+              name: guide.name,
+              baseRate: new Decimal('25.00'),
+              effectiveFrom: guide.effectiveFrom,
+              timezone: 'Australia/Sydney',
+              isActive: true,
+            },
+          })
+        }
+
+        const { GET } = await import('@/app/api/pay-rates/route')
+        const request = new MockRequest('http://localhost/api/pay-rates?sortBy=effectiveFrom&sortOrder=asc')
+
+        const response = await GET(request as any)
+        const result = await response.json()
+
+        expect(response.status).toBe(200)
+        // We should have at least the 3 created guides  
+        expect(result.data.payGuides.length).toBeGreaterThanOrEqual(3)
+        
+        // Verify chronological order by effectiveFrom
+        const effectiveDates = result.data.payGuides.map((pg: any) => new Date(pg.effectiveFrom))
+        // Check that dates are in ascending chronological order
+        const sortedDatesAsc = [...effectiveDates].sort((a, b) => a.getTime() - b.getTime())
+        expect(effectiveDates).toEqual(sortedDatesAsc)
+        
+        // Verify we have our test dates
+        const dateStrings = result.data.payGuides.map((pg: any) => pg.effectiveFrom.split('T')[0])
+        expect(dateStrings).toContain('2023-12-01')
+        expect(dateStrings).toContain('2024-01-01')
+        expect(dateStrings).toContain('2024-06-01')
+        
+        // Verify dates are properly formatted as ISO strings
+        result.data.payGuides.forEach((pg: any) => {
+          expect(typeof pg.effectiveFrom).toBe('string')
+          expect(() => new Date(pg.effectiveFrom)).not.toThrow()
+        })
       })
 
       it('should reject invalid sort parameters', async () => {
-        /**
-         * TODO: Test sorting validation
-         *
-         * Test cases:
-         * 1. Invalid sortBy: GET /api/pay-rates?sortBy=invalidField
-         * 2. Invalid sortOrder: GET /api/pay-rates?sortOrder=invalid
-         *
-         * Assertions for each case:
-         * - Response status is 400
-         * - Response contains validation errors
-         * - Error message indicates invalid sort parameter
-         */
+        const { GET } = await import('@/app/api/pay-rates/route')
+
+        // Test case 1: Invalid sortBy
+        const invalidSortByRequest = new MockRequest('http://localhost/api/pay-rates?sortBy=invalidField')
+        const sortByResponse = await GET(invalidSortByRequest as any)
+        const sortByResult = await sortByResponse.json()
+
+        expect(sortByResponse.status).toBe(400)
+        expect(sortByResult.errors).toBeInstanceOf(Array)
+        expect(sortByResult.errors.length).toBeGreaterThan(0)
+        expect(sortByResult.errors.some((err: any) => 
+          err.field === 'sortBy' && err.message.includes('Invalid sort field')
+        )).toBe(true)
+        expect(sortByResult.message).toBe('Invalid query parameters')
+
+        // Test case 2: Invalid sortOrder
+        const invalidSortOrderRequest = new MockRequest('http://localhost/api/pay-rates?sortOrder=invalid')
+        const sortOrderResponse = await GET(invalidSortOrderRequest as any)
+        const sortOrderResult = await sortOrderResponse.json()
+
+        expect(sortOrderResponse.status).toBe(400)
+        expect(sortOrderResult.errors).toBeInstanceOf(Array)
+        expect(sortOrderResult.errors.length).toBeGreaterThan(0)
+        expect(sortOrderResult.errors.some((err: any) => 
+          err.field === 'sortOrder' && err.message.includes('Sort order must be asc or desc')
+        )).toBe(true)
+        expect(sortOrderResult.message).toBe('Invalid query parameters')
       })
     })
 
