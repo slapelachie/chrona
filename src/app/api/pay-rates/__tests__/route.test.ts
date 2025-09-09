@@ -2448,31 +2448,40 @@ describe('Pay Rates API', () => {
 
         const { POST } = await import('@/app/api/pay-rates/route')
 
-        // This should handle the JSON parsing error gracefully
-        let response: any
-        let result: any
+        // Suppress console.error during this test to avoid stderr pollution
+        const originalConsoleError = console.error
+        console.error = () => {}
 
         try {
-          response = await POST(invalidJsonRequest as any)
-          result = await response.json()
-        } catch (error) {
-          // If the route doesn't handle JSON parsing errors, it might throw
-          expect(error).toBeInstanceOf(Error)
-          expect((error as Error).message).toContain('JSON')
-          return
+          // This should handle the JSON parsing error gracefully
+          let response: any
+          let result: any
+
+          try {
+            response = await POST(invalidJsonRequest as any)
+            result = await response.json()
+          } catch (error) {
+            // If the route doesn't handle JSON parsing errors, it might throw
+            expect(error).toBeInstanceOf(Error)
+            expect((error as Error).message).toContain('JSON')
+            return
+          }
+
+          // If the route handles the error gracefully, verify the response
+          expect(response.status).toBeGreaterThanOrEqual(400)
+          expect(response.status).toBeLessThan(600)
+          expect(result.error || result.message).toBeTruthy()
+
+          // Verify no pay guide was created (there shouldn't be any with malformed data)
+          const allPayGuides = await prisma.payGuide.findMany()
+          const malformedGuides = allPayGuides.filter(
+            (pg) => pg.name?.includes('invalid') || pg.name?.includes('malformed')
+          )
+          expect(malformedGuides.length).toBe(0)
+        } finally {
+          // Restore console.error
+          console.error = originalConsoleError
         }
-
-        // If the route handles the error gracefully, verify the response
-        expect(response.status).toBeGreaterThanOrEqual(400)
-        expect(response.status).toBeLessThan(600)
-        expect(result.error || result.message).toBeTruthy()
-
-        // Verify no pay guide was created (there shouldn't be any with malformed data)
-        const allPayGuides = await prisma.payGuide.findMany()
-        const malformedGuides = allPayGuides.filter(
-          (pg) => pg.name?.includes('invalid') || pg.name?.includes('malformed')
-        )
-        expect(malformedGuides.length).toBe(0)
       })
     })
 

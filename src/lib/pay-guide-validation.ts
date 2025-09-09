@@ -27,33 +27,45 @@ export const validatePayGuideFields = (
   isUpdate: boolean = false
 ): void => {
   // Name validation (required for create, optional for update)
-  if (!isUpdate || data.name !== undefined) {
-    const name = isUpdate ? (data as UpdatePayGuideRequest).name : (data as CreatePayGuideRequest).name
-    if (name !== undefined) {
-      validateString(name, 'name', validator, {
-        minLength: 3,
-        maxLength: 200,
-      })
-    }
+  if (!isUpdate) {
+    // For CREATE: always validate (required)
+    const name = (data as CreatePayGuideRequest).name
+    validateString(name, 'name', validator, {
+      minLength: 3,
+      maxLength: 200,
+    })
+  } else if (data.name !== undefined) {
+    // For UPDATE: only validate if present
+    validateString(data.name, 'name', validator, {
+      minLength: 3,
+      maxLength: 200,
+    })
   }
 
   // Base rate validation (required for create, optional for update)
-  if (!isUpdate || data.baseRate !== undefined) {
-    const baseRate = isUpdate ? (data as UpdatePayGuideRequest).baseRate : (data as CreatePayGuideRequest).baseRate
-    if (baseRate !== undefined) {
-      validateDecimal(baseRate, 'baseRate', validator, {
-        min: new Decimal('0.01'),
-        max: new Decimal('1000.00'),
-      })
-    }
+  if (!isUpdate) {
+    // For CREATE: always validate (required)
+    const baseRate = (data as CreatePayGuideRequest).baseRate
+    validateDecimal(baseRate, 'baseRate', validator, {
+      min: new Decimal('0.01'),
+      max: new Decimal('1000.00'),
+    })
+  } else if (data.baseRate !== undefined) {
+    // For UPDATE: only validate if present
+    validateDecimal(data.baseRate, 'baseRate', validator, {
+      min: new Decimal('0.01'),
+      max: new Decimal('1000.00'),
+    })
   }
 
   // Effective from validation (required for create, optional for update)
-  if (!isUpdate || data.effectiveFrom !== undefined) {
-    const effectiveFrom = isUpdate ? (data as UpdatePayGuideRequest).effectiveFrom : (data as CreatePayGuideRequest).effectiveFrom
-    if (effectiveFrom !== undefined) {
-      validateDate(effectiveFrom, 'effectiveFrom', validator)
-    }
+  if (!isUpdate) {
+    // For CREATE: always validate (required)
+    const effectiveFrom = (data as CreatePayGuideRequest).effectiveFrom
+    validateDate(effectiveFrom, 'effectiveFrom', validator)
+  } else if (data.effectiveFrom !== undefined) {
+    // For UPDATE: only validate if present
+    validateDate(data.effectiveFrom, 'effectiveFrom', validator)
   }
 
   // Effective to validation (optional for both)
@@ -69,11 +81,13 @@ export const validatePayGuideFields = (
   }
 
   // Timezone validation (required for create, optional for update)
-  if (!isUpdate || data.timezone !== undefined) {
-    const timezone = isUpdate ? (data as UpdatePayGuideRequest).timezone : (data as CreatePayGuideRequest).timezone
-    if (timezone !== undefined) {
-      validateTimezone(timezone, 'timezone', validator)
-    }
+  if (!isUpdate) {
+    // For CREATE: always validate (required)
+    const timezone = (data as CreatePayGuideRequest).timezone
+    validateTimezone(timezone, 'timezone', validator)
+  } else if (data.timezone !== undefined) {
+    // For UPDATE: only validate if present
+    validateTimezone(data.timezone, 'timezone', validator)
   }
 
   // Minimum shift hours validation (optional for both)
