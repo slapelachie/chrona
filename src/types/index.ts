@@ -304,6 +304,35 @@ export interface OvertimeTimeFrameResponse
   updatedAt: string
 }
 
+// Break Period API Types
+export interface CreateBreakPeriodRequest {
+  startTime: string // ISO string
+  endTime: string // ISO string
+}
+
+export interface UpdateBreakPeriodRequest {
+  startTime?: string // ISO string
+  endTime?: string // ISO string
+}
+
+export interface BreakPeriodResponse extends Omit<BreakPeriod, 'startTime' | 'endTime' | 'createdAt' | 'updatedAt'> {
+  startTime: string // ISO string
+  endTime: string // ISO string
+  createdAt: string // ISO string
+  updatedAt: string // ISO string
+}
+
+export interface BreakPeriodsListResponse {
+  breakPeriods: BreakPeriodResponse[]
+  shiftId: string
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
+
 // Public Holiday API Types
 export interface CreatePublicHolidayRequest {
   name: string
