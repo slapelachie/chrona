@@ -548,7 +548,6 @@ describe('Pay Rates [id] Route API', () => {
             payGuideId: testPayGuideId,
             startTime: new Date('2024-01-01T09:00:00Z'),
             endTime: new Date('2024-01-01T17:00:00Z'),
-            breakMinutes: 30,
           },
         })
 

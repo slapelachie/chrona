@@ -261,7 +261,6 @@ describe('Database Models - Blackbox Tests', () => {
         payGuideId: payGuide.id,
         startTime: new Date('2024-01-02T09:00:00Z'),
         endTime: new Date('2024-01-02T17:00:00Z'),
-        breakMinutes: 30,
         payPeriodId: payPeriod.id,
       }
 
@@ -271,11 +270,10 @@ describe('Database Models - Blackbox Tests', () => {
       expect(shift.payGuideId).toBe(payGuide.id)
       expect(shift.startTime).toEqual(shiftData.startTime)
       expect(shift.endTime).toEqual(shiftData.endTime)
-      expect(shift.breakMinutes).toBe(30)
       expect(shift.payPeriodId).toBe(payPeriod.id)
     })
 
-    it('should use default break minutes when not provided', async () => {
+    it('should create shift with no break periods initially', async () => {
       const shift = await prisma.shift.create({
         data: {
           userId: user.id,
@@ -283,9 +281,12 @@ describe('Database Models - Blackbox Tests', () => {
           startTime: new Date('2024-01-02T09:00:00Z'),
           endTime: new Date('2024-01-02T17:00:00Z'),
         },
+        include: {
+          breakPeriods: true
+        }
       })
 
-      expect(shift.breakMinutes).toBe(0)
+      expect(shift.breakPeriods).toHaveLength(0)
     })
 
     it('should store calculated pay amounts as decimals', async () => {

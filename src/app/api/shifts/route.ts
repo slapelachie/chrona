@@ -11,7 +11,6 @@ import {
 import { 
   ValidationResult, 
   validateString, 
-  validateNumber, 
   validateDateRange
 } from '@/lib/validation'
 import { 
@@ -102,7 +101,6 @@ export async function GET(request: NextRequest) {
       payGuideId: shift.payGuideId,
       startTime: shift.startTime,
       endTime: shift.endTime,
-      breakMinutes: shift.breakMinutes,
       totalHours: shift.totalHours?.toString(),
       basePay: shift.basePay?.toString(),
       overtimePay: shift.overtimePay?.toString(),
@@ -181,7 +179,6 @@ export async function POST(request: NextRequest) {
     validateString(body.payGuideId, 'payGuideId', validator)
     validateString(body.startTime, 'startTime', validator)
     validateString(body.endTime, 'endTime', validator)
-    validateNumber(body.breakMinutes, 'breakMinutes', validator, { min: 0, max: 480, integer: true })
     
     if (body.notes !== undefined) {
       validateString(body.notes, 'notes', validator, { maxLength: 500 })
@@ -242,7 +239,6 @@ export async function POST(request: NextRequest) {
         payGuideId: body.payGuideId,
         startTime: new Date(body.startTime),
         endTime: new Date(body.endTime),
-        breakMinutes: body.breakMinutes,
         notes: body.notes,
         payPeriodId: payPeriod?.id
       },
@@ -297,7 +293,6 @@ export async function POST(request: NextRequest) {
       payGuideId: shift.payGuideId,
       startTime: shift.startTime,
       endTime: shift.endTime,
-      breakMinutes: shift.breakMinutes,
       totalHours: shift.totalHours?.toString(),
       basePay: shift.basePay?.toString(),
       overtimePay: shift.overtimePay?.toString(),

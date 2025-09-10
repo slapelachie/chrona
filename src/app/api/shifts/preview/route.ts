@@ -13,7 +13,6 @@ import {
 import { 
   ValidationResult, 
   validateString, 
-  validateNumber, 
   validateDateRange 
 } from '@/lib/validation'
 
@@ -29,7 +28,6 @@ export async function POST(request: NextRequest) {
     validateString(body.payGuideId, 'payGuideId', validator)
     validateString(body.startTime, 'startTime', validator)
     validateString(body.endTime, 'endTime', validator)
-    validateNumber(body.breakMinutes, 'breakMinutes', validator, { min: 0, max: 480, integer: true })
     
     // Validate date range
     if (validator.isValid()) {
@@ -186,7 +184,6 @@ export async function GET(request: NextRequest) {
     const payGuideId = searchParams.get('payGuideId')
     const startTime = searchParams.get('startTime')
     const endTime = searchParams.get('endTime')
-    const breakMinutes = Number(searchParams.get('breakMinutes') || '0')
 
     if (!payGuideId || !startTime || !endTime) {
       return NextResponse.json({
@@ -201,8 +198,7 @@ export async function GET(request: NextRequest) {
     const postBody: ShiftPreviewRequest = {
       payGuideId,
       startTime,
-      endTime,
-      breakMinutes
+      endTime
     }
 
     // Create a new request with POST method and body

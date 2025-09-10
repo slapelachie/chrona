@@ -131,7 +131,6 @@ describe('Individual Break Period Route API', () => {
         payGuideId: testPayGuideId,
         startTime: new Date('2024-01-15T09:00:00Z'),
         endTime: new Date('2024-01-15T17:00:00Z'),
-        breakMinutes: 30,
       },
     })
     testShiftId = testShift.id
@@ -234,7 +233,6 @@ describe('Individual Break Period Route API', () => {
             payGuideId: testPayGuideId,
             startTime: new Date('2024-01-16T09:00:00Z'),
             endTime: new Date('2024-01-16T17:00:00Z'),
-            breakMinutes: 30,
           },
         })
 
@@ -579,7 +577,6 @@ describe('Individual Break Period Route API', () => {
             payGuideId: testPayGuideId,
             startTime: new Date('2024-01-16T09:00:00Z'),
             endTime: new Date('2024-01-16T17:00:00Z'),
-            breakMinutes: 30,
           },
         })
 

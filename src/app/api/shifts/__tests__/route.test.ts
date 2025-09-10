@@ -195,7 +195,6 @@ describe('Shifts Route API', () => {
             payGuideId: testPayGuideId,
             startTime: new Date('2024-01-15T09:00:00Z'),
             endTime: new Date('2024-01-15T17:00:00Z'),
-            breakMinutes: 30,
             notes: 'Test shift 1',
           },
         })
@@ -206,7 +205,6 @@ describe('Shifts Route API', () => {
             payGuideId: testPayGuideId,
             startTime: new Date('2024-01-16T10:00:00Z'),
             endTime: new Date('2024-01-16T18:00:00Z'),
-            breakMinutes: 60,
             notes: 'Test shift 2',
           },
         })
@@ -241,7 +239,6 @@ describe('Shifts Route API', () => {
               payGuideId: testPayGuideId,
               startTime: new Date(`2024-01-${15 + i}T09:00:00Z`),
               endTime: new Date(`2024-01-${15 + i}T17:00:00Z`),
-              breakMinutes: 30,
               notes: `Test shift ${i + 1}`,
             },
           })
@@ -269,7 +266,6 @@ describe('Shifts Route API', () => {
             payGuideId: testPayGuideId,
             startTime: new Date('2024-01-10T09:00:00Z'),
             endTime: new Date('2024-01-10T17:00:00Z'),
-            breakMinutes: 30,
           },
         })
 
@@ -279,7 +275,6 @@ describe('Shifts Route API', () => {
             payGuideId: testPayGuideId,
             startTime: new Date('2024-01-20T09:00:00Z'),
             endTime: new Date('2024-01-20T17:00:00Z'),
-            breakMinutes: 30,
           },
         })
 
@@ -339,7 +334,6 @@ describe('Shifts Route API', () => {
           payGuideId: testPayGuideId,
           startTime: '2024-01-15T09:00:00Z',
           endTime: '2024-01-15T17:00:00Z',
-          breakMinutes: 30,
           notes: 'Test shift with pay calculation',
         }
 
@@ -358,7 +352,6 @@ describe('Shifts Route API', () => {
         expect(result.data.payGuideId).toBe(testPayGuideId)
         expect(result.data.startTime).toBe('2024-01-15T09:00:00.000Z')
         expect(result.data.endTime).toBe('2024-01-15T17:00:00.000Z')
-        expect(result.data.breakMinutes).toBe(30)
         expect(result.data.notes).toBe('Test shift with pay calculation')
         expect(result.data.breakPeriods).toEqual([])
         expect(result.message).toBe('Shift created successfully')
@@ -396,7 +389,6 @@ describe('Shifts Route API', () => {
           payGuideId: testPayGuideId,
           startTime: '2024-01-15T16:00:00Z', // 4pm local
           endTime: '2024-01-15T21:00:00Z',   // 9pm local (includes evening penalty)
-          breakMinutes: 30,
           notes: 'Evening shift with penalties',
         }
 
@@ -423,7 +415,6 @@ describe('Shifts Route API', () => {
           payGuideId: testPayGuideId,
           startTime: '2024-01-15T09:00:00Z',
           endTime: '2024-01-15T10:00:00Z', // Only 1 hour, but minimum is 3
-          breakMinutes: 0,
         }
 
         const { POST } = await import('@/app/api/shifts/route')
@@ -467,7 +458,6 @@ describe('Shifts Route API', () => {
         expect(errorFields).toContain('payGuideId')
         expect(errorFields).toContain('startTime')
         expect(errorFields).toContain('endTime')
-        expect(errorFields).toContain('breakMinutes')
       })
 
       it('should validate shift duration', async () => {
@@ -475,7 +465,6 @@ describe('Shifts Route API', () => {
           payGuideId: testPayGuideId,
           startTime: '2024-01-15T09:00:00Z',
           endTime: '2024-01-14T17:00:00Z', // End before start
-          breakMinutes: 30,
         }
 
         const { POST } = await import('@/app/api/shifts/route')
@@ -492,34 +481,12 @@ describe('Shifts Route API', () => {
         expect(result.message).toBe('Invalid shift data')
       })
 
-      it('should validate break minutes range', async () => {
-        const invalidData: CreateShiftRequest = {
-          payGuideId: testPayGuideId,
-          startTime: '2024-01-15T09:00:00Z',
-          endTime: '2024-01-15T17:00:00Z',
-          breakMinutes: 500, // Exceeds max of 480
-        }
-
-        const { POST } = await import('@/app/api/shifts/route')
-        const request = new MockRequest('http://localhost/api/shifts', {
-          method: 'POST',
-          body: invalidData,
-        })
-
-        const response = await POST(request as any)
-        const result = await response.json()
-
-        expect(response.status).toBe(400)
-        expect(result.errors).toBeInstanceOf(Array)
-        expect(result.message).toBe('Invalid shift data')
-      })
 
       it('should return 400 for non-existent pay guide', async () => {
         const invalidData: CreateShiftRequest = {
           payGuideId: 'cltmv8r5v0000l508whbz1234', // Non-existent ID
           startTime: '2024-01-15T09:00:00Z',
           endTime: '2024-01-15T17:00:00Z',
-          breakMinutes: 30,
         }
 
         const { POST } = await import('@/app/api/shifts/route')
@@ -542,7 +509,6 @@ describe('Shifts Route API', () => {
           payGuideId: testPayGuideId,
           startTime: '2024-01-15T09:00:00Z',
           endTime: '2024-01-15T17:00:00Z',
-          breakMinutes: 30,
           notes: 'x'.repeat(501), // Exceeds max length of 500
         }
 

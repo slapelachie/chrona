@@ -131,8 +131,7 @@ describe('Break Periods Collection Route API', () => {
         payGuideId: testPayGuideId,
         startTime: new Date('2024-01-15T09:00:00Z'),
         endTime: new Date('2024-01-15T17:00:00Z'),
-        breakMinutes: 30,
-      },
+              },
     })
     testShiftId = testShift.id
   })
@@ -555,6 +554,46 @@ describe('Break Periods Collection Route API', () => {
         expect(response.status).toBe(400)
         expect(result.errors).toBeInstanceOf(Array)
         expect(result.message).toBe('Invalid break period data')
+      })
+    })
+
+    describe('Pay Recalculation Integration', () => {
+      it('should recalculate shift pay when break period is created', async () => {
+        // First, get the shift's initial pay
+        const initialShift = await prisma.shift.findUnique({
+          where: { id: testShiftId }
+        })
+        const initialTotalPay = initialShift?.totalPay
+
+        // Create a break period
+        const breakData: CreateBreakPeriodRequest = {
+          startTime: '2024-01-15T12:00:00Z',
+          endTime: '2024-01-15T13:00:00Z', // 1 hour break
+        }
+
+        const { POST } = await import('@/app/api/shifts/[id]/break-periods/route')
+        const request = new MockRequest(`http://localhost/api/shifts/${testShiftId}/break-periods`, {
+          method: 'POST',
+          body: breakData,
+        })
+        const params = { id: testShiftId }
+
+        const response = await POST(request as any, { params })
+        expect(response.status).toBe(201)
+
+        // Verify that shift pay was recalculated
+        const updatedShift = await prisma.shift.findUnique({
+          where: { id: testShiftId }
+        })
+        
+        expect(updatedShift?.totalPay).toBeTruthy()
+        expect(updatedShift?.totalHours).toBeTruthy()
+        
+        // With a 1-hour break, total hours should be reduced, affecting pay
+        if (initialTotalPay && updatedShift?.totalPay) {
+          // The pay should be different due to reduced working hours
+          expect(updatedShift.totalPay.equals(initialTotalPay)).toBe(false)
+        }
       })
     })
   })

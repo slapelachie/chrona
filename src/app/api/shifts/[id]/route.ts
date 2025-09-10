@@ -69,7 +69,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       payGuideId: shift.payGuideId,
       startTime: shift.startTime,
       endTime: shift.endTime,
-      breakMinutes: shift.breakMinutes,
       totalHours: shift.totalHours?.toString(),
       basePay: shift.basePay?.toString(),
       overtimePay: shift.overtimePay?.toString(),
@@ -169,10 +168,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       validateString(body.endTime, 'endTime', validator)
     }
     
-    if (body.breakMinutes !== undefined) {
-      validateNumber(body.breakMinutes, 'breakMinutes', validator, { min: 0, max: 480, integer: true })
-    }
-    
     if (body.notes !== undefined && body.notes !== null) {
       validateString(body.notes, 'notes', validator, { maxLength: 500 })
     }
@@ -212,7 +207,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (body.payGuideId !== undefined) updateData.payGuideId = body.payGuideId
     if (body.startTime !== undefined) updateData.startTime = new Date(body.startTime)
     if (body.endTime !== undefined) updateData.endTime = new Date(body.endTime)
-    if (body.breakMinutes !== undefined) updateData.breakMinutes = body.breakMinutes
     if (body.notes !== undefined) updateData.notes = body.notes
 
     // Find appropriate pay period if dates are changing
@@ -231,7 +225,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Clear calculated fields when shift details change
-    if (body.startTime || body.endTime || body.breakMinutes || body.payGuideId) {
+    if (body.startTime || body.endTime || body.payGuideId) {
       updateData.totalHours = null
       updateData.basePay = null
       updateData.overtimePay = null
@@ -260,7 +254,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     })
 
     // Recalculate pay if shift details changed
-    if (body.startTime || body.endTime || body.breakMinutes || body.payGuideId) {
+    if (body.startTime || body.endTime || body.payGuideId) {
       const breakPeriods = await fetchShiftBreakPeriods(updatedShift.id)
       const calculation = await calculateAndUpdateShift({
         payGuideId: updatedShift.payGuideId,
@@ -289,7 +283,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       payGuideId: updatedShift.payGuideId,
       startTime: updatedShift.startTime,
       endTime: updatedShift.endTime,
-      breakMinutes: updatedShift.breakMinutes,
       totalHours: updatedShift.totalHours?.toString(),
       basePay: updatedShift.basePay?.toString(),
       overtimePay: updatedShift.overtimePay?.toString(),

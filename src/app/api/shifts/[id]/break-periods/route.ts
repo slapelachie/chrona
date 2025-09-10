@@ -12,10 +12,38 @@ import {
   validateDateRange,
   validateCuid
 } from '@/lib/validation'
+import { 
+  calculateAndUpdateShift, 
+  fetchShiftBreakPeriods,
+  updateShiftWithCalculation 
+} from '@/lib/shift-calculation'
 
 interface RouteParams {
   params: {
     id: string
+  }
+}
+
+/**
+ * Recalculates and updates shift pay after break period changes
+ */
+async function recalculateShiftPay(shiftId: string): Promise<void> {
+  const shift = await prisma.shift.findUnique({
+    where: { id: shiftId }
+  })
+  
+  if (!shift) return
+  
+  const breakPeriods = await fetchShiftBreakPeriods(shiftId)
+  const calculation = await calculateAndUpdateShift({
+    payGuideId: shift.payGuideId,
+    startTime: shift.startTime,
+    endTime: shift.endTime,
+    breakPeriods
+  })
+  
+  if (calculation) {
+    await updateShiftWithCalculation(shiftId, calculation)
   }
 }
 
@@ -221,6 +249,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         endTime: breakEnd
       }
     })
+
+    // Recalculate shift pay with updated break periods
+    await recalculateShiftPay(shiftId)
 
     // Transform to response format
     const responseBreakPeriod: BreakPeriodResponse = {

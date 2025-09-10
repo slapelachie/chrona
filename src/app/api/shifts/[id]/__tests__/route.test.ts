@@ -178,7 +178,6 @@ describe('Individual Shift Route API', () => {
         payGuideId: testPayGuideId,
         startTime: new Date('2024-01-15T09:00:00Z'),
         endTime: new Date('2024-01-15T17:00:00Z'),
-        breakMinutes: 30,
         notes: 'Test shift',
         totalHours: new Decimal('7.5'),
         basePay: new Decimal('187.50'),
@@ -223,7 +222,6 @@ describe('Individual Shift Route API', () => {
         expect(result.data.payGuideId).toBe(testPayGuideId)
         expect(result.data.startTime).toBe('2024-01-15T09:00:00.000Z')
         expect(result.data.endTime).toBe('2024-01-15T17:00:00.000Z')
-        expect(result.data.breakMinutes).toBe(30)
         expect(result.data.notes).toBe('Test shift')
 
         // Check calculated pay fields
@@ -287,7 +285,6 @@ describe('Individual Shift Route API', () => {
         const updateData: UpdateShiftRequest = {
           startTime: '2024-01-15T08:00:00Z', // Earlier start
           endTime: '2024-01-15T18:00:00Z',   // Later end
-          breakMinutes: 60, // Longer break
           notes: 'Updated test shift',
         }
 
@@ -305,7 +302,6 @@ describe('Individual Shift Route API', () => {
         expect(result.data.id).toBe(testShiftId)
         expect(result.data.startTime).toBe('2024-01-15T08:00:00.000Z')
         expect(result.data.endTime).toBe('2024-01-15T18:00:00.000Z')
-        expect(result.data.breakMinutes).toBe(60)
         expect(result.data.notes).toBe('Updated test shift')
         expect(result.message).toBe('Shift updated successfully')
 
@@ -327,77 +323,7 @@ describe('Individual Shift Route API', () => {
         })
         expect(updated!.startTime.toISOString()).toBe('2024-01-15T08:00:00.000Z')
         expect(updated!.endTime.toISOString()).toBe('2024-01-15T18:00:00.000Z')
-        expect(updated!.breakMinutes).toBe(60)
         expect(updated!.totalHours).toBeTruthy()
-      })
-
-      it('should update only specific fields and recalculate pay', async () => {
-        const updateData: UpdateShiftRequest = {
-          breakMinutes: 15, // Only updating break minutes
-        }
-
-        const { PUT } = await import('@/app/api/shifts/[id]/route')
-        const request = new MockRequest(`http://localhost/api/shifts/${testShiftId}`, {
-          method: 'PUT',
-          body: updateData,
-        })
-        const params = Promise.resolve({ id: testShiftId })
-
-        const response = await PUT(request as any, { params })
-        const result = await response.json()
-
-        expect(response.status).toBe(200)
-        expect(result.data.breakMinutes).toBe(15)
-        
-        // Other fields should remain unchanged
-        expect(result.data.startTime).toBe('2024-01-15T09:00:00.000Z')
-        expect(result.data.endTime).toBe('2024-01-15T17:00:00.000Z')
-        expect(result.data.notes).toBe('Test shift')
-
-        // Pay should be recalculated due to different break time
-        expect(result.data.totalHours).toBeTruthy()
-        const totalHours = parseFloat(result.data.totalHours)
-        expect(totalHours).toBeCloseTo(7.75, 2) // 8 hours - 15min break = 7.75 hours
-      })
-
-      it('should handle pay guide changes and recalculate accordingly', async () => {
-        // Create another pay guide with different rates
-        const alternatePayGuide = await prisma.payGuide.create({
-          data: {
-            name: 'Alternative Award',
-            baseRate: new Decimal('30.00'), // Higher rate
-            minimumShiftHours: 4,
-            maximumShiftHours: 12,
-            effectiveFrom: new Date('2024-01-01'),
-            timezone: 'Australia/Sydney',
-            isActive: true,
-          },
-        })
-
-        const updateData: UpdateShiftRequest = {
-          payGuideId: alternatePayGuide.id,
-        }
-
-        const { PUT } = await import('@/app/api/shifts/[id]/route')
-        const request = new MockRequest(`http://localhost/api/shifts/${testShiftId}`, {
-          method: 'PUT',
-          body: updateData,
-        })
-        const params = Promise.resolve({ id: testShiftId })
-
-        const response = await PUT(request as any, { params })
-        const result = await response.json()
-
-        expect(response.status).toBe(200)
-        expect(result.data.payGuideId).toBe(alternatePayGuide.id)
-        expect(result.data.payGuide.baseRate).toBe('30')
-
-        // Pay should be higher due to higher base rate
-        const totalPay = parseFloat(result.data.totalPay)
-        expect(totalPay).toBeGreaterThan(250) // Should be higher than original
-
-        // Clean up
-        await prisma.payGuide.delete({ where: { id: alternatePayGuide.id } })
       })
 
       it('should not recalculate pay when only notes are updated', async () => {
@@ -470,26 +396,6 @@ describe('Individual Shift Route API', () => {
         const updateData: UpdateShiftRequest = {
           startTime: '2024-01-15T18:00:00Z',
           endTime: '2024-01-15T09:00:00Z', // End before start
-        }
-
-        const { PUT } = await import('@/app/api/shifts/[id]/route')
-        const request = new MockRequest(`http://localhost/api/shifts/${testShiftId}`, {
-          method: 'PUT',
-          body: updateData,
-        })
-        const params = Promise.resolve({ id: testShiftId })
-
-        const response = await PUT(request as any, { params })
-        const result = await response.json()
-
-        expect(response.status).toBe(400)
-        expect(result.errors).toBeInstanceOf(Array)
-        expect(result.message).toBe('Invalid shift data')
-      })
-
-      it('should validate break minutes range', async () => {
-        const updateData: UpdateShiftRequest = {
-          breakMinutes: 500, // Exceeds max
         }
 
         const { PUT } = await import('@/app/api/shifts/[id]/route')

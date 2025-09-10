@@ -75,7 +75,6 @@ export interface Shift {
   payGuideId: string
   startTime: Date
   endTime: Date
-  breakMinutes: number
   totalHours?: Decimal
   basePay?: Decimal
   overtimePay?: Decimal
@@ -151,7 +150,6 @@ export interface CreateShiftRequest {
   payGuideId: string
   startTime: string // ISO string
   endTime: string // ISO string
-  breakMinutes: number
   notes?: string
 }
 
@@ -159,7 +157,6 @@ export interface UpdateShiftRequest {
   payGuideId?: string
   startTime?: string
   endTime?: string
-  breakMinutes?: number
   notes?: string
 }
 
@@ -182,7 +179,6 @@ export interface ShiftPreviewRequest {
   payGuideId: string
   startTime: string
   endTime: string
-  breakMinutes: number
 }
 
 export interface ShiftPreviewResponse {
@@ -371,7 +367,6 @@ export interface ShiftFormData {
   payGuideId: string
   startTime: string
   endTime: string
-  breakMinutes: number
   notes: string
 }
 
