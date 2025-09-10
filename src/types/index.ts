@@ -175,6 +175,7 @@ export interface ShiftResponse
   totalPay?: string
   payGuide?: PayGuideResponse
   payPeriod?: PayPeriodResponse
+  breakPeriods?: BreakPeriodResponse[]
 }
 
 export interface ShiftPreviewRequest {

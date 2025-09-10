@@ -6,7 +6,9 @@ import {
   ShiftPreviewResponse, 
   ApiValidationResponse,
   PayGuide,
-  PenaltyTimeFrame
+  PenaltyTimeFrame,
+  OvertimeTimeFrame,
+  PublicHoliday
 } from '@/types'
 import { 
   ValidationResult, 
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
       } as ApiValidationResponse, { status: 400 })
     }
 
-    // Fetch pay guide with penalty time frames
+    // Fetch pay guide with all time frames and holidays
     const payGuideRecord = await prisma.payGuide.findUnique({
       where: { 
         id: body.payGuideId,
@@ -54,6 +56,12 @@ export async function POST(request: NextRequest) {
       },
       include: {
         penaltyTimeFrames: {
+          where: { isActive: true }
+        },
+        overtimeTimeFrames: {
+          where: { isActive: true }
+        },
+        publicHolidays: {
           where: { isActive: true }
         }
       }
@@ -71,11 +79,12 @@ export async function POST(request: NextRequest) {
       id: payGuideRecord.id,
       name: payGuideRecord.name,
       baseRate: payGuideRecord.baseRate,
-      casualLoading: payGuideRecord.casualLoading,
-      overtimeRules: payGuideRecord.overtimeRules,
+      minimumShiftHours: payGuideRecord.minimumShiftHours,
+      maximumShiftHours: payGuideRecord.maximumShiftHours,
       description: payGuideRecord.description,
       effectiveFrom: payGuideRecord.effectiveFrom,
       effectiveTo: payGuideRecord.effectiveTo,
+      timezone: payGuideRecord.timezone,
       isActive: payGuideRecord.isActive,
       createdAt: payGuideRecord.createdAt,
       updatedAt: payGuideRecord.updatedAt
@@ -96,14 +105,40 @@ export async function POST(request: NextRequest) {
       updatedAt: ptf.updatedAt
     }))
 
+    const overtimeTimeFrames: OvertimeTimeFrame[] = payGuideRecord.overtimeTimeFrames.map(otf => ({
+      id: otf.id,
+      payGuideId: otf.payGuideId,
+      name: otf.name,
+      firstThreeHoursMult: otf.firstThreeHoursMult,
+      afterThreeHoursMult: otf.afterThreeHoursMult,
+      dayOfWeek: otf.dayOfWeek,
+      startTime: otf.startTime,
+      endTime: otf.endTime,
+      isPublicHoliday: otf.isPublicHoliday,
+      description: otf.description,
+      isActive: otf.isActive,
+      createdAt: otf.createdAt,
+      updatedAt: otf.updatedAt
+    }))
+
+    const publicHolidays: PublicHoliday[] = payGuideRecord.publicHolidays.map(ph => ({
+      id: ph.id,
+      payGuideId: ph.payGuideId,
+      name: ph.name,
+      date: ph.date,
+      isActive: ph.isActive,
+      createdAt: ph.createdAt,
+      updatedAt: ph.updatedAt
+    }))
+
     // Calculate pay using the calculator
-    const calculator = new PayCalculator(payGuide, penaltyTimeFrames)
+    const calculator = new PayCalculator(payGuide, penaltyTimeFrames, overtimeTimeFrames, publicHolidays)
     
     try {
       const calculation = calculator.calculate(
         new Date(body.startTime),
         new Date(body.endTime),
-        body.breakMinutes
+        [] // No break periods in preview since shift doesn't exist yet
       )
 
       const endTime = Date.now()

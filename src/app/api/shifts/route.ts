@@ -5,15 +5,20 @@ import {
   ShiftResponse, 
   ShiftsListResponse, 
   ApiValidationResponse,
-  ShiftFilters 
+  BreakPeriodResponse,
+  PayPeriodStatus
 } from '@/types'
 import { 
   ValidationResult, 
   validateString, 
   validateNumber, 
-  validateDateRange,
-  validateUUID
+  validateDateRange
 } from '@/lib/validation'
+import { 
+  calculateAndUpdateShift, 
+  fetchShiftBreakPeriods,
+  updateShiftWithCalculation 
+} from '@/lib/shift-calculation'
 
 // GET /api/shifts - List shifts with filtering and pagination
 export async function GET(request: NextRequest) {
@@ -77,6 +82,9 @@ export async function GET(request: NextRequest) {
       include: {
         payGuide: true,
         payPeriod: true,
+        breakPeriods: {
+          orderBy: { startTime: 'asc' }
+        },
         user: {
           select: {
             id: true,
@@ -99,21 +107,29 @@ export async function GET(request: NextRequest) {
       basePay: shift.basePay?.toString(),
       overtimePay: shift.overtimePay?.toString(),
       penaltyPay: shift.penaltyPay?.toString(),
-      casualPay: shift.casualPay?.toString(),
       totalPay: shift.totalPay?.toString(),
-      notes: shift.notes,
-      payPeriodId: shift.payPeriodId,
+      notes: shift.notes ?? undefined,
+      payPeriodId: shift.payPeriodId ?? undefined,
       createdAt: shift.createdAt,
       updatedAt: shift.updatedAt,
+      breakPeriods: shift.breakPeriods.map(bp => ({
+        id: bp.id,
+        shiftId: bp.shiftId,
+        startTime: bp.startTime.toISOString(),
+        endTime: bp.endTime.toISOString(),
+        createdAt: bp.createdAt.toISOString(),
+        updatedAt: bp.updatedAt.toISOString()
+      })),
       payGuide: shift.payGuide ? {
         id: shift.payGuide.id,
         name: shift.payGuide.name,
         baseRate: shift.payGuide.baseRate.toString(),
-        casualLoading: shift.payGuide.casualLoading.toString(),
-        overtimeRules: shift.payGuide.overtimeRules,
-        description: shift.payGuide.description,
+        minimumShiftHours: shift.payGuide.minimumShiftHours ?? undefined,
+        maximumShiftHours: shift.payGuide.maximumShiftHours ?? undefined,
+        description: shift.payGuide.description ?? undefined,
         effectiveFrom: shift.payGuide.effectiveFrom,
-        effectiveTo: shift.payGuide.effectiveTo,
+        effectiveTo: shift.payGuide.effectiveTo ?? undefined,
+        timezone: shift.payGuide.timezone,
         isActive: shift.payGuide.isActive,
         createdAt: shift.payGuide.createdAt,
         updatedAt: shift.payGuide.updatedAt
@@ -123,7 +139,7 @@ export async function GET(request: NextRequest) {
         userId: shift.payPeriod.userId,
         startDate: shift.payPeriod.startDate,
         endDate: shift.payPeriod.endDate,
-        status: shift.payPeriod.status,
+        status: shift.payPeriod.status as PayPeriodStatus,
         totalHours: shift.payPeriod.totalHours?.toString(),
         totalPay: shift.payPeriod.totalPay?.toString(),
         actualPay: shift.payPeriod.actualPay?.toString(),
@@ -219,7 +235,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Create the shift
+    // Create the shift without calculations first
     const shift = await prisma.shift.create({
       data: {
         userId: user.id,
@@ -243,6 +259,37 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // Calculate pay for the shift
+    const breakPeriods = await fetchShiftBreakPeriods(shift.id)
+    const calculation = await calculateAndUpdateShift({
+      payGuideId: body.payGuideId,
+      startTime: new Date(body.startTime),
+      endTime: new Date(body.endTime),
+      breakPeriods
+    })
+
+    if (calculation) {
+      // Update the shift with calculated pay values
+      await updateShiftWithCalculation(shift.id, calculation)
+      
+      // Update the shift object with calculated values for response
+      shift.totalHours = calculation.totalHours
+      shift.basePay = calculation.basePay
+      shift.overtimePay = calculation.overtimePay
+      shift.penaltyPay = calculation.penaltyPay
+      shift.totalPay = calculation.totalPay
+    }
+
+    // Get break periods for response
+    const responseBreakPeriods: BreakPeriodResponse[] = breakPeriods.map(bp => ({
+      id: bp.id,
+      shiftId: bp.shiftId,
+      startTime: bp.startTime.toISOString(),
+      endTime: bp.endTime.toISOString(),
+      createdAt: bp.createdAt.toISOString(),
+      updatedAt: bp.updatedAt.toISOString()
+    }))
+
     // Transform to response format
     const responseShift: ShiftResponse = {
       id: shift.id,
@@ -255,21 +302,22 @@ export async function POST(request: NextRequest) {
       basePay: shift.basePay?.toString(),
       overtimePay: shift.overtimePay?.toString(),
       penaltyPay: shift.penaltyPay?.toString(),
-      casualPay: shift.casualPay?.toString(),
       totalPay: shift.totalPay?.toString(),
-      notes: shift.notes,
-      payPeriodId: shift.payPeriodId,
+      notes: shift.notes ?? undefined,
+      payPeriodId: shift.payPeriodId ?? undefined,
       createdAt: shift.createdAt,
       updatedAt: shift.updatedAt,
+      breakPeriods: responseBreakPeriods,
       payGuide: {
         id: shift.payGuide.id,
         name: shift.payGuide.name,
         baseRate: shift.payGuide.baseRate.toString(),
-        casualLoading: shift.payGuide.casualLoading.toString(),
-        overtimeRules: shift.payGuide.overtimeRules,
-        description: shift.payGuide.description,
+        minimumShiftHours: shift.payGuide.minimumShiftHours ?? undefined,
+        maximumShiftHours: shift.payGuide.maximumShiftHours ?? undefined,
+        description: shift.payGuide.description ?? undefined,
         effectiveFrom: shift.payGuide.effectiveFrom,
-        effectiveTo: shift.payGuide.effectiveTo,
+        effectiveTo: shift.payGuide.effectiveTo ?? undefined,
+        timezone: shift.payGuide.timezone,
         isActive: shift.payGuide.isActive,
         createdAt: shift.payGuide.createdAt,
         updatedAt: shift.payGuide.updatedAt
@@ -279,7 +327,7 @@ export async function POST(request: NextRequest) {
         userId: shift.payPeriod.userId,
         startDate: shift.payPeriod.startDate,
         endDate: shift.payPeriod.endDate,
-        status: shift.payPeriod.status,
+        status: shift.payPeriod.status as PayPeriodStatus,
         totalHours: shift.payPeriod.totalHours?.toString(),
         totalPay: shift.payPeriod.totalPay?.toString(),
         actualPay: shift.payPeriod.actualPay?.toString(),

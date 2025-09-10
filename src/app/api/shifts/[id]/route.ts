@@ -1,28 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { UpdateShiftRequest, ShiftResponse, ApiValidationResponse } from '@/types'
+import { UpdateShiftRequest, ShiftResponse, ApiValidationResponse, BreakPeriodResponse, PayPeriodStatus } from '@/types'
 import { 
   ValidationResult, 
   validateString, 
   validateNumber, 
   validateDateRange,
-  validateUUID
+  validateCuid
 } from '@/lib/validation'
+import { 
+  calculateAndUpdateShift, 
+  fetchShiftBreakPeriods,
+  updateShiftWithCalculation 
+} from '@/lib/shift-calculation'
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 // GET /api/shifts/[id] - Get specific shift
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = params
+    const { id } = await params
 
     // Validate shift ID
     const validator = ValidationResult.create()
-    validateUUID(id, 'id', validator)
+    validateCuid(id, 'id', validator)
 
     if (!validator.isValid()) {
       return NextResponse.json({
@@ -37,6 +42,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       include: {
         payGuide: true,
         payPeriod: true,
+        breakPeriods: {
+          orderBy: { startTime: 'asc' }
+        },
         user: {
           select: {
             id: true,
@@ -66,21 +74,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       basePay: shift.basePay?.toString(),
       overtimePay: shift.overtimePay?.toString(),
       penaltyPay: shift.penaltyPay?.toString(),
-      casualPay: shift.casualPay?.toString(),
       totalPay: shift.totalPay?.toString(),
-      notes: shift.notes,
-      payPeriodId: shift.payPeriodId,
+      notes: shift.notes ?? undefined,
+      payPeriodId: shift.payPeriodId ?? undefined,
       createdAt: shift.createdAt,
       updatedAt: shift.updatedAt,
+      breakPeriods: shift.breakPeriods.map(bp => ({
+        id: bp.id,
+        shiftId: bp.shiftId,
+        startTime: bp.startTime.toISOString(),
+        endTime: bp.endTime.toISOString(),
+        createdAt: bp.createdAt.toISOString(),
+        updatedAt: bp.updatedAt.toISOString()
+      })),
       payGuide: {
         id: shift.payGuide.id,
         name: shift.payGuide.name,
         baseRate: shift.payGuide.baseRate.toString(),
-        casualLoading: shift.payGuide.casualLoading.toString(),
-        overtimeRules: shift.payGuide.overtimeRules,
-        description: shift.payGuide.description,
+        minimumShiftHours: shift.payGuide.minimumShiftHours ?? undefined,
+        maximumShiftHours: shift.payGuide.maximumShiftHours ?? undefined,
+        description: shift.payGuide.description ?? undefined,
         effectiveFrom: shift.payGuide.effectiveFrom,
-        effectiveTo: shift.payGuide.effectiveTo,
+        effectiveTo: shift.payGuide.effectiveTo ?? undefined,
+        timezone: shift.payGuide.timezone,
         isActive: shift.payGuide.isActive,
         createdAt: shift.payGuide.createdAt,
         updatedAt: shift.payGuide.updatedAt
@@ -90,7 +106,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         userId: shift.payPeriod.userId,
         startDate: shift.payPeriod.startDate,
         endDate: shift.payPeriod.endDate,
-        status: shift.payPeriod.status,
+        status: shift.payPeriod.status as PayPeriodStatus,
         totalHours: shift.payPeriod.totalHours?.toString(),
         totalPay: shift.payPeriod.totalPay?.toString(),
         actualPay: shift.payPeriod.actualPay?.toString(),
@@ -114,12 +130,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // PUT /api/shifts/[id] - Update specific shift
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = params
+    const { id } = await params
     const body: UpdateShiftRequest = await request.json()
 
     // Validate shift ID
     const validator = ValidationResult.create()
-    validateUUID(id, 'id', validator)
+    validateCuid(id, 'id', validator)
 
     if (!validator.isValid()) {
       return NextResponse.json({
@@ -220,7 +236,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       updateData.basePay = null
       updateData.overtimePay = null
       updateData.penaltyPay = null
-      updateData.casualPay = null
       updateData.totalPay = null
     }
 
@@ -231,6 +246,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       include: {
         payGuide: true,
         payPeriod: true,
+        breakPeriods: {
+          orderBy: { startTime: 'asc' }
+        },
         user: {
           select: {
             id: true,
@@ -240,6 +258,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         }
       }
     })
+
+    // Recalculate pay if shift details changed
+    if (body.startTime || body.endTime || body.breakMinutes || body.payGuideId) {
+      const breakPeriods = await fetchShiftBreakPeriods(updatedShift.id)
+      const calculation = await calculateAndUpdateShift({
+        payGuideId: updatedShift.payGuideId,
+        startTime: updatedShift.startTime,
+        endTime: updatedShift.endTime,
+        breakPeriods
+      })
+
+      if (calculation) {
+        // Update the shift with calculated pay values
+        await updateShiftWithCalculation(updatedShift.id, calculation)
+        
+        // Update the updatedShift object with calculated values for response
+        updatedShift.totalHours = calculation.totalHours
+        updatedShift.basePay = calculation.basePay
+        updatedShift.overtimePay = calculation.overtimePay
+        updatedShift.penaltyPay = calculation.penaltyPay
+        updatedShift.totalPay = calculation.totalPay
+      }
+    }
 
     // Transform to response format
     const responseShift: ShiftResponse = {
@@ -253,21 +294,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       basePay: updatedShift.basePay?.toString(),
       overtimePay: updatedShift.overtimePay?.toString(),
       penaltyPay: updatedShift.penaltyPay?.toString(),
-      casualPay: updatedShift.casualPay?.toString(),
       totalPay: updatedShift.totalPay?.toString(),
       notes: updatedShift.notes,
       payPeriodId: updatedShift.payPeriodId,
       createdAt: updatedShift.createdAt,
       updatedAt: updatedShift.updatedAt,
+      breakPeriods: updatedShift.breakPeriods.map(bp => ({
+        id: bp.id,
+        shiftId: bp.shiftId,
+        startTime: bp.startTime.toISOString(),
+        endTime: bp.endTime.toISOString(),
+        createdAt: bp.createdAt.toISOString(),
+        updatedAt: bp.updatedAt.toISOString()
+      })),
       payGuide: {
         id: updatedShift.payGuide.id,
         name: updatedShift.payGuide.name,
         baseRate: updatedShift.payGuide.baseRate.toString(),
-        casualLoading: updatedShift.payGuide.casualLoading.toString(),
-        overtimeRules: updatedShift.payGuide.overtimeRules,
-        description: updatedShift.payGuide.description,
+        minimumShiftHours: updatedShift.payGuide.minimumShiftHours ?? undefined,
+        maximumShiftHours: updatedShift.payGuide.maximumShiftHours ?? undefined,
+        description: updatedShift.payGuide.description ?? undefined,
         effectiveFrom: updatedShift.payGuide.effectiveFrom,
-        effectiveTo: updatedShift.payGuide.effectiveTo,
+        effectiveTo: updatedShift.payGuide.effectiveTo ?? undefined,
+        timezone: updatedShift.payGuide.timezone,
         isActive: updatedShift.payGuide.isActive,
         createdAt: updatedShift.payGuide.createdAt,
         updatedAt: updatedShift.payGuide.updatedAt
@@ -277,7 +326,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         userId: updatedShift.payPeriod.userId,
         startDate: updatedShift.payPeriod.startDate,
         endDate: updatedShift.payPeriod.endDate,
-        status: updatedShift.payPeriod.status,
+        status: updatedShift.payPeriod.status as PayPeriodStatus,
         totalHours: updatedShift.payPeriod.totalHours?.toString(),
         totalPay: updatedShift.payPeriod.totalPay?.toString(),
         actualPay: updatedShift.payPeriod.actualPay?.toString(),
@@ -304,11 +353,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 // DELETE /api/shifts/[id] - Delete specific shift
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = params
+    const { id } = await params
 
     // Validate shift ID
     const validator = ValidationResult.create()
-    validateUUID(id, 'id', validator)
+    validateCuid(id, 'id', validator)
 
     if (!validator.isValid()) {
       return NextResponse.json({
