@@ -275,7 +275,6 @@ async function main() {
       payGuideId: retailPayGuide.id,
       startTime: new Date('2024-09-02T09:00:00Z'), // Monday 9am
       endTime: new Date('2024-09-02T17:00:00Z'), // Monday 5pm
-      breakMinutes: 30,
       notes: 'Regular weekday shift',
       payPeriodId: currentPayPeriod.id,
     },
@@ -285,7 +284,6 @@ async function main() {
       payGuideId: retailPayGuide.id,
       startTime: new Date('2024-09-07T10:00:00Z'), // Saturday 10am
       endTime: new Date('2024-09-07T18:00:00Z'), // Saturday 6pm
-      breakMinutes: 30,
       notes: 'Weekend shift with Saturday penalty',
       payPeriodId: currentPayPeriod.id,
     },
@@ -295,7 +293,6 @@ async function main() {
       payGuideId: retailPayGuide.id,
       startTime: new Date('2024-09-03T16:00:00Z'), // Tuesday 4pm
       endTime: new Date('2024-09-03T22:00:00Z'), // Tuesday 10pm
-      breakMinutes: 30,
       notes: 'Evening shift crossing into penalty time',
       payPeriodId: currentPayPeriod.id,
     },
@@ -305,7 +302,6 @@ async function main() {
       payGuideId: retailPayGuide.id,
       startTime: new Date('2024-09-04T08:00:00Z'), // Wednesday 8am
       endTime: new Date('2024-09-04T19:00:00Z'), // Wednesday 7pm (11 hours)
-      breakMinutes: 60,
       notes: 'Long shift with overtime and evening penalty',
       payPeriodId: currentPayPeriod.id,
     },
@@ -315,7 +311,6 @@ async function main() {
       payGuideId: retailPayGuide.id,
       startTime: new Date('2024-09-08T11:00:00Z'), // Sunday 11am
       endTime: new Date('2024-09-08T17:00:00Z'), // Sunday 5pm
-      breakMinutes: 30,
       notes: 'Sunday shift with 200% penalty rate',
       payPeriodId: currentPayPeriod.id,
     },
@@ -325,7 +320,6 @@ async function main() {
       payGuideId: hospitalityPayGuide.id,
       startTime: new Date('2024-09-05T22:00:00Z'), // Thursday 10pm
       endTime: new Date('2024-09-06T04:00:00Z'), // Friday 4am
-      breakMinutes: 30,
       notes: 'Night shift crossing midnight',
       payPeriodId: currentPayPeriod.id,
     },

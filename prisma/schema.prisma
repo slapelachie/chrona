@@ -87,14 +87,12 @@ model Shift {
   // Shift timing (stored in UTC)
   startTime    DateTime
   endTime      DateTime
-  breakMinutes Int       @default(0)
   
   // Calculated fields (cached for performance)
   totalHours   Decimal?  // 8.5 hours
   basePay      Decimal?  // $215.50
   overtimePay  Decimal?  // $45.75
   penaltyPay   Decimal?  // $102.25
-  casualPay    Decimal?  // $53.88
   totalPay     Decimal?  // $417.38
   
   // Optional fields
