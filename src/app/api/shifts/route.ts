@@ -6,7 +6,8 @@ import {
   ShiftsListResponse, 
   ApiValidationResponse,
   BreakPeriodResponse,
-  PayPeriodStatus
+  PayPeriodStatus,
+  ShiftListItem
 } from '@/types'
 import { 
   ValidationResult, 
@@ -18,6 +19,12 @@ import {
   fetchShiftBreakPeriods,
   updateShiftWithCalculation 
 } from '@/lib/shift-calculation'
+import {
+  parseIncludeParams,
+  parseFieldParams,
+  transformShiftToListItem,
+  applyFieldSelection
+} from '@/lib/api-response-utils'
 
 // GET /api/shifts - List shifts with filtering and pagination
 export async function GET(request: NextRequest) {
@@ -33,6 +40,10 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate')
     const payGuideId = searchParams.get('payGuideId')
     const payPeriodId = searchParams.get('payPeriodId')
+    
+    // Parse optimization parameters
+    const includes = parseIncludeParams(searchParams.get('include') || undefined)
+    const fields = parseFieldParams(searchParams.get('fields') || undefined)
 
     // Validate pagination parameters
     const validator = ValidationResult.create()
@@ -72,80 +83,40 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit
     const totalPages = Math.ceil(total / limit)
 
-    // Fetch shifts with relations
+    // Build include clause based on requested data
+    const includeClause: any = {}
+    
+    // Only include payGuide if specifically requested
+    if (includes.has('payGuide')) {
+      includeClause.payGuide = true
+    }
+    
+    // Only include payPeriod if specifically requested
+    if (includes.has('payPeriod')) {
+      includeClause.payPeriod = true
+    }
+    
+    // Only include breakPeriods if specifically requested
+    if (includes.has('breakPeriods')) {
+      includeClause.breakPeriods = {
+        orderBy: { startTime: 'asc' }
+      }
+    }
+
+    // Fetch shifts with selective relations
     const shifts = await prisma.shift.findMany({
       where,
       skip,
       take: limit,
       orderBy: { [sortBy]: sortOrder },
-      include: {
-        payGuide: true,
-        payPeriod: true,
-        breakPeriods: {
-          orderBy: { startTime: 'asc' }
-        },
-        user: {
-          select: {
-            id: true,
-            name: true,
-            timezone: true
-          }
-        }
-      }
+      include: includeClause
     })
 
-    // Transform to response format
-    const responseShifts: ShiftResponse[] = shifts.map(shift => ({
-      id: shift.id,
-      userId: shift.userId,
-      payGuideId: shift.payGuideId,
-      startTime: shift.startTime,
-      endTime: shift.endTime,
-      totalHours: shift.totalHours?.toString(),
-      basePay: shift.basePay?.toString(),
-      overtimePay: shift.overtimePay?.toString(),
-      penaltyPay: shift.penaltyPay?.toString(),
-      totalPay: shift.totalPay?.toString(),
-      notes: shift.notes ?? undefined,
-      payPeriodId: shift.payPeriodId ?? undefined,
-      createdAt: shift.createdAt,
-      updatedAt: shift.updatedAt,
-      breakPeriods: shift.breakPeriods.map(bp => ({
-        id: bp.id,
-        shiftId: bp.shiftId,
-        startTime: bp.startTime.toISOString(),
-        endTime: bp.endTime.toISOString(),
-        createdAt: bp.createdAt.toISOString(),
-        updatedAt: bp.updatedAt.toISOString()
-      })),
-      payGuide: shift.payGuide ? {
-        id: shift.payGuide.id,
-        name: shift.payGuide.name,
-        baseRate: shift.payGuide.baseRate.toString(),
-        minimumShiftHours: shift.payGuide.minimumShiftHours ?? undefined,
-        maximumShiftHours: shift.payGuide.maximumShiftHours ?? undefined,
-        description: shift.payGuide.description ?? undefined,
-        effectiveFrom: shift.payGuide.effectiveFrom,
-        effectiveTo: shift.payGuide.effectiveTo ?? undefined,
-        timezone: shift.payGuide.timezone,
-        isActive: shift.payGuide.isActive,
-        createdAt: shift.payGuide.createdAt,
-        updatedAt: shift.payGuide.updatedAt
-      } : undefined,
-      payPeriod: shift.payPeriod ? {
-        id: shift.payPeriod.id,
-        userId: shift.payPeriod.userId,
-        startDate: shift.payPeriod.startDate,
-        endDate: shift.payPeriod.endDate,
-        status: shift.payPeriod.status as PayPeriodStatus,
-        totalHours: shift.payPeriod.totalHours?.toString(),
-        totalPay: shift.payPeriod.totalPay?.toString(),
-        actualPay: shift.payPeriod.actualPay?.toString(),
-        verified: shift.payPeriod.verified,
-        createdAt: shift.payPeriod.createdAt,
-        updatedAt: shift.payPeriod.updatedAt
-      } : undefined
-    }))
+    // Transform to lightweight response format
+    const responseShifts: ShiftListItem[] = shifts.map(shift => {
+      const listItem = transformShiftToListItem(shift, includes)
+      return fields ? applyFieldSelection(listItem, fields) as ShiftListItem : listItem
+    })
 
     const response: ShiftsListResponse = {
       shifts: responseShifts,

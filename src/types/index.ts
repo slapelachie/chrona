@@ -187,7 +187,7 @@ export interface ShiftPreviewResponse {
 }
 
 export interface ShiftsListResponse {
-  shifts: ShiftResponse[]
+  shifts: ShiftListItem[]
   pagination: {
     page: number
     limit: number
@@ -226,7 +226,7 @@ export interface PayGuideResponse extends Omit<PayGuide, 'baseRate'> {
 }
 
 export interface PayGuidesListResponse {
-  payGuides: PayGuideResponse[]
+  payGuides: PayGuideListItem[]
   pagination: {
     page: number
     limit: number
@@ -411,7 +411,12 @@ export interface PaginationParams {
   sortOrder?: 'asc' | 'desc'
 }
 
-export interface ShiftFilters extends PaginationParams {
+export interface FieldSelectionParams {
+  fields?: string // Comma-separated list of fields
+  include?: string // Comma-separated list of related data to include
+}
+
+export interface ShiftFilters extends PaginationParams, FieldSelectionParams {
   startDate?: string
   endDate?: string
   payGuideId?: string
@@ -427,6 +432,50 @@ export interface ApiValidationResponse {
   errors: ValidationError[]
   message: string
 }
+
+// =============================================================================
+// LIGHTWEIGHT DTO TYPES
+// =============================================================================
+
+// Summary DTOs for nested relationships
+export interface PayGuideSummary {
+  id: string
+  name: string
+  baseRate: string
+}
+
+export interface PayPeriodSummary {
+  id: string
+  startDate: Date
+  endDate: Date
+  status: PayPeriodStatus
+  totalPay?: string
+}
+
+// Lightweight response types for list views
+export interface ShiftListItem {
+  id: string
+  userId: string
+  payGuideId: string
+  startTime: Date
+  endTime: Date
+  totalHours?: string
+  totalPay?: string
+  notes?: string
+  payPeriodId?: string
+  payGuide?: PayGuideSummary
+  payPeriod?: PayPeriodSummary
+}
+
+export interface PayGuideListItem {
+  id: string
+  name: string
+  baseRate: string
+  effectiveFrom: Date
+  effectiveTo?: Date
+  isActive: boolean
+}
+
 
 // =============================================================================
 // CURRENCY TYPES

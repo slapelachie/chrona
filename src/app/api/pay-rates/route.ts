@@ -5,6 +5,7 @@ import {
   PayGuideResponse,
   PayGuidesListResponse,
   ApiValidationResponse,
+  PayGuideListItem,
 } from '@/types'
 import { ValidationResult } from '@/lib/validation'
 import {
@@ -16,6 +17,12 @@ import {
   checkPayGuideNameUniqueness,
   createPayGuideData,
 } from '@/lib/pay-guide-utils'
+import {
+  parseIncludeParams,
+  parseFieldParams,
+  transformPayGuideToListItem,
+  applyFieldSelection
+} from '@/lib/api-response-utils'
 
 // GET /api/pay-rates - List all pay guides
 export async function GET(request: NextRequest) {
@@ -28,6 +35,12 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'name'
     const sortOrder = (searchParams.get('sortOrder') || 'asc') as 'asc' | 'desc'
     const active = searchParams.get('active')
+    
+    // Parse optimization parameters
+    const includes = parseIncludeParams(searchParams.get('include') || undefined)
+    const fields = parseFieldParams(searchParams.get('fields') || undefined)
+    // Only include metadata when specifically requested
+    const includeMetadata = includes.has('metadata')
 
     // Validate pagination parameters
     const validator = ValidationResult.create()
@@ -74,8 +87,11 @@ export async function GET(request: NextRequest) {
       orderBy: { [sortBy]: sortOrder },
     })
 
-    // Transform to response format
-    const responsePayGuides: PayGuideResponse[] = payGuides.map(transformPayGuideToResponse)
+    // Transform to lightweight response format
+    const responsePayGuides: PayGuideListItem[] = payGuides.map(payGuide => {
+      const listItem = transformPayGuideToListItem(payGuide, includeMetadata)
+      return fields ? applyFieldSelection(listItem, fields) as PayGuideListItem : listItem
+    })
 
     const response: PayGuidesListResponse = {
       payGuides: responsePayGuides,
