@@ -4,11 +4,14 @@ import { Decimal } from 'decimal.js'
 // DATABASE MODEL TYPES
 // =============================================================================
 
+export type PayPeriodType = 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY'
+
 export interface User {
   id: string
   name: string
   email: string
   timezone: string
+  payPeriodType: PayPeriodType
   createdAt: Date
   updatedAt: Date
 }
@@ -80,8 +83,8 @@ export interface Shift {
   overtimePay?: Decimal
   penaltyPay?: Decimal
   totalPay?: Decimal
-  notes?: string
-  payPeriodId?: string
+  notes?: string | null
+  payPeriodId: string // Required - auto-created if doesn't exist
   createdAt: Date
   updatedAt: Date
 }
@@ -170,8 +173,6 @@ export interface ShiftResponse
   overtimePay?: string
   penaltyPay?: string
   totalPay?: string
-  payGuide?: PayGuideResponse
-  payPeriod?: PayPeriodResponse
   breakPeriods?: BreakPeriodResponse[]
 }
 
@@ -312,7 +313,11 @@ export interface UpdateBreakPeriodRequest {
   endTime?: string // ISO string
 }
 
-export interface BreakPeriodResponse extends Omit<BreakPeriod, 'startTime' | 'endTime' | 'createdAt' | 'updatedAt'> {
+export interface BreakPeriodResponse
+  extends Omit<
+    BreakPeriod,
+    'startTime' | 'endTime' | 'createdAt' | 'updatedAt'
+  > {
   startTime: string // ISO string
   endTime: string // ISO string
   createdAt: string // ISO string
@@ -457,14 +462,12 @@ export interface ShiftListItem {
   id: string
   userId: string
   payGuideId: string
+  payPeriodId: string // Required - auto-created if doesn't exist
   startTime: Date
   endTime: Date
   totalHours?: string
   totalPay?: string
   notes?: string
-  payPeriodId?: string
-  payGuide?: PayGuideSummary
-  payPeriod?: PayPeriodSummary
 }
 
 export interface PayGuideListItem {
@@ -475,7 +478,6 @@ export interface PayGuideListItem {
   effectiveTo?: Date
   isActive: boolean
 }
-
 
 // =============================================================================
 // CURRENCY TYPES

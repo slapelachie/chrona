@@ -22,7 +22,12 @@ describe('Database Models - Blackbox Tests', () => {
   beforeAll(async () => {
     // Set up test database
     process.env.DATABASE_URL = 'file:./test.db'
-    execSync('npx prisma migrate dev --name init', { stdio: 'pipe' })
+    try {
+      execSync('npx prisma migrate reset --force', { stdio: 'pipe' })
+    } catch (error) {
+      // If reset fails, try deploy
+      execSync('npx prisma migrate deploy', { stdio: 'pipe' })
+    }
   })
 
   afterAll(async () => {
@@ -52,6 +57,7 @@ describe('Database Models - Blackbox Tests', () => {
         name: 'Test User',
         email: 'test@example.com',
         timezone: 'Australia/Sydney',
+        payPeriodType: 'FORTNIGHTLY', // Default value
       })
       expect(user.id).toBeTruthy()
       expect(user.createdAt).toBeInstanceOf(Date)
@@ -83,6 +89,31 @@ describe('Database Models - Blackbox Tests', () => {
       })
 
       expect(user.timezone).toBe('Australia/Sydney')
+      expect(user.payPeriodType).toBe('FORTNIGHTLY')
+    })
+
+    it('should create user with custom pay period type', async () => {
+      const user = await prisma.user.create({
+        data: {
+          name: 'Test User',
+          email: 'test@example.com',
+          payPeriodType: 'WEEKLY',
+        },
+      })
+
+      expect(user.payPeriodType).toBe('WEEKLY')
+    })
+
+    it('should create user with monthly pay period type', async () => {
+      const user = await prisma.user.create({
+        data: {
+          name: 'Test User',
+          email: 'test@example.com',
+          payPeriodType: 'MONTHLY',
+        },
+      })
+
+      expect(user.payPeriodType).toBe('MONTHLY')
     })
   })
 
@@ -346,6 +377,38 @@ describe('Database Models - Blackbox Tests', () => {
         userId: user.id,
         startDate: new Date('2024-01-01T00:00:00Z'),
         endDate: new Date('2024-01-14T23:59:59Z'),
+      }
+
+      const payPeriod = await prisma.payPeriod.create({ data: payPeriodData })
+
+      expect(payPeriod.userId).toBe(user.id)
+      expect(payPeriod.startDate).toEqual(payPeriodData.startDate)
+      expect(payPeriod.endDate).toEqual(payPeriodData.endDate)
+      expect(payPeriod.status).toBe('open')
+      expect(payPeriod.verified).toBe(false)
+    })
+
+    it('should create a weekly pay period', async () => {
+      const payPeriodData = {
+        userId: user.id,
+        startDate: new Date('2024-01-01T00:00:00Z'), // Monday
+        endDate: new Date('2024-01-07T23:59:59Z'),   // Sunday
+      }
+
+      const payPeriod = await prisma.payPeriod.create({ data: payPeriodData })
+
+      expect(payPeriod.userId).toBe(user.id)
+      expect(payPeriod.startDate).toEqual(payPeriodData.startDate)
+      expect(payPeriod.endDate).toEqual(payPeriodData.endDate)
+      expect(payPeriod.status).toBe('open')
+      expect(payPeriod.verified).toBe(false)
+    })
+
+    it('should create a monthly pay period', async () => {
+      const payPeriodData = {
+        userId: user.id,
+        startDate: new Date('2024-01-01T00:00:00Z'),
+        endDate: new Date('2024-01-31T23:59:59Z'),
       }
 
       const payPeriod = await prisma.payPeriod.create({ data: payPeriodData })

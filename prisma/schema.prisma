@@ -10,14 +10,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Pay period types enumeration
+enum PayPeriodType {
+  WEEKLY
+  FORTNIGHTLY
+  MONTHLY
+}
+
 // Single user app - basic user information
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  timezone  String   @default("Australia/Sydney")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String        @id @default(cuid())
+  name           String
+  email          String        @unique
+  timezone       String        @default("Australia/Sydney")
+  payPeriodType  PayPeriodType @default(FORTNIGHTLY)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   // Relations
   shifts     Shift[]

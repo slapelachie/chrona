@@ -1,55 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { 
-  CreateShiftRequest, 
-  ShiftResponse, 
-  ShiftsListResponse, 
+import {
+  CreateShiftRequest,
+  ShiftResponse,
+  ShiftsListResponse,
   ApiValidationResponse,
   BreakPeriodResponse,
   PayPeriodStatus,
-  ShiftListItem
+  ShiftListItem,
 } from '@/types'
-import { 
-  ValidationResult, 
-  validateString, 
-  validateDateRange
+import {
+  ValidationResult,
+  validateString,
+  validateDateRange,
 } from '@/lib/validation'
-import { 
-  calculateAndUpdateShift, 
+import {
+  calculateAndUpdateShift,
   fetchShiftBreakPeriods,
-  updateShiftWithCalculation 
+  updateShiftWithCalculation,
 } from '@/lib/shift-calculation'
+import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
 import {
   parseIncludeParams,
   parseFieldParams,
   transformShiftToListItem,
-  applyFieldSelection
+  applyFieldSelection,
 } from '@/lib/api-response-utils'
 
 // GET /api/shifts - List shifts with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    
+
     // Parse query parameters
     const page = Number(searchParams.get('page') || '1')
     const limit = Number(searchParams.get('limit') || '10')
     const sortBy = searchParams.get('sortBy') || 'startTime'
-    const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc'
+    const sortOrder = (searchParams.get('sortOrder') || 'desc') as
+      | 'asc'
+      | 'desc'
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
     const payGuideId = searchParams.get('payGuideId')
     const payPeriodId = searchParams.get('payPeriodId')
-    
+
     // Parse optimization parameters
-    const includes = parseIncludeParams(searchParams.get('include') || undefined)
+    const includes = parseIncludeParams(
+      searchParams.get('include') || undefined
+    )
     const fields = parseFieldParams(searchParams.get('fields') || undefined)
 
     // Validate pagination parameters
     const validator = ValidationResult.create()
-    
+
     if (page < 1) validator.addError('page', 'Page must be at least 1')
-    if (limit < 1 || limit > 100) validator.addError('limit', 'Limit must be between 1 and 100')
+    if (limit < 1 || limit > 100)
+      validator.addError('limit', 'Limit must be between 1 and 100')
     if (!['startTime', 'endTime', 'totalPay', 'createdAt'].includes(sortBy)) {
       validator.addError('sortBy', 'Invalid sort field')
     }
@@ -58,48 +64,51 @@ export async function GET(request: NextRequest) {
     }
 
     if (!validator.isValid()) {
-      return NextResponse.json({
-        errors: validator.getErrors(),
-        message: 'Invalid query parameters'
-      } as ApiValidationResponse, { status: 400 })
+      return NextResponse.json(
+        {
+          errors: validator.getErrors(),
+          message: 'Invalid query parameters',
+        } as ApiValidationResponse,
+        { status: 400 }
+      )
     }
 
     // Build where clause for filtering
     const where: any = {}
-    
+
     if (startDate || endDate) {
       where.startTime = {}
       if (startDate) where.startTime.gte = new Date(startDate)
       if (endDate) where.startTime.lte = new Date(endDate)
     }
-    
+
     if (payGuideId) where.payGuideId = payGuideId
     if (payPeriodId) where.payPeriodId = payPeriodId
 
     // Get total count for pagination
     const total = await prisma.shift.count({ where })
-    
+
     // Calculate pagination
     const skip = (page - 1) * limit
     const totalPages = Math.ceil(total / limit)
 
     // Build include clause based on requested data
     const includeClause: any = {}
-    
+
     // Only include payGuide if specifically requested
     if (includes.has('payGuide')) {
       includeClause.payGuide = true
     }
-    
+
     // Only include payPeriod if specifically requested
     if (includes.has('payPeriod')) {
       includeClause.payPeriod = true
     }
-    
+
     // Only include breakPeriods if specifically requested
     if (includes.has('breakPeriods')) {
       includeClause.breakPeriods = {
-        orderBy: { startTime: 'asc' }
+        orderBy: { startTime: 'asc' },
       }
     }
 
@@ -109,13 +118,15 @@ export async function GET(request: NextRequest) {
       skip,
       take: limit,
       orderBy: { [sortBy]: sortOrder },
-      include: includeClause
+      include: includeClause,
     })
 
     // Transform to lightweight response format
-    const responseShifts: ShiftListItem[] = shifts.map(shift => {
+    const responseShifts: ShiftListItem[] = shifts.map((shift) => {
       const listItem = transformShiftToListItem(shift, includes)
-      return fields ? applyFieldSelection(listItem, fields) as ShiftListItem : listItem
+      return fields
+        ? (applyFieldSelection(listItem, fields) as ShiftListItem)
+        : listItem
     })
 
     const response: ShiftsListResponse = {
@@ -124,12 +135,11 @@ export async function GET(request: NextRequest) {
         page,
         limit,
         total,
-        totalPages
-      }
+        totalPages,
+      },
     }
 
     return NextResponse.json({ data: response })
-
   } catch (error) {
     console.error('Error fetching shifts:', error)
     return NextResponse.json(
@@ -146,42 +156,45 @@ export async function POST(request: NextRequest) {
 
     // Validate request body
     const validator = ValidationResult.create()
-    
+
     validateString(body.payGuideId, 'payGuideId', validator)
     validateString(body.startTime, 'startTime', validator)
     validateString(body.endTime, 'endTime', validator)
-    
+
     if (body.notes !== undefined) {
       validateString(body.notes, 'notes', validator, { maxLength: 500 })
     }
 
     // Validate date range
     if (validator.isValid()) {
-      validateDateRange(
-        body.startTime, 
-        body.endTime, 
-        validator, 
-        { maxDurationHours: 24 }
-      )
+      validateDateRange(body.startTime, body.endTime, validator, {
+        maxDurationHours: 24,
+      })
     }
 
     if (!validator.isValid()) {
-      return NextResponse.json({
-        errors: validator.getErrors(),
-        message: 'Invalid shift data'
-      } as ApiValidationResponse, { status: 400 })
+      return NextResponse.json(
+        {
+          errors: validator.getErrors(),
+          message: 'Invalid shift data',
+        } as ApiValidationResponse,
+        { status: 400 }
+      )
     }
 
     // Check if pay guide exists
     const payGuide = await prisma.payGuide.findUnique({
-      where: { id: body.payGuideId }
+      where: { id: body.payGuideId },
     })
 
     if (!payGuide) {
-      return NextResponse.json({
-        errors: [{ field: 'payGuideId', message: 'Pay guide not found' }],
-        message: 'Invalid pay guide'
-      } as ApiValidationResponse, { status: 400 })
+      return NextResponse.json(
+        {
+          errors: [{ field: 'payGuideId', message: 'Pay guide not found' }],
+          message: 'Invalid pay guide',
+        } as ApiValidationResponse,
+        { status: 400 }
+      )
     }
 
     // Get the default user (single user app)
@@ -193,15 +206,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find appropriate pay period for the shift
+    // Find or create appropriate pay period for the shift
     const startTime = new Date(body.startTime)
-    const payPeriod = await prisma.payPeriod.findFirst({
-      where: {
-        userId: user.id,
-        startDate: { lte: startTime },
-        endDate: { gte: startTime }
-      }
-    })
+    const payPeriod = await findOrCreatePayPeriod(user.id, startTime)
 
     // Create the shift without calculations first
     const shift = await prisma.shift.create({
@@ -211,7 +218,7 @@ export async function POST(request: NextRequest) {
         startTime: new Date(body.startTime),
         endTime: new Date(body.endTime),
         notes: body.notes,
-        payPeriodId: payPeriod?.id
+        payPeriodId: payPeriod.id,
       },
       include: {
         payGuide: true,
@@ -220,10 +227,10 @@ export async function POST(request: NextRequest) {
           select: {
             id: true,
             name: true,
-            timezone: true
-          }
-        }
-      }
+            timezone: true,
+          },
+        },
+      },
     })
 
     // Calculate pay for the shift
@@ -232,13 +239,13 @@ export async function POST(request: NextRequest) {
       payGuideId: body.payGuideId,
       startTime: new Date(body.startTime),
       endTime: new Date(body.endTime),
-      breakPeriods
+      breakPeriods,
     })
 
     if (calculation) {
       // Update the shift with calculated pay values
       await updateShiftWithCalculation(shift.id, calculation)
-      
+
       // Update the shift object with calculated values for response
       shift.totalHours = calculation.totalHours
       shift.basePay = calculation.basePay
@@ -248,14 +255,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Get break periods for response
-    const responseBreakPeriods: BreakPeriodResponse[] = breakPeriods.map(bp => ({
-      id: bp.id,
-      shiftId: bp.shiftId,
-      startTime: bp.startTime.toISOString(),
-      endTime: bp.endTime.toISOString(),
-      createdAt: bp.createdAt.toISOString(),
-      updatedAt: bp.updatedAt.toISOString()
-    }))
+    const responseBreakPeriods: BreakPeriodResponse[] = breakPeriods.map(
+      (bp) => ({
+        id: bp.id,
+        shiftId: bp.shiftId,
+        startTime: bp.startTime.toISOString(),
+        endTime: bp.endTime.toISOString(),
+        createdAt: bp.createdAt.toISOString(),
+        updatedAt: bp.updatedAt.toISOString(),
+      })
+    )
 
     // Transform to response format
     const responseShift: ShiftResponse = {
@@ -270,44 +279,16 @@ export async function POST(request: NextRequest) {
       penaltyPay: shift.penaltyPay?.toString(),
       totalPay: shift.totalPay?.toString(),
       notes: shift.notes ?? undefined,
-      payPeriodId: shift.payPeriodId ?? undefined,
+      payPeriodId: shift.payPeriodId,
       createdAt: shift.createdAt,
       updatedAt: shift.updatedAt,
       breakPeriods: responseBreakPeriods,
-      payGuide: {
-        id: shift.payGuide.id,
-        name: shift.payGuide.name,
-        baseRate: shift.payGuide.baseRate.toString(),
-        minimumShiftHours: shift.payGuide.minimumShiftHours ?? undefined,
-        maximumShiftHours: shift.payGuide.maximumShiftHours ?? undefined,
-        description: shift.payGuide.description ?? undefined,
-        effectiveFrom: shift.payGuide.effectiveFrom,
-        effectiveTo: shift.payGuide.effectiveTo ?? undefined,
-        timezone: shift.payGuide.timezone,
-        isActive: shift.payGuide.isActive,
-        createdAt: shift.payGuide.createdAt,
-        updatedAt: shift.payGuide.updatedAt
-      },
-      payPeriod: shift.payPeriod ? {
-        id: shift.payPeriod.id,
-        userId: shift.payPeriod.userId,
-        startDate: shift.payPeriod.startDate,
-        endDate: shift.payPeriod.endDate,
-        status: shift.payPeriod.status as PayPeriodStatus,
-        totalHours: shift.payPeriod.totalHours?.toString(),
-        totalPay: shift.payPeriod.totalPay?.toString(),
-        actualPay: shift.payPeriod.actualPay?.toString(),
-        verified: shift.payPeriod.verified,
-        createdAt: shift.payPeriod.createdAt,
-        updatedAt: shift.payPeriod.updatedAt
-      } : undefined
     }
 
     return NextResponse.json(
       { data: responseShift, message: 'Shift created successfully' },
       { status: 201 }
     )
-
   } catch (error) {
     console.error('Error creating shift:', error)
     return NextResponse.json(

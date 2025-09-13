@@ -1,5 +1,10 @@
 import { PrismaClient } from '@prisma/client'
 import { Decimal } from 'decimal.js'
+import { 
+  calculateAndUpdateShift, 
+  updateShiftWithCalculation, 
+  fetchShiftBreakPeriods 
+} from '../src/lib/shift-calculation'
 
 const prisma = new PrismaClient()
 
@@ -328,10 +333,28 @@ async function main() {
   const createdShifts = []
   for (const shiftData of shifts) {
     const shift = await prisma.shift.create({ data: shiftData })
+    
+    // Calculate pay for the shift (no break periods exist yet)
+    const calculation = await calculateAndUpdateShift({
+      payGuideId: shift.payGuideId,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      breakPeriods: []
+    })
+
+    if (calculation) {
+      // Update the shift with calculated pay values
+      await updateShiftWithCalculation(shift.id, calculation)
+      console.log(
+        `✅ Created shift with pay: ${shift.startTime.toLocaleString()} - ${shift.endTime.toLocaleString()} (Total: $${calculation.totalPay.toFixed(2)})`
+      )
+    } else {
+      console.log(
+        `⚠️ Created shift without pay calculation: ${shift.startTime.toLocaleString()} - ${shift.endTime.toLocaleString()}`
+      )
+    }
+    
     createdShifts.push(shift)
-    console.log(
-      `✅ Created shift: ${shift.startTime.toLocaleString()} - ${shift.endTime.toLocaleString()}`
-    )
   }
 
   // Create sample break periods for shifts
@@ -384,6 +407,34 @@ async function main() {
     await prisma.breakPeriod.create({ data: breakData })
   }
   console.log(`✅ Created ${breakPeriods.length} break periods`)
+
+  // Recalculate pay for shifts that now have break periods
+  console.log('♻️  Recalculating shift pay with break periods...')
+  const affectedShiftIds = [...new Set(breakPeriods.map(bp => bp.shiftId))]
+  
+  for (const shiftId of affectedShiftIds) {
+    const shift = createdShifts.find(s => s.id === shiftId)
+    if (shift) {
+      // Fetch break periods for this shift
+      const shiftBreakPeriods = await fetchShiftBreakPeriods(shiftId)
+      
+      // Recalculate pay with break periods
+      const calculation = await calculateAndUpdateShift({
+        payGuideId: shift.payGuideId,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        breakPeriods: shiftBreakPeriods
+      })
+
+      if (calculation) {
+        // Update the shift with recalculated pay values
+        await updateShiftWithCalculation(shiftId, calculation)
+        console.log(
+          `✅ Recalculated shift pay with breaks: ${shift.startTime.toLocaleString()} (Total: $${calculation.totalPay.toFixed(2)})`
+        )
+      }
+    }
+  }
 
   // Create previous pay period with completed status
   console.log('📊 Creating previous pay period...')

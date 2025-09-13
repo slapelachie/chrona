@@ -1,22 +1,22 @@
-import { 
-  ShiftListItem, 
-  PayGuideListItem, 
-  PayGuideSummary, 
+import {
+  ShiftListItem,
+  PayGuideListItem,
+  PayGuideSummary,
   PayPeriodSummary,
   ShiftResponse,
-  PayGuideResponse 
+  PayGuideResponse,
 } from '@/types'
 
 // Utility function to parse include parameters
 export function parseIncludeParams(include?: string): Set<string> {
   if (!include) return new Set()
-  return new Set(include.split(',').map(item => item.trim()))
+  return new Set(include.split(',').map((item) => item.trim()))
 }
 
 // Utility function to parse field selection parameters
 export function parseFieldParams(fields?: string): Set<string> | null {
   if (!fields) return null
-  return new Set(fields.split(',').map(field => field.trim()))
+  return new Set(fields.split(',').map((field) => field.trim()))
 }
 
 // Transform full shift response to lightweight list item
@@ -33,27 +33,18 @@ export function transformShiftToListItem(
     totalHours: shift.totalHours?.toString(),
     totalPay: shift.totalPay?.toString(),
     notes: shift.notes ?? undefined,
-    payPeriodId: shift.payPeriodId ?? undefined,
-  }
-
-  // Add related data only when specifically requested
-  if (includes.has('payGuide') && shift.payGuide) {
-    listItem.payGuide = transformPayGuideToSummary(shift.payGuide)
-  }
-
-  if (includes.has('payPeriod') && shift.payPeriod) {
-    listItem.payPeriod = transformPayPeriodToSummary(shift.payPeriod)
+    payPeriodId: shift.payPeriodId,
   }
 
   // Include breakPeriods only when specifically requested
   if (includes.has('breakPeriods') && shift.breakPeriods) {
-    (listItem as any).breakPeriods = shift.breakPeriods.map((bp: any) => ({
+    ;(listItem as any).breakPeriods = shift.breakPeriods.map((bp: any) => ({
       id: bp.id,
       shiftId: bp.shiftId,
       startTime: bp.startTime.toISOString(),
       endTime: bp.endTime.toISOString(),
       createdAt: bp.createdAt.toISOString(),
-      updatedAt: bp.updatedAt.toISOString()
+      updatedAt: bp.updatedAt.toISOString(),
     }))
   }
 
@@ -76,8 +67,10 @@ export function transformPayGuideToListItem(
 
   // Add metadata fields if requested
   if (includeMetadata) {
-    (listItem as any).minimumShiftHours = payGuide.minimumShiftHours ?? undefined
-    ;(listItem as any).maximumShiftHours = payGuide.maximumShiftHours ?? undefined
+    ;(listItem as any).minimumShiftHours =
+      payGuide.minimumShiftHours ?? undefined
+    ;(listItem as any).maximumShiftHours =
+      payGuide.maximumShiftHours ?? undefined
     ;(listItem as any).description = payGuide.description ?? undefined
     ;(listItem as any).timezone = payGuide.timezone
     ;(listItem as any).createdAt = payGuide.createdAt
@@ -113,7 +106,7 @@ export function applyFieldSelection<T extends Record<string, any>>(
   fields: Set<string> | null
 ): Partial<T> {
   if (!fields) return object
-  
+
   const filtered: Partial<T> = {}
   for (const field of fields) {
     if (field in object) {
