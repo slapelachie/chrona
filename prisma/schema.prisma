@@ -28,8 +28,10 @@ model User {
   updatedAt      DateTime      @updatedAt
 
   // Relations
-  shifts     Shift[]
-  payPeriods PayPeriod[]
+  shifts        Shift[]
+  payPeriods    PayPeriod[]
+  taxSettings   TaxSettings?
+  yearToDateTax YearToDateTax[]
 
   @@map("users")
 }
@@ -187,7 +189,14 @@ model PayPeriod {
   
   // Calculated totals (cached)
   totalHours  Decimal? // 76.5 hours
-  totalPay    Decimal? // $2,145.75
+  totalPay    Decimal? // $2,145.75 (gross pay)
+  
+  // Tax calculations (added for tax engine)
+  paygWithholding  Decimal? // PAYG tax withheld
+  medicareLevy     Decimal? // Medicare levy amount
+  hecsHelpAmount   Decimal? // HECS-HELP repayment amount
+  totalWithholdings Decimal? // Total tax withholdings
+  netPay           Decimal? // Net pay after tax
   
   // Verification against actual pay
   actualPay   Decimal? // What was actually paid
@@ -202,4 +211,43 @@ model PayPeriod {
 
   @@unique([userId, startDate]) // Prevent duplicate pay periods
   @@map("pay_periods")
+}
+
+// User tax settings for PAYG withholding calculations
+model TaxSettings {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique // One tax setting per user
+  claimedTaxFreeThreshold Boolean  @default(true) // Most employees claim tax-free threshold
+  isForeignResident       Boolean  @default(false)
+  hasTaxFileNumber        Boolean  @default(true)
+  medicareExemption       String   @default("none") // "none", "half", "full"
+  hecsHelpRate            Decimal? // e.g., 0.01 for 1% HECS rate
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  // Relations
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tax_settings")
+}
+
+// Year-to-date tax tracking for accurate annual calculations
+model YearToDateTax {
+  id                String   @id @default(cuid())
+  userId            String
+  taxYear           String   // "2024-25" format
+  grossIncome       Decimal  @default(0)
+  payGWithholding   Decimal  @default(0)
+  medicareLevy      Decimal  @default(0)
+  hecsHelpAmount    Decimal  @default(0)
+  totalWithholdings Decimal  @default(0)
+  lastUpdated       DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taxYear]) // One record per user per tax year
+  @@map("year_to_date_tax")
 }

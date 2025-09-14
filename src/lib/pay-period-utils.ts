@@ -128,7 +128,7 @@ export async function findOrCreatePayPeriod(
   })
 
   if (existingPayPeriod) {
-    return existingPayPeriod
+    return existingPayPeriod as PayPeriod
   }
 
   // Get user's pay period type configuration
@@ -162,7 +162,7 @@ export async function findOrCreatePayPeriod(
     },
   })
 
-  return payPeriod
+  return payPeriod as PayPeriod
 }
 
 /**
@@ -190,10 +190,12 @@ export async function getPayPeriodsForUser(
     where.status = options.status
   }
 
-  return await prisma.payPeriod.findMany({
+  const results = await prisma.payPeriod.findMany({
     where,
     orderBy: { startDate: 'desc' },
   })
+
+  return results as PayPeriod[]
 }
 
 /**

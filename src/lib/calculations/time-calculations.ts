@@ -47,6 +47,10 @@ export class TimeCalculations {
     return amount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
   }
 
+  static roundToHours(hours: Decimal): Decimal {
+    return hours.toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+  }
+
   static sumHours(items: { hours: Decimal }[]): Decimal {
     return items.reduce((sum, item) => sum.plus(item.hours), new Decimal(0))
   }

@@ -97,6 +97,11 @@ export interface PayPeriod {
   status: PayPeriodStatus
   totalHours?: Decimal
   totalPay?: Decimal
+  paygWithholding?: Decimal
+  medicareLevy?: Decimal
+  hecsHelpAmount?: Decimal
+  totalWithholdings?: Decimal
+  netPay?: Decimal
   actualPay?: Decimal
   verified: boolean
   createdAt: Date
@@ -357,11 +362,57 @@ export interface PublicHolidayResponse
 
 // Pay Period API Types
 export interface PayPeriodResponse
-  extends Omit<PayPeriod, 'totalHours' | 'totalPay' | 'actualPay'> {
+  extends Omit<PayPeriod, 'totalHours' | 'totalPay' | 'paygWithholding' | 'medicareLevy' | 'hecsHelpAmount' | 'totalWithholdings' | 'netPay' | 'actualPay'> {
   totalHours?: string
   totalPay?: string
+  paygWithholding?: string
+  medicareLevy?: string
+  hecsHelpAmount?: string
+  totalWithholdings?: string
+  netPay?: string
   actualPay?: string
   shifts?: ShiftResponse[]
+}
+
+// Tax Settings API Types
+export interface CreateTaxSettingsRequest {
+  claimedTaxFreeThreshold?: boolean
+  isForeignResident?: boolean
+  hasTaxFileNumber?: boolean
+  medicareExemption?: 'none' | 'half' | 'full'
+  hecsHelpRate?: string // Decimal as string
+}
+
+export interface UpdateTaxSettingsRequest {
+  claimedTaxFreeThreshold?: boolean
+  isForeignResident?: boolean
+  hasTaxFileNumber?: boolean
+  medicareExemption?: 'none' | 'half' | 'full'
+  hecsHelpRate?: string // Decimal as string
+}
+
+export interface TaxSettingsResponse extends Omit<TaxSettings, 'hecsHelpRate'> {
+  hecsHelpRate?: string // Decimal as string
+}
+
+// Tax Calculation API Types
+export interface TaxCalculationRequest {
+  payPeriodId: string
+}
+
+export interface TaxCalculationResponse {
+  taxCalculation: TaxCalculationResult
+  success: boolean
+}
+
+export interface TaxPreviewRequest {
+  grossPay: string // Decimal as string
+  payPeriodType: PayPeriodType
+}
+
+export interface TaxPreviewResponse {
+  preview: TaxCalculationResult
+  errors?: string[]
 }
 
 // =============================================================================
@@ -550,4 +601,81 @@ export interface AppliedOvertime {
   pay: Decimal
   startTime: Date
   endTime: Date
+}
+
+// =============================================================================
+// TAX CALCULATION TYPES
+// =============================================================================
+
+export type TaxScale = 'scale1' | 'scale2' | 'scale3' | 'scale4' | 'scale5' | 'scale6'
+
+export interface TaxSettings {
+  id: string
+  userId: string
+  claimedTaxFreeThreshold: boolean
+  isForeignResident: boolean
+  hasTaxFileNumber: boolean
+  medicareExemption: 'none' | 'half' | 'full'
+  hecsHelpRate?: Decimal | null // e.g., 0.01 for 1%
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface TaxCoefficient {
+  scale: TaxScale
+  earningsFrom: Decimal // Weekly earnings threshold
+  earningsTo: Decimal | null // null for highest bracket
+  coefficientA: Decimal // Multiplier
+  coefficientB: Decimal // Constant adjustment
+}
+
+export interface TaxCalculationResult {
+  payPeriod: {
+    id: string
+    grossPay: Decimal
+    payPeriodType: PayPeriodType
+  }
+  breakdown: {
+    grossPay: Decimal
+    paygWithholding: Decimal
+    medicareLevy: Decimal
+    hecsHelpAmount: Decimal
+    totalWithholdings: Decimal
+    netPay: Decimal
+  }
+  taxScale: TaxScale
+  yearToDate: {
+    grossIncome: Decimal
+    totalWithholdings: Decimal
+  }
+}
+
+export interface YearToDateTax {
+  id: string
+  userId: string
+  taxYear: string // e.g., "2024-25"
+  grossIncome: Decimal
+  payGWithholding: Decimal
+  medicareLevy: Decimal
+  hecsHelpAmount: Decimal
+  totalWithholdings: Decimal
+  lastUpdated: Date
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Tax rate configuration for ATO compliance
+export interface TaxRateConfig {
+  taxYear: string
+  medicareRate: Decimal // 0.02 for 2%
+  medicareLowIncomeThreshold: Decimal
+  medicareHighIncomeThreshold: Decimal
+  hecsHelpThresholds: HecsThreshold[]
+  coefficients: TaxCoefficient[]
+}
+
+export interface HecsThreshold {
+  incomeFrom: Decimal
+  incomeTo: Decimal | null
+  rate: Decimal // e.g., 0.01 for 1%
 }

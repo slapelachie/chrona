@@ -30,6 +30,14 @@ export const validateRequired = (value: any, field: string, validator: Validatio
   return true
 }
 
+export const validateBoolean = (value: any, field: string, validator: ValidationResult) => {
+  if (typeof value !== 'boolean') {
+    validator.addError(field, `${field} must be a boolean`)
+    return false
+  }
+  return true
+}
+
 export const validateString = (value: any, field: string, validator: ValidationResult, options?: {
   minLength?: number
   maxLength?: number
