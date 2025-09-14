@@ -115,7 +115,7 @@ model Shift {
   // Relations
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   payGuide     PayGuide  @relation(fields: [payGuideId], references: [id])
-  payPeriod    PayPeriod? @relation(fields: [payPeriodId], references: [id])
+  payPeriod    PayPeriod? @relation(fields: [payPeriodId], references: [id], onDelete: Cascade)
   breakPeriods BreakPeriod[]
 
   @@map("shifts")

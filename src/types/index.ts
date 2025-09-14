@@ -374,6 +374,42 @@ export interface PayPeriodResponse
   shifts?: ShiftResponse[]
 }
 
+export interface CreatePayPeriodRequest {
+  startDate: string // ISO string
+  endDate: string // ISO string
+  status?: PayPeriodStatus // Optional, defaults to "open"
+}
+
+export interface UpdatePayPeriodRequest {
+  startDate?: string // ISO string - Allow date corrections
+  endDate?: string // ISO string - Allow date corrections
+  status?: PayPeriodStatus // Allow status transitions
+  actualPay?: string // For pay verification (Decimal as string)
+  verified?: boolean // For marking as verified
+}
+
+export interface PayPeriodListItem {
+  id: string
+  startDate: Date
+  endDate: Date
+  status: PayPeriodStatus
+  totalHours?: string
+  totalPay?: string
+  netPay?: string
+  verified: boolean
+  shiftsCount?: number // Count of shifts in period
+}
+
+export interface PayPeriodsListResponse {
+  payPeriods: PayPeriodListItem[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
+
 // Tax Settings API Types
 export interface CreateTaxSettingsRequest {
   claimedTaxFreeThreshold?: boolean

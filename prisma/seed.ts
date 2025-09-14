@@ -5,6 +5,7 @@ import {
   updateShiftWithCalculation, 
   fetchShiftBreakPeriods 
 } from '../src/lib/shift-calculation'
+import { PayPeriodSyncService } from '../src/lib/pay-period-sync-service'
 
 const prisma = new PrismaClient()
 
@@ -23,6 +24,22 @@ async function main() {
     },
   })
   console.log(`✅ Created user: ${user.name} (${user.id})`)
+
+  // Create default tax settings for the user
+  console.log('💰 Creating default tax settings...')
+  const taxSettings = await prisma.taxSettings.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: {
+      userId: user.id,
+      claimedTaxFreeThreshold: true,
+      isForeignResident: false,
+      hasTaxFileNumber: true,
+      medicareExemption: 'none',
+      hecsHelpRate: null,
+    },
+  })
+  console.log(`✅ Created tax settings for user`)
 
   // Create Australian Retail Award Pay Guide
   console.log('💰 Creating Australian Retail Award pay guide...')
@@ -436,6 +453,24 @@ async function main() {
     }
   }
 
+  // Demonstrate automatic pay period sync by triggering calculations
+  console.log('🔄 Triggering automatic pay period sync and tax calculations...')
+  await PayPeriodSyncService.syncPayPeriod(currentPayPeriod.id)
+  
+  // Fetch the updated pay period to show the results
+  const updatedCurrentPayPeriod = await prisma.payPeriod.findUnique({
+    where: { id: currentPayPeriod.id },
+    include: { shifts: true }
+  })
+  
+  if (updatedCurrentPayPeriod) {
+    console.log(`📊 Current pay period totals after sync:`)
+    console.log(`   Hours: ${updatedCurrentPayPeriod.totalHours?.toFixed(2) || '0'} hours`)
+    console.log(`   Gross Pay: $${updatedCurrentPayPeriod.totalPay?.toFixed(2) || '0'}`)
+    console.log(`   Tax Withholding: $${updatedCurrentPayPeriod.paygWithholding?.toFixed(2) || '0'}`)
+    console.log(`   Net Pay: $${updatedCurrentPayPeriod.netPay?.toFixed(2) || '0'}`)
+  }
+
   // Create previous pay period with completed status
   console.log('📊 Creating previous pay period...')
   const previousPayPeriodStart = new Date(payPeriodStart)
@@ -453,7 +488,10 @@ async function main() {
       status: 'paid',
       totalHours: new Decimal('76.5'),
       totalPay: new Decimal('2145.75'),
-      actualPay: new Decimal('2145.75'),
+      paygWithholding: new Decimal('429.15'), // Example tax withholding
+      totalWithholdings: new Decimal('429.15'),
+      netPay: new Decimal('1716.60'),
+      actualPay: new Decimal('1716.60'),
       verified: true,
     },
   })

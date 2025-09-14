@@ -20,6 +20,7 @@ import {
   updateShiftWithCalculation,
 } from '@/lib/shift-calculation'
 import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
+import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 
 interface RouteParams {
   params: Promise<{
@@ -125,14 +126,24 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // Check if shift exists
+    // Check if shift exists and capture current pay period for sync
     const existingShift = await prisma.shift.findUnique({
       where: { id },
+      select: {
+        id: true,
+        payPeriodId: true,
+        startTime: true,
+        endTime: true,
+        payGuideId: true,
+      },
     })
 
     if (!existingShift) {
       return NextResponse.json({ error: 'Shift not found' }, { status: 404 })
     }
+
+    // Store the previous pay period ID for sync later
+    const previousPayPeriodId = existingShift.payPeriodId
 
     // Validate request body fields that are provided
     if (body.payGuideId !== undefined) {
@@ -258,6 +269,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // Trigger automatic pay period sync after successful shift update
+    await PayPeriodSyncService.onShiftUpdated(updatedShift.id, previousPayPeriodId ?? undefined)
+
     // Transform to response format
     const responseShift: ShiftResponse = {
       id: updatedShift.id,
@@ -270,8 +284,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       overtimePay: updatedShift.overtimePay?.toString(),
       penaltyPay: updatedShift.penaltyPay?.toString(),
       totalPay: updatedShift.totalPay?.toString(),
-      notes: updatedShift.notes,
-      payPeriodId: updatedShift.payPeriodId,
+      notes: updatedShift.notes ?? undefined,
+      payPeriodId: updatedShift.payPeriodId ?? undefined,
       createdAt: updatedShift.createdAt,
       updatedAt: updatedShift.updatedAt,
       breakPeriods: updatedShift.breakPeriods.map((bp) => ({
@@ -316,19 +330,28 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // Check if shift exists
+    // Check if shift exists and capture pay period for sync
     const existingShift = await prisma.shift.findUnique({
       where: { id },
+      select: { id: true, payPeriodId: true },
     })
 
     if (!existingShift) {
       return NextResponse.json({ error: 'Shift not found' }, { status: 404 })
     }
 
+    // Store the pay period ID for sync after deletion
+    const payPeriodId = existingShift.payPeriodId
+
     // Delete the shift
     await prisma.shift.delete({
       where: { id },
     })
+
+    // Trigger automatic pay period sync after successful shift deletion
+    if (payPeriodId) {
+      await PayPeriodSyncService.onShiftDeleted(payPeriodId)
+    }
 
     return NextResponse.json({
       message: 'Shift deleted successfully',

@@ -17,11 +17,12 @@ import {
   fetchShiftBreakPeriods,
   updateShiftWithCalculation 
 } from '@/lib/shift-calculation'
+import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 /**
@@ -50,7 +51,7 @@ async function recalculateShiftPay(shiftId: string): Promise<void> {
 // GET /api/shifts/[id]/break-periods - List break periods for a shift
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id: shiftId } = params
+    const { id: shiftId } = await params
     const { searchParams } = new URL(request.url)
     
     // Parse query parameters
@@ -143,7 +144,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // POST /api/shifts/[id]/break-periods - Create a new break period
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id: shiftId } = params
+    const { id: shiftId } = await params
     const body: CreateBreakPeriodRequest = await request.json()
 
     // Validate shift ID
@@ -252,6 +253,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // Recalculate shift pay with updated break periods
     await recalculateShiftPay(shiftId)
+
+    // Trigger automatic pay period sync after break period changes
+    await PayPeriodSyncService.onBreakPeriodsChanged(shiftId)
 
     // Transform to response format
     const responseBreakPeriod: BreakPeriodResponse = {

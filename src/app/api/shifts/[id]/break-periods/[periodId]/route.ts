@@ -16,12 +16,13 @@ import {
   fetchShiftBreakPeriods,
   updateShiftWithCalculation 
 } from '@/lib/shift-calculation'
+import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string
     periodId: string
-  }
+  }>
 }
 
 /**
@@ -50,7 +51,7 @@ async function recalculateShiftPay(shiftId: string): Promise<void> {
 // GET /api/shifts/[id]/break-periods/[periodId] - Get specific break period
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id: shiftId, periodId } = params
+    const { id: shiftId, periodId } = await params
 
     // Validate IDs
     const validator = ValidationResult.create()
@@ -103,7 +104,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // PUT /api/shifts/[id]/break-periods/[periodId] - Update specific break period
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id: shiftId, periodId } = params
+    const { id: shiftId, periodId } = await params
     const body: UpdateBreakPeriodRequest = await request.json()
 
     // Validate IDs
@@ -227,6 +228,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Recalculate shift pay with updated break periods
     await recalculateShiftPay(shiftId)
 
+    // Trigger automatic pay period sync after break period changes
+    await PayPeriodSyncService.onBreakPeriodsChanged(shiftId)
+
     // Transform to response format
     const responseBreakPeriod: BreakPeriodResponse = {
       id: updatedBreakPeriod.id,
@@ -254,7 +258,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 // DELETE /api/shifts/[id]/break-periods/[periodId] - Delete specific break period
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id: shiftId, periodId } = params
+    const { id: shiftId, periodId } = await params
 
     // Validate IDs
     const validator = ValidationResult.create()
@@ -290,6 +294,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // Recalculate shift pay with updated break periods
     await recalculateShiftPay(shiftId)
+
+    // Trigger automatic pay period sync after break period changes
+    await PayPeriodSyncService.onBreakPeriodsChanged(shiftId)
 
     return NextResponse.json({
       message: 'Break period deleted successfully'

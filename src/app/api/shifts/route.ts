@@ -26,6 +26,7 @@ import {
   transformShiftToListItem,
   applyFieldSelection,
 } from '@/lib/api-response-utils'
+import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 
 // GET /api/shifts - List shifts with filtering and pagination
 export async function GET(request: NextRequest) {
@@ -254,6 +255,9 @@ export async function POST(request: NextRequest) {
       shift.totalPay = calculation.totalPay
     }
 
+    // Trigger automatic pay period sync after successful shift creation
+    await PayPeriodSyncService.onShiftCreated(shift.id)
+
     // Get break periods for response
     const responseBreakPeriods: BreakPeriodResponse[] = breakPeriods.map(
       (bp) => ({
@@ -279,7 +283,7 @@ export async function POST(request: NextRequest) {
       penaltyPay: shift.penaltyPay?.toString(),
       totalPay: shift.totalPay?.toString(),
       notes: shift.notes ?? undefined,
-      payPeriodId: shift.payPeriodId,
+      payPeriodId: shift.payPeriodId ?? undefined,
       createdAt: shift.createdAt,
       updatedAt: shift.updatedAt,
       breakPeriods: responseBreakPeriods,
