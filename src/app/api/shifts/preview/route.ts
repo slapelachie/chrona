@@ -129,6 +129,16 @@ export async function POST(request: NextRequest) {
       updatedAt: ph.updatedAt
     }))
 
+    // Transform break periods for calculation
+    const breakPeriods = (body.breakPeriods || []).map((bp, index) => ({
+      id: `preview-break-${index}`,
+      shiftId: 'preview',
+      startTime: new Date(bp.startTime),
+      endTime: new Date(bp.endTime),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }))
+
     // Calculate pay using the calculator
     const calculator = new PayCalculator(payGuide, penaltyTimeFrames, overtimeTimeFrames, publicHolidays)
     
@@ -136,7 +146,7 @@ export async function POST(request: NextRequest) {
       const calculation = calculator.calculate(
         new Date(body.startTime),
         new Date(body.endTime),
-        [] // No break periods in preview since shift doesn't exist yet
+        breakPeriods
       )
 
       const endTime = Date.now()

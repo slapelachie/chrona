@@ -1,0 +1,190 @@
+// Top App Bar Component Styles
+
+.top-app-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-fixed);
+  background-color: var(--color-nav-bg);
+  border-bottom: 1px solid var(--color-border-primary);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  
+  // Support for devices with safe areas (iPhone X+)
+  padding-top: env(safe-area-inset-top);
+
+  &__container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    padding: 0 var(--spacing-md);
+    max-width: 100%;
+    margin: 0 auto;
+    
+    @media (max-width: 576px) {
+      height: 56px;
+      padding: 0 var(--spacing-sm);
+    }
+  }
+
+  &__start {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0; // Allow text truncation
+  }
+
+  &__center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__end {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1;
+    gap: var(--spacing-sm);
+    min-width: 0;
+  }
+
+  &__logo {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__title {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+    line-height: var(--line-height-tight);
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    
+    @media (max-width: 576px) {
+      font-size: var(--font-size-lg);
+    }
+  }
+
+  &__subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: var(--line-height-tight);
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    
+    @media (max-width: 576px) {
+      font-size: var(--font-size-xs);
+    }
+  }
+
+  &__back-button {
+    margin-right: var(--spacing-sm);
+    min-width: 44px;
+    
+    &.chrona-btn {
+      padding: var(--spacing-sm);
+      min-height: 40px;
+    }
+  }
+
+  &__notification-button {
+    position: relative;
+    min-width: 44px;
+    
+    &.chrona-btn {
+      padding: var(--spacing-sm);
+      min-height: 40px;
+    }
+  }
+
+  &__notification-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background-color: var(--color-danger);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+    border: 2px solid var(--color-nav-bg);
+  }
+}
+
+// Larger screens adjustments
+@media (min-width: 768px) {
+  .top-app-bar {
+    &__container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 var(--spacing-lg);
+    }
+  }
+}
+
+@media (min-width: 992px) {
+  .top-app-bar {
+    &__container {
+      max-width: 960px;
+    }
+  }
+}
+
+@media (min-width: 1200px) {
+  .top-app-bar {
+    &__container {
+      max-width: 1140px;
+    }
+  }
+}
+
+// High contrast mode
+@media (prefers-contrast: high) {
+  .top-app-bar {
+    border-bottom-width: 2px;
+  }
+}
+
+// Dark mode blur support fallback
+@supports not (backdrop-filter: blur(20px)) {
+  .top-app-bar {
+    background-color: rgba(18, 18, 18, 0.95);
+  }
+}
+
+// RTL support
+[dir="rtl"] {
+  .top-app-bar {
+    &__start {
+      justify-content: flex-end;
+    }
+    
+    &__end {
+      justify-content: flex-start;
+    }
+    
+    &__back-button {
+      margin-right: 0;
+      margin-left: var(--spacing-sm);
+      
+      svg {
+        transform: scaleX(-1);
+      }
+    }
+  }
+}

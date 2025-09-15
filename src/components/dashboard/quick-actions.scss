@@ -1,0 +1,150 @@
+// Quick Actions Component Styles
+
+.quick-actions {
+  &__title {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-md);
+    margin-top: 0;
+  }
+  
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--spacing-md);
+    
+    @media (max-width: 576px) {
+      grid-template-columns: 1fr;
+      gap: var(--spacing-sm);
+    }
+    
+    @media (min-width: 768px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    @media (min-width: 992px) {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+  
+  &__button {
+    // Enhanced styling for quick action buttons
+    font-weight: 600;
+    border-radius: var(--radius-lg);
+    transition: all 0.2s ease-in-out;
+    
+    &.chrona-btn {
+      padding: var(--spacing-md) var(--spacing-lg);
+      min-height: 56px;
+      
+      @media (max-width: 576px) {
+        min-height: 52px;
+        padding: var(--spacing-sm) var(--spacing-md);
+      }
+    }
+    
+    &--primary {
+      // Special styling for the primary action (Add Shift)
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+      box-shadow: var(--shadow-md);
+      
+      &:hover:not(:disabled) {
+        background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+      }
+      
+      &:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: var(--shadow-md);
+      }
+    }
+    
+    // Hover effects for outline buttons
+    &.chrona-btn--outline {
+      &:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-sm);
+      }
+      
+      &:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: none;
+      }
+    }
+  }
+}
+
+// Alternative layout for mobile - single column with primary action emphasized
+@media (max-width: 576px) {
+  .quick-actions {
+    &__grid {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+    
+    &__button--primary {
+      order: -1; // Move primary action to top
+      margin-bottom: var(--spacing-sm);
+    }
+  }
+}
+
+// Animation for button interactions
+.quick-actions__button {
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.3s ease, height 0.3s ease;
+  }
+  
+  &:active::before {
+    width: 300px;
+    height: 300px;
+  }
+}
+
+// Reduced motion support
+@media (prefers-reduced-motion: reduce) {
+  .quick-actions {
+    &__button {
+      transition: none;
+      
+      &::before {
+        display: none;
+      }
+      
+      &--primary {
+        &:hover:not(:disabled) {
+          transform: none;
+        }
+        
+        &:active:not(:disabled) {
+          transform: none;
+        }
+      }
+      
+      &.chrona-btn--outline {
+        &:hover:not(:disabled) {
+          transform: none;
+        }
+        
+        &:active:not(:disabled) {
+          transform: none;
+        }
+      }
+    }
+  }
+}

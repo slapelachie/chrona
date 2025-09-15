@@ -1,0 +1,247 @@
+// Shift Card Component Styles
+
+.shift-card {
+  transition: all 0.2s ease-in-out;
+  
+  &.chrona-card--interactive {
+    cursor: pointer;
+    
+    &:hover {
+      transform: translateX(4px);
+      border-color: var(--color-primary);
+    }
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+  }
+
+  &__date {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-weight: 600;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    
+    svg {
+      color: var(--color-primary);
+      flex-shrink: 0;
+    }
+  }
+
+  &__status {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+  }
+
+  &__status-badge {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-md);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+
+    &--upcoming {
+      background-color: rgba(0, 188, 212, 0.1);
+      color: var(--color-primary);
+    }
+
+    &--in-progress {
+      background-color: rgba(255, 193, 7, 0.1);
+      color: var(--color-warning);
+    }
+
+    &--completed {
+      background-color: rgba(0, 229, 255, 0.1);
+      color: var(--color-success);
+    }
+  }
+
+  &__arrow {
+    color: var(--color-text-tertiary);
+    transition: transform 0.2s ease-in-out;
+    flex-shrink: 0;
+  }
+
+  &__details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  &__time {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+    
+    svg {
+      color: var(--color-primary);
+      flex-shrink: 0;
+    }
+  }
+
+  &__duration {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    margin-left: var(--spacing-xs);
+    font-weight: 500;
+  }
+
+  &__location {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    
+    svg {
+      color: var(--color-text-tertiary);
+      flex-shrink: 0;
+    }
+  }
+
+  &__pay {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: var(--font-size-base);
+    
+    svg {
+      color: var(--color-primary);
+      flex-shrink: 0;
+    }
+  }
+
+  &__pay-amount {
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  &__pay-label {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    font-weight: 400;
+    margin-left: var(--spacing-xs);
+  }
+
+  &__notes {
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--color-border-primary);
+    
+    p {
+      margin: 0;
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-normal);
+    }
+  }
+}
+
+// Hover effects
+.shift-card {
+  &.chrona-card--interactive:hover {
+    .shift-card__arrow {
+      transform: translateX(4px);
+    }
+  }
+}
+
+// Status-specific styling
+.shift-card {
+  &--upcoming {
+    border-left: 3px solid var(--color-primary);
+  }
+
+  &--in-progress {
+    border-left: 3px solid var(--color-warning);
+  }
+
+  &--completed {
+    border-left: 3px solid var(--color-success);
+  }
+}
+
+// Mobile optimizations
+@media (max-width: 576px) {
+  .shift-card {
+    &__header {
+      flex-wrap: wrap;
+      gap: var(--spacing-xs);
+    }
+
+    &__date {
+      font-size: var(--font-size-xs);
+    }
+
+    &__status {
+      order: 3;
+      flex: 1 1 100%;
+      justify-content: flex-start;
+    }
+
+    &__arrow {
+      order: 2;
+    }
+
+    &__details {
+      gap: var(--spacing-xs);
+    }
+
+    &__time {
+      font-size: var(--font-size-sm);
+    }
+
+    &__duration {
+      font-size: var(--font-size-xs);
+    }
+
+    &__location {
+      font-size: var(--font-size-xs);
+    }
+
+    &__pay {
+      font-size: var(--font-size-sm);
+    }
+
+    &__notes p {
+      font-size: var(--font-size-xs);
+    }
+  }
+}
+
+// Reduced motion support
+@media (prefers-reduced-motion: reduce) {
+  .shift-card {
+    transition: none;
+    
+    &.chrona-card--interactive {
+      &:hover {
+        transform: none;
+      }
+    }
+    
+    &__arrow {
+      transition: none;
+    }
+    
+    &.chrona-card--interactive:hover {
+      .shift-card__arrow {
+        transform: none;
+      }
+    }
+  }
+}

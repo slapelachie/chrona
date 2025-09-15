@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import 'bootstrap/dist/css/bootstrap.min.css'
+import '../styles/globals.scss'
 
 export const metadata: Metadata = {
   title: 'Chrona - Australian Casual Pay Tracker',
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+      </body>
     </html>
   )
 }

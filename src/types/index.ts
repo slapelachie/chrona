@@ -185,6 +185,10 @@ export interface ShiftPreviewRequest {
   payGuideId: string
   startTime: string
   endTime: string
+  breakPeriods?: Array<{
+    startTime: string
+    endTime: string
+  }>
 }
 
 export interface ShiftPreviewResponse {
