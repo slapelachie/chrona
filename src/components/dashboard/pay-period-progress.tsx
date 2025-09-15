@@ -1,27 +1,42 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Card, CardHeader, CardBody } from '../ui'
 import { Calendar, Clock, DollarSign } from 'lucide-react'
 import './pay-period-progress.scss'
 
 export const PayPeriodProgress: React.FC = () => {
-  // Mock data - in real app, this would come from API/database
-  const payPeriod = {
-    startDate: '2024-09-02',
-    endDate: '2024-09-15',
-    currentDate: '2024-09-10',
-    daysWorked: 6,
-    totalDays: 14,
-    hoursWorked: 48.5,
-    expectedHours: 80,
-    earnedSoFar: 1234.75,
-    projectedTotal: 2048.00
-  }
+  const [summary, setSummary] = useState<any | null>(null)
 
-  const progress = (payPeriod.daysWorked / payPeriod.totalDays) * 100
-  const hoursProgress = (payPeriod.hoursWorked / payPeriod.expectedHours) * 100
-  const daysRemaining = payPeriod.totalDays - payPeriod.daysWorked
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('/api/dashboard/summary', { cache: 'no-store' })
+        const json = await res.json()
+        if (!cancelled) setSummary(json.data)
+      } catch (_) {
+        if (!cancelled) setSummary(null)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  const vm = useMemo(() => {
+    const cp = summary?.currentPeriod
+    if (!cp) return null
+    const progress = cp.totalDays > 0 ? (cp.daysElapsed / cp.totalDays) * 100 : 0
+    const daysRemaining = Math.max(0, (cp.totalDays ?? 0) - (cp.daysElapsed ?? 0))
+    const start = new Date(cp.startDate)
+    const end = new Date(cp.endDate)
+    const hoursWorked = Number(cp.hoursWorked ?? '0')
+    const earnedSoFar = Number(cp.grossPay ?? '0')
+    const projectedTotal = Number(cp.projections?.grossPay ?? '0')
+    return { progress, daysRemaining, start, end, hoursWorked, earnedSoFar, projectedTotal }
+  }, [summary])
+
+  if (!vm) return null
 
   return (
     <div className="pay-period-progress">
@@ -32,10 +47,14 @@ export const PayPeriodProgress: React.FC = () => {
           <div className="pay-period-progress__header">
             <div className="pay-period-progress__dates">
               <Calendar size={20} />
-              <span>Sep 2 - Sep 15, 2024</span>
+              <span>
+                {vm.start.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })}
+                {' - '}
+                {vm.end.toLocaleDateString('en-AU', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
             </div>
             <div className="pay-period-progress__remaining">
-              <span className="text-aqua">{daysRemaining} days remaining</span>
+              <span className="text-aqua">{vm.daysRemaining} days remaining</span>
             </div>
           </div>
         </CardHeader>
@@ -46,17 +65,17 @@ export const PayPeriodProgress: React.FC = () => {
             <div className="progress-section">
               <div className="progress-section__header">
                 <span className="progress-section__label">Period Progress</span>
-                <span className="progress-section__value">{Math.round(progress)}%</span>
+                <span className="progress-section__value">{Math.round(vm.progress)}%</span>
               </div>
               <div className="progress-bar">
                 <div 
                   className="progress-bar__fill" 
-                  style={{ width: `${progress}%` }}
+                  style={{ width: `${vm.progress}%` }}
                   role="progressbar"
-                  aria-valuenow={progress}
+                  aria-valuenow={vm.progress}
                   aria-valuemin={0}
                   aria-valuemax={100}
-                  aria-label={`Pay period ${Math.round(progress)}% complete`}
+                  aria-label={`Pay period ${Math.round(vm.progress)}% complete`}
                 />
               </div>
             </div>
@@ -69,17 +88,9 @@ export const PayPeriodProgress: React.FC = () => {
                 </div>
                 <div className="pay-period-stat__content">
                   <span className="pay-period-stat__value text-mono">
-                    {payPeriod.hoursWorked}h
+                    {vm.hoursWorked.toFixed(1)}h
                   </span>
-                  <span className="pay-period-stat__label">
-                    of {payPeriod.expectedHours}h expected
-                  </span>
-                  <div className="mini-progress-bar">
-                    <div 
-                      className="mini-progress-bar__fill"
-                      style={{ width: `${Math.min(hoursProgress, 100)}%` }}
-                    />
-                  </div>
+                  <span className="pay-period-stat__label">Hours worked</span>
                 </div>
               </div>
 
@@ -89,15 +100,15 @@ export const PayPeriodProgress: React.FC = () => {
                 </div>
                 <div className="pay-period-stat__content">
                   <span className="pay-period-stat__value text-mono">
-                    ${payPeriod.earnedSoFar.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
+                    ${vm.earnedSoFar.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
                   </span>
                   <span className="pay-period-stat__label">
-                    Projected: ${payPeriod.projectedTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
+                    Projected: ${vm.projectedTotal.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
                   </span>
                   <div className="mini-progress-bar">
                     <div 
                       className="mini-progress-bar__fill"
-                      style={{ width: `${(payPeriod.earnedSoFar / payPeriod.projectedTotal) * 100}%` }}
+                      style={{ width: `${vm.projectedTotal > 0 ? (vm.earnedSoFar / vm.projectedTotal) * 100 : 0}%` }}
                     />
                   </div>
                 </div>

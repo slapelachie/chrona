@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Card, CardHeader, CardBody } from '../ui'
 import { 
   Clock, 
@@ -116,49 +116,32 @@ const ActivityItemComponent: React.FC<{ activity: ActivityItem }> = ({ activity 
 }
 
 export const RecentActivity: React.FC = () => {
-  // Mock data - in real app, this would come from API/database
-  const recentActivities: ActivityItem[] = [
-    {
-      id: '1',
-      type: 'shift_completed',
-      title: 'Shift Completed',
-      description: 'Morning shift at Main Store (8h)',
-      timestamp: '2024-09-10T17:00:00',
-      amount: 208.50
-    },
-    {
-      id: '2',
-      type: 'payment_received',
-      title: 'Payment Received',
-      description: 'Pay period Sep 2-15 payment processed',
-      timestamp: '2024-09-09T10:30:00',
-      amount: 1847.25,
-      status: 'success'
-    },
-    {
-      id: '3',
-      type: 'tax_calculated',
-      title: 'Tax Update',
-      description: 'YTD tax calculations updated',
-      timestamp: '2024-09-09T10:30:00',
-      status: 'info'
-    },
-    {
-      id: '4',
-      type: 'alert',
-      title: 'Hours Alert',
-      description: 'You\'re close to overtime threshold this week',
-      timestamp: '2024-09-08T14:15:00',
-      status: 'warning'
-    },
-    {
-      id: '5',
-      type: 'pay_period_closed',
-      title: 'Pay Period Closed',
-      description: 'Aug 19 - Sep 1 period finalized',
-      timestamp: '2024-09-02T09:00:00'
+  const [recentActivities, setRecentActivities] = useState<ActivityItem[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('/api/dashboard/summary', { cache: 'no-store' })
+        const json = await res.json()
+        if (cancelled) return
+        const items: ActivityItem[] = (json?.data?.recentActivities ?? []).map((a: any) => ({
+          id: a.id,
+          type: a.type,
+          title: a.title,
+          description: a.description,
+          timestamp: a.timestamp,
+          amount: typeof a.amount === 'number' ? a.amount : undefined,
+          status: a.status,
+        }))
+        setRecentActivities(items)
+      } catch (_) {
+        if (!cancelled) setRecentActivities([])
+      }
     }
-  ]
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <div className="recent-activity">

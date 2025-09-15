@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Card, CardHeader, CardBody } from '../ui'
 import { Calendar, Clock, MapPin, DollarSign, ChevronRight } from 'lucide-react'
 import './upcoming-shifts.scss'
@@ -77,37 +77,22 @@ const ShiftCard: React.FC<{ shift: Shift }> = ({ shift }) => {
 }
 
 export const UpcomingShifts: React.FC = () => {
-  // Mock data - in real app, this would come from API/database
-  const upcomingShifts: Shift[] = [
-    {
-      id: '1',
-      date: '2024-09-11',
-      startTime: '9:00 AM',
-      endTime: '5:00 PM',
-      location: 'Main Store',
-      estimatedPay: 208.50,
-      duration: '8h',
-      isTomorrow: true
-    },
-    {
-      id: '2',
-      date: '2024-09-12',
-      startTime: '10:00 AM',
-      endTime: '6:00 PM',
-      location: 'West Side Location',
-      estimatedPay: 216.75,
-      duration: '8h'
-    },
-    {
-      id: '3',
-      date: '2024-09-14',
-      startTime: '8:00 AM',
-      endTime: '2:00 PM',
-      location: 'Main Store',
-      estimatedPay: 156.25,
-      duration: '6h'
+  const [items, setItems] = useState<any[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('/api/dashboard/summary', { cache: 'no-store' })
+        const json = await res.json()
+        if (!cancelled) setItems(json?.data?.upcomingShifts ?? [])
+      } catch (_) {
+        if (!cancelled) setItems([])
+      }
     }
-  ]
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <div className="upcoming-shifts">
@@ -118,11 +103,24 @@ export const UpcomingShifts: React.FC = () => {
         </button>
       </div>
       
-      {upcomingShifts.length > 0 ? (
+      {items.length > 0 ? (
         <div className="upcoming-shifts__list">
-          {upcomingShifts.map((shift) => (
-            <ShiftCard key={shift.id} shift={shift} />
-          ))}
+          {items.map((s: any) => {
+            const start = new Date(s.startTime)
+            const end = new Date(s.endTime)
+            const shift: Shift = {
+              id: s.id,
+              date: start.toISOString(),
+              startTime: start.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }),
+              endTime: end.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }),
+              location: s.payGuideName ?? '—',
+              estimatedPay: Number(s.totalPay ?? '0'),
+              duration: `${Number(s.totalHours ?? '0').toFixed(1)}h`,
+              isToday: new Date().toDateString() === start.toDateString(),
+              isTomorrow: new Date(Date.now() + 24*60*60*1000).toDateString() === start.toDateString(),
+            }
+            return <ShiftCard key={shift.id} shift={shift} />
+          })}
         </div>
       ) : (
         <Card variant="default">

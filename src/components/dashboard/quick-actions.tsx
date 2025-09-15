@@ -1,38 +1,96 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Button } from '../ui'
-import { Plus, FileText, Download, Calculator } from 'lucide-react'
+import { Plus, Play, RotateCw, FolderOpen } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import './quick-actions.scss'
 
 export const QuickActions: React.FC = () => {
-  const actions = [
+  const router = useRouter()
+  const [summary, setSummary] = useState<any | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('/api/dashboard/summary', { cache: 'no-store' })
+        const json = await res.json()
+        if (!cancelled) setSummary(json.data)
+      } catch (_) {
+        if (!cancelled) setSummary(null)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  const currentId = summary?.currentPeriod?.id ?? null
+  const shiftsCount = summary?.currentPeriod?.shiftsCount ?? 0
+  const canView = !!currentId
+
+  const [canProcess, setCanProcess] = useState<boolean>(false)
+  useEffect(() => {
+    let cancel = false
+    async function checkProcess() {
+      if (!currentId) { setCanProcess(false); return }
+      try {
+        const r = await fetch(`/api/pay-periods/${currentId}/process`)
+        const j = await r.json()
+        if (!cancel) setCanProcess(!!j?.data?.canProcess)
+      } catch { if (!cancel) setCanProcess(false) }
+    }
+    checkProcess()
+    return () => { cancel = true }
+  }, [currentId])
+
+  const actions = useMemo(() => [
     {
       label: 'Add Shift',
       icon: <Plus size={20} />,
       variant: 'primary' as const,
-      onClick: () => console.log('Add shift clicked'),
-      isPrimary: true
+      onClick: () => router.push('/shifts/new'),
+      isPrimary: true,
+      disabled: false,
     },
     {
-      label: 'View Pay Slip',
-      icon: <FileText size={20} />,
+      label: 'View Current Period',
+      icon: <FolderOpen size={20} />,
       variant: 'outline' as const,
-      onClick: () => console.log('View pay slip clicked')
+      onClick: () => currentId && router.push(`/pay-periods/${currentId}`),
+      disabled: !canView,
+      title: !canView ? 'No current pay period yet' : undefined,
     },
     {
-      label: 'Export Data',
-      icon: <Download size={20} />,
+      label: 'Process Current Period',
+      icon: <Play size={20} />,
       variant: 'outline' as const,
-      onClick: () => console.log('Export data clicked')
+      onClick: async () => {
+        if (!currentId) return
+        setBusy('process')
+        try {
+          await fetch(`/api/pay-periods/${currentId}/process`, { method: 'POST' })
+        } finally { setBusy(null) }
+      },
+      disabled: !canProcess,
+      title: !canProcess ? 'Requires open period with all shifts calculated' : undefined,
     },
     {
-      label: 'Tax Calculator',
-      icon: <Calculator size={20} />,
+      label: 'Recalculate Taxes',
+      icon: <RotateCw size={20} />,
       variant: 'outline' as const,
-      onClick: () => console.log('Tax calculator clicked')
-    }
-  ]
+      onClick: async () => {
+        if (!currentId) return
+        setBusy('tax')
+        try {
+          await fetch(`/api/pay-periods/${currentId}/tax-calculation`, { method: 'POST' })
+        } finally { setBusy(null) }
+      },
+      disabled: !(currentId && shiftsCount > 0),
+      title: !(currentId && shiftsCount > 0) ? 'No pay period or no shifts to calculate' : undefined,
+    },
+  ], [router, currentId, canView, canProcess, shiftsCount])
 
   return (
     <div className="quick-actions">
@@ -43,12 +101,14 @@ export const QuickActions: React.FC = () => {
           <Button
             key={index}
             variant={action.variant}
-            leftIcon={action.icon}
+            leftIcon={busy ? undefined : action.icon}
             onClick={action.onClick}
+            disabled={!!busy || action.disabled}
+            title={action.title}
             className={`quick-actions__button ${action.isPrimary ? 'quick-actions__button--primary' : ''}`}
             size="lg"
           >
-            {action.label}
+            {busy && index > 0 && action.label.includes('Recalculate') ? 'Recalculating…' : busy && index > 0 && action.label.includes('Process') ? 'Processing…' : action.label}
           </Button>
         ))}
       </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Card, CardBody } from '../ui'
 import { Clock, DollarSign, TrendingUp, Calendar } from 'lucide-react'
 import './stats-cards.scss'
@@ -49,41 +49,81 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, trend
 )
 
 export const StatsCards: React.FC = () => {
-  // Mock data - in real app, this would come from API/database
-  const stats = [
-    {
-      title: 'This Week',
-      value: '32.5h',
-      subtitle: 'Hours worked',
-      icon: <Clock size={24} />,
-      trend: {
-        value: '+5.2h',
-        isPositive: true
+  const [summary, setSummary] = useState<any | null>(null)
+  const [ytd, setYtd] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      try {
+        const [summaryRes, ytdRes] = await Promise.all([
+          fetch('/api/dashboard/summary', { cache: 'no-store' }),
+          fetch('/api/tax/year-to-date', { cache: 'no-store' }),
+        ])
+        const summaryJson = await summaryRes.json()
+        const ytdJson = await ytdRes.json()
+        if (!cancelled) {
+          setSummary(summaryJson.data)
+          setYtd(ytdJson.data)
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setSummary(null)
+          setYtd(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-    },
-    {
-      title: 'Projected Pay',
-      value: '$847.50',
-      subtitle: 'This period',
-      icon: <DollarSign size={24} />,
-      trend: {
-        value: '+$127',
-        isPositive: true
-      }
-    },
-    {
-      title: 'YTD Earnings',
-      value: '$12,345',
-      subtitle: 'Tax year 2024-25',
-      icon: <TrendingUp size={24} />
-    },
-    {
-      title: 'Next Shift',
-      value: 'Tomorrow',
-      subtitle: '9:00 AM - 5:00 PM',
-      icon: <Calendar size={24} />
     }
-  ]
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const stats = useMemo(() => {
+    const hoursWorked = Number(summary?.currentPeriod?.hoursWorked ?? '0')
+    const projectedGross = Number(summary?.currentPeriod?.projections?.grossPay ?? '0')
+    const ytdGross = Number(ytd?.yearToDate?.grossIncome ?? '0')
+
+    // Next shift summary
+    const next = summary?.upcomingShifts?.[0]
+    const start = next ? new Date(next.startTime) : null
+    const end = next ? new Date(next.endTime) : null
+    const nextSubtitle = start && end
+      ? `${start.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}`
+      : '—'
+
+    const items = [
+      {
+        title: 'This Period',
+        value: `${hoursWorked.toFixed(1)}h`,
+        subtitle: 'Hours worked',
+        icon: <Clock size={24} />,
+      },
+      {
+        title: 'Projected Pay',
+        value: `$${projectedGross.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        subtitle: 'This period (rostered)',
+        icon: <DollarSign size={24} />,
+      },
+      {
+        title: 'YTD Earnings',
+        value: `$${ytdGross.toLocaleString('en-AU')}`,
+        subtitle: `Tax year ${ytd?.taxYear ?? ''}`,
+        icon: <TrendingUp size={24} />,
+      },
+      {
+        title: 'Next Shift',
+        value: start ? start.toLocaleDateString('en-AU', { weekday: 'short' }) : '—',
+        subtitle: nextSubtitle,
+        icon: <Calendar size={24} />,
+      },
+    ]
+    return items
+  }, [summary, ytd])
 
   return (
     <div className="stats-cards">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { PayPeriodTaxService } from '@/lib/pay-period-tax-service'
+import { Decimal } from 'decimal.js'
 
 // GET /api/tax/year-to-date - Get year-to-date tax summary
 export async function GET(request: NextRequest) {
