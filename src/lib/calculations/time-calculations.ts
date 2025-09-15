@@ -53,6 +53,11 @@ export class TimeCalculations {
     return amount.toDecimalPlaces(0, Decimal.ROUND_FLOOR)
   }
 
+  // Round to the nearest whole dollar (half up)
+  static roundToNearestDollar(amount: Decimal): Decimal {
+    return amount.toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+  }
+
   static roundToHours(hours: Decimal): Decimal {
     return hours.toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
   }

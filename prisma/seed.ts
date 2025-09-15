@@ -21,6 +21,7 @@ async function main() {
       name: 'Default User',
       email: 'user@chrona.app',
       timezone: 'Australia/Sydney',
+      payPeriodType: 'WEEKLY',
     },
   })
   console.log(`✅ Created user: ${user.name} (${user.id})`)
@@ -264,21 +265,21 @@ async function main() {
   })
   console.log(`✅ Created sample public holidays`)
 
-  // Create current pay period (fortnightly)
+  // Create current pay period (weekly)
   console.log('📅 Creating current pay period...')
   const today = new Date()
   const anchor = new Date(Date.UTC(1970, 0, 5, 0, 0, 0, 0)) // Monday UTC
   const dayMs = 24 * 60 * 60 * 1000
   const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
   const daysSinceAnchor = Math.floor((todayUTC.getTime() - anchor.getTime()) / dayMs)
-  const startDays = daysSinceAnchor - (daysSinceAnchor % 14)
+  const startDays = daysSinceAnchor - (daysSinceAnchor % 7)
   const payPeriodStart = new Date(anchor.getTime() + startDays * dayMs)
-  const payPeriodEnd = new Date(payPeriodStart.getTime() + 13 * dayMs)
+  const payPeriodEnd = new Date(payPeriodStart.getTime() + 6 * dayMs)
   payPeriodEnd.setUTCHours(23, 59, 59, 999)
 
   const currentPayPeriod = await prisma.payPeriod.upsert({
     where: { userId_startDate: { userId: user.id, startDate: payPeriodStart } },
-    update: {},
+    update: { endDate: payPeriodEnd, status: 'open' },
     create: { userId: user.id, startDate: payPeriodStart, endDate: payPeriodEnd, status: 'open' },
   })
   console.log(`✅ Current pay period: ${currentPayPeriod.startDate.toDateString()} - ${currentPayPeriod.endDate.toDateString()}`)
@@ -343,14 +344,14 @@ async function main() {
     const s = shiftData.startTime
     const sUTC = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()))
     const sDays = Math.floor((sUTC.getTime() - anchor.getTime()) / dayMs)
-    const sStartDays = sDays - (sDays % 14)
+    const sStartDays = sDays - (sDays % 7)
     const sPPStart = new Date(anchor.getTime() + sStartDays * dayMs)
-    const sPPEnd = new Date(sPPStart.getTime() + 13 * dayMs)
+    const sPPEnd = new Date(sPPStart.getTime() + 6 * dayMs)
     sPPEnd.setUTCHours(23, 59, 59, 999)
 
     const shiftPayPeriod = await prisma.payPeriod.upsert({
       where: { userId_startDate: { userId: user.id, startDate: sPPStart } },
-      update: {},
+      update: { endDate: sPPEnd, status: 'open' },
       create: { userId: user.id, startDate: sPPStart, endDate: sPPEnd, status: 'open' },
     })
 
@@ -479,21 +480,33 @@ async function main() {
   // Create previous pay period with completed status
   console.log('📊 Creating previous pay period...')
   const previousPayPeriodStart = new Date(payPeriodStart)
-  previousPayPeriodStart.setDate(payPeriodStart.getDate() - 14)
+  previousPayPeriodStart.setDate(payPeriodStart.getDate() - 7)
 
   const previousPayPeriodEnd = new Date(previousPayPeriodStart)
-  previousPayPeriodEnd.setDate(previousPayPeriodStart.getDate() + 13)
+  previousPayPeriodEnd.setDate(previousPayPeriodStart.getDate() + 6)
   previousPayPeriodEnd.setHours(23, 59, 59, 999)
 
-  const previousPayPeriod = await prisma.payPeriod.create({
-    data: {
+  const previousPayPeriod = await prisma.payPeriod.upsert({
+    where: { userId_startDate: { userId: user.id, startDate: previousPayPeriodStart } },
+    update: {
+      endDate: previousPayPeriodEnd,
+      status: 'paid',
+      totalHours: new Decimal('76.5'),
+      totalPay: new Decimal('2145.75'),
+      paygWithholding: new Decimal('429.15'),
+      totalWithholdings: new Decimal('429.15'),
+      netPay: new Decimal('1716.60'),
+      actualPay: new Decimal('1716.60'),
+      verified: true,
+    },
+    create: {
       userId: user.id,
       startDate: previousPayPeriodStart,
       endDate: previousPayPeriodEnd,
       status: 'paid',
       totalHours: new Decimal('76.5'),
       totalPay: new Decimal('2145.75'),
-      paygWithholding: new Decimal('429.15'), // Example tax withholding
+      paygWithholding: new Decimal('429.15'),
       totalWithholdings: new Decimal('429.15'),
       netPay: new Decimal('1716.60'),
       actualPay: new Decimal('1716.60'),
@@ -638,6 +651,54 @@ async function main() {
 
   console.log(`✅ Created ${hecsThresholds.length} HECS-HELP thresholds`)
 
+  // STSL (Schedule 8) A/B formula rates for 2024-25 (both groups)
+  console.log('🎓 Seeding STSL Schedule 8 A/B component rates for 2024-25...')
+  type SeedStsl = { scale: 'WITH_TFT_OR_FR' | 'NO_TFT'; from: Decimal; to: Decimal | null; a: Decimal; b: Decimal; description?: string }
+  const stslRates: SeedStsl[] = [
+    // WITH_TFT_OR_FR group
+    { scale: 'WITH_TFT_OR_FR', from: new Decimal(0),     to: new Decimal(1288), a: new Decimal(0),    b: new Decimal(0),        description: 'Below 1288 – no component' },
+    { scale: 'WITH_TFT_OR_FR', from: new Decimal(1288),  to: new Decimal(2403), a: new Decimal(0.15), b: new Decimal(193.2692), description: 'Mid bracket' },
+    { scale: 'WITH_TFT_OR_FR', from: new Decimal(2403),  to: new Decimal(3447), a: new Decimal(0.17), b: new Decimal(241.3462), description: 'Upper mid bracket' },
+    { scale: 'WITH_TFT_OR_FR', from: new Decimal(3447),  to: null,               a: new Decimal(0.10), b: new Decimal(0),        description: 'Top bracket' },
+    // NO_TFT group – seed non-zero brackets to enable testing
+    { scale: 'NO_TFT',         from: new Decimal(0),     to: new Decimal(1000), a: new Decimal(0),    b: new Decimal(0),        description: 'Below 1000 – no component' },
+    { scale: 'NO_TFT',         from: new Decimal(1000),  to: new Decimal(2000), a: new Decimal(0.12), b: new Decimal(120),      description: 'Mid bracket' },
+    { scale: 'NO_TFT',         from: new Decimal(2000),  to: new Decimal(3200), a: new Decimal(0.16), b: new Decimal(220),      description: 'Upper mid bracket' },
+    { scale: 'NO_TFT',         from: new Decimal(3200),  to: null,               a: new Decimal(0.10), b: new Decimal(0),        description: 'Top bracket' },
+  ]
+
+  let stslUpserts = 0
+  for (const r of stslRates) {
+    await prisma.stslRate.upsert({
+      where: {
+        taxYear_scale_earningsFrom: {
+          taxYear,
+          scale: r.scale,
+          earningsFrom: r.from,
+        }
+      },
+      update: {
+        earningsTo: r.to,
+        coefficientA: r.a,
+        coefficientB: r.b,
+        description: r.description,
+        isActive: true,
+      },
+      create: {
+        taxYear,
+        scale: r.scale,
+        earningsFrom: r.from,
+        earningsTo: r.to,
+        coefficientA: r.a,
+        coefficientB: r.b,
+        description: r.description,
+        isActive: true,
+      }
+    })
+    stslUpserts++
+  }
+  console.log(`✅ Created/updated ${stslUpserts} STSL A/B component rows`)
+
   console.log('✨ Database seeding completed successfully!')
   console.log('\n📈 Seeded data summary:')
   console.log(`   👤 Users: ${1}`)
@@ -650,6 +711,7 @@ async function main() {
   console.log(`   📅 Pay Periods: ${2}`)
   console.log(`   🧮 Tax Coefficients: ${scale1Coefficients.length + scale2Coefficients.length}`)
   console.log(`   🎓 HECS-HELP Thresholds: ${hecsThresholds.length}`)
+  console.log(`   🎓 STSL A/B Rows: ${stslUpserts}`)
   console.log(`   ⚙️  Tax Rate Configs: ${1}`)
 }
 

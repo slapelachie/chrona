@@ -23,7 +23,7 @@ model User {
   name           String
   email          String        @unique
   timezone       String        @default("Australia/Sydney")
-  payPeriodType  PayPeriodType @default(FORTNIGHTLY)
+  payPeriodType  PayPeriodType @default(WEEKLY)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Decimal } from 'decimal.js'
 import { prisma } from '@/lib/db'
 import { ValidationResult, validateString, validateDecimal } from '@/lib/validation'
+import { TaxCoefficientService } from '@/lib/tax-coefficient-service'
 
 // GET /api/admin/stsl-rates - Get STSL component rates by tax year and scale
 export async function GET(request: NextRequest) {
@@ -122,6 +123,9 @@ export async function PUT(request: NextRequest) {
 
       return affectedIds
     })
+
+    // Invalidate caches so the calculator sees the new A/B rows immediately
+    try { TaxCoefficientService.clearCacheForTaxYear(taxYear) } catch (e) { console.warn('Failed to clear tax cache after STSL update:', e) }
 
     return NextResponse.json({ data: parsed.map(p => ({ taxYear, scale: p.scale, earningsFrom: p.earningsFrom.toString(), earningsTo: p.earningsTo?.toString() ?? null, coefficientA: p.coefficientA.toString(), coefficientB: p.coefficientB.toString(), description: p.description, isActive: true })), message: `Successfully upserted ${affected.length} STSL rates for ${taxYear}` })
   } catch (error) {

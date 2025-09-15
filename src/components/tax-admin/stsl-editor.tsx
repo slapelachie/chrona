@@ -35,7 +35,8 @@ export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYe
       const res = await fetch(`/api/admin/stsl-rates?${q.toString()}`)
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || 'Failed to load STSL rates')
-      const data = (json.data || []).filter((r: any) => r.mode === 'FORMULA_AB')
+      // API already serves formula-only A/B rows; no mode property is present.
+      const data = (json.data || [])
       setRows(data as Rate[])
     } catch (e: any) { setErr(e.message) } finally { setLoading(false) }
   }

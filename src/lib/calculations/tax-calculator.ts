@@ -97,10 +97,13 @@ export class TaxCalculator {
     // Medicare levy is included in PAYG for this product; set to zero
     const medicareLevyRaw = new Decimal(0)
     
-    // Calculate HECS-HELP amount
+    // Calculate STSL (HECS-HELP) component
     const hecsHelpAmountRaw = this.calculateHecsHelp(grossPay, payPeriodType, yearToDateTax)
     
-    const hecsHelpAmount = TimeCalculations.roundDownToDollar(hecsHelpAmountRaw)
+    const paygWithholding = TimeCalculations.roundDownToDollar(paygWithholdingRaw)
+    const medicareLevy = TimeCalculations.roundDownToDollar(medicareLevyRaw)
+    // STSL rounds to the nearest dollar (Schedule 8 guidance)
+    const hecsHelpAmount = TimeCalculations.roundToNearestDollar(hecsHelpAmountRaw)
     const totalWithholdings = paygWithholding.plus(hecsHelpAmount)
     const netPay = grossPay.minus(totalWithholdings)
     
@@ -149,15 +152,15 @@ export class TaxCalculator {
     const weeklyPaygWithholding = this.calculatePaygWithholding(weeklyGrossPay, taxScale)
     const paygWithholdingRaw = this.convertFromWeeklyPay(weeklyPaygWithholding, payPeriodType)
     const medicareLevyRaw = new Decimal(0)
-    const hecsHelpAmountRaw = await this.calculateHecsHelpAsync(
+    const hecsHelpAmountRaw = this.calculateHecsHelp(
       grossPay,
       payPeriodType,
-      { taxYear: opts?.taxYear ?? this.getCurrentTaxYear(), onDate: opts?.onDate ?? new Date() }
+      yearToDateTax
     )
 
     const paygWithholding = TimeCalculations.roundDownToDollar(paygWithholdingRaw)
     const medicareLevy = TimeCalculations.roundDownToDollar(medicareLevyRaw)
-    const hecsHelpAmount = TimeCalculations.roundDownToDollar(hecsHelpAmountRaw)
+    const hecsHelpAmount = TimeCalculations.roundToNearestDollar(hecsHelpAmountRaw)
     const totalWithholdings = paygWithholding.plus(hecsHelpAmount)
     const netPay = grossPay.minus(totalWithholdings)
 
