@@ -1,47 +1,74 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Decimal } from 'decimal.js'
-import { prismaMock } from '../../../__tests__/setup'
 import { PayPeriodTaxService } from '../pay-period-tax-service'
 import { PayPeriodType } from '@/types'
 
-// Mock the tax calculator to avoid complex setup
-jest.mock('../calculations/tax-calculator', () => ({
-  TaxCalculator: jest.fn().mockImplementation(() => ({
-    calculatePayPeriodTax: jest.fn().mockReturnValue({
-      payPeriod: {
-        id: 'test-pay-period',
-        grossPay: new Decimal(2000),
-        payPeriodType: 'FORTNIGHTLY' as PayPeriodType,
-      },
-      breakdown: {
-        grossPay: new Decimal(2000),
-        paygWithholding: new Decimal(300),
-        medicareLevy: new Decimal(40),
-        hecsHelpAmount: new Decimal(0),
-        totalWithholdings: new Decimal(340),
-        netPay: new Decimal(1660),
-      },
-      taxScale: 'scale2' as const,
-      yearToDate: {
-        grossIncome: new Decimal(12000),
-        totalWithholdings: new Decimal(1540),
-      },
-    })
-  })),
-  DEFAULT_TAX_COEFFICIENTS: [],
-  DEFAULT_HECS_THRESHOLDS: [],
+// Mock the database (use vi.hoisted to avoid hoisting issues)
+const { mockPrisma } = vi.hoisted(() => ({
+  mockPrisma: {
+    payPeriod: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    taxSettings: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      upsert: vi.fn(),
+    },
+    yearToDateTax: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+  },
+}))
+
+vi.mock('@/lib/db', () => ({
+  prisma: mockPrisma,
+}))
+
+// Mock the tax calculator
+const mockTaxCalculator = {
+  calculatePayPeriodTax: vi.fn().mockReturnValue({
+    payPeriod: {
+      id: 'test-pay-period',
+      grossPay: new Decimal(2000),
+      payPeriodType: 'FORTNIGHTLY' as PayPeriodType,
+    },
+    breakdown: {
+      grossPay: new Decimal(2000),
+      paygWithholding: new Decimal(300),
+      medicareLevy: new Decimal(40),
+      hecsHelpAmount: new Decimal(0),
+      totalWithholdings: new Decimal(340),
+      netPay: new Decimal(1660),
+    },
+    taxScale: 'scale2' as const,
+    yearToDate: {
+      grossIncome: new Decimal(12000),
+      totalWithholdings: new Decimal(1540),
+    },
+  })
+}
+
+vi.mock('../calculations/tax-calculator', () => ({
+  TaxCalculator: {
+    createFromDatabase: vi.fn().mockResolvedValue(mockTaxCalculator),
+  },
 }))
 
 describe('PayPeriodTaxService', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('calculatePayPeriodTax', () => {
-    test('should calculate tax for a pay period successfully', async () => {
+    it('should calculate tax for a pay period successfully', async () => {
       // Mock database responses
       const mockPayPeriod = {
         id: 'test-pay-period',
         userId: 'test-user',
+        startDate: new Date('2024-08-01'),
         totalPay: new Decimal(2000),
         user: {
           payPeriodType: 'FORTNIGHTLY' as PayPeriodType,
@@ -74,11 +101,11 @@ describe('PayPeriodTaxService', () => {
         updatedAt: new Date(),
       }
 
-      prismaMock.payPeriod.findUnique.mockResolvedValue(mockPayPeriod as any)
-      prismaMock.taxSettings.findUnique.mockResolvedValue(mockPayPeriod.user.taxSettings as any)
-      prismaMock.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
-      prismaMock.payPeriod.update.mockResolvedValue(mockPayPeriod as any)
-      prismaMock.yearToDateTax.update.mockResolvedValue(mockYearToDateTax as any)
+      mockPrisma.payPeriod.findUnique.mockResolvedValue(mockPayPeriod as any)
+      mockPrisma.taxSettings.findUnique.mockResolvedValue(mockPayPeriod.user.taxSettings as any)
+      mockPrisma.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
+      mockPrisma.payPeriod.update.mockResolvedValue(mockPayPeriod as any)
+      mockPrisma.yearToDateTax.update.mockResolvedValue(mockYearToDateTax as any)
 
       const result = await PayPeriodTaxService.calculatePayPeriodTax('test-pay-period')
 
@@ -90,7 +117,7 @@ describe('PayPeriodTaxService', () => {
       expect(result.breakdown.netPay.toNumber()).toBe(1660)
 
       // Verify database updates
-      expect(prismaMock.payPeriod.update).toHaveBeenCalledWith({
+      expect(mockPrisma.payPeriod.update).toHaveBeenCalledWith({
         where: { id: 'test-pay-period' },
         data: {
           paygWithholding: new Decimal(300),
@@ -101,17 +128,17 @@ describe('PayPeriodTaxService', () => {
         }
       })
 
-      expect(prismaMock.yearToDateTax.update).toHaveBeenCalled()
+      expect(mockPrisma.yearToDateTax.update).toHaveBeenCalled()
     })
 
-    test('should throw error if pay period not found', async () => {
-      prismaMock.payPeriod.findUnique.mockResolvedValue(null)
+    it('should throw error if pay period not found', async () => {
+      mockPrisma.payPeriod.findUnique.mockResolvedValue(null)
 
       await expect(PayPeriodTaxService.calculatePayPeriodTax('nonexistent'))
         .rejects.toThrow('Pay period not found: nonexistent')
     })
 
-    test('should throw error if pay period has no total pay', async () => {
+    it('should throw error if pay period has no total pay', async () => {
       const mockPayPeriod = {
         id: 'test-pay-period',
         userId: 'test-user',
@@ -120,7 +147,7 @@ describe('PayPeriodTaxService', () => {
         shifts: []
       }
 
-      prismaMock.payPeriod.findUnique.mockResolvedValue(mockPayPeriod as any)
+      mockPrisma.payPeriod.findUnique.mockResolvedValue(mockPayPeriod as any)
 
       await expect(PayPeriodTaxService.calculatePayPeriodTax('test-pay-period'))
         .rejects.toThrow('Pay period test-pay-period has no calculated total pay')
@@ -128,7 +155,7 @@ describe('PayPeriodTaxService', () => {
   })
 
   describe('previewTaxCalculation', () => {
-    test('should preview tax calculation without saving', async () => {
+    it('should preview tax calculation without saving', async () => {
       const mockTaxSettings = {
         id: 'test-tax-settings',
         userId: 'test-user',
@@ -155,8 +182,8 @@ describe('PayPeriodTaxService', () => {
         updatedAt: new Date(),
       }
 
-      prismaMock.taxSettings.findUnique.mockResolvedValue(mockTaxSettings as any)
-      prismaMock.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
+      mockPrisma.taxSettings.findUnique.mockResolvedValue(mockTaxSettings as any)
+      mockPrisma.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
 
       const result = await PayPeriodTaxService.previewTaxCalculation(
         'test-user',
@@ -169,13 +196,13 @@ describe('PayPeriodTaxService', () => {
       expect(result.breakdown.paygWithholding.toNumber()).toBe(300)
 
       // Should not update database
-      expect(prismaMock.payPeriod.update).not.toHaveBeenCalled()
-      expect(prismaMock.yearToDateTax.update).not.toHaveBeenCalled()
+      expect(mockPrisma.payPeriod.update).not.toHaveBeenCalled()
+      expect(mockPrisma.yearToDateTax.update).not.toHaveBeenCalled()
     })
   })
 
   describe('processPayPeriod', () => {
-    test('should process pay period with tax calculations', async () => {
+    it('should process pay period with tax calculations', async () => {
       const mockPayPeriod = {
         id: 'test-pay-period',
         userId: 'test-user',
@@ -215,18 +242,18 @@ describe('PayPeriodTaxService', () => {
         updatedAt: new Date(),
       }
 
-      prismaMock.payPeriod.findUnique
+      mockPrisma.payPeriod.findUnique
         .mockResolvedValueOnce(mockPayPeriod as any) // For calculatePayPeriodTotals
         .mockResolvedValueOnce({ ...mockPayPeriod, totalPay: new Decimal(2000) } as any) // For calculatePayPeriodTax
 
-      prismaMock.payPeriod.update
+      mockPrisma.payPeriod.update
         .mockResolvedValueOnce({ ...mockPayPeriod, totalPay: new Decimal(2000) } as any) // For calculatePayPeriodTotals
         .mockResolvedValueOnce(mockPayPeriod as any) // For tax calculation update
         .mockResolvedValueOnce({ ...mockPayPeriod, status: 'processing' } as any) // For status update
 
-      prismaMock.taxSettings.findUnique.mockResolvedValue(mockPayPeriod.user.taxSettings as any)
-      prismaMock.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
-      prismaMock.yearToDateTax.update.mockResolvedValue(mockYearToDateTax as any)
+      mockPrisma.taxSettings.findUnique.mockResolvedValue(mockPayPeriod.user.taxSettings as any)
+      mockPrisma.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
+      mockPrisma.yearToDateTax.update.mockResolvedValue(mockYearToDateTax as any)
 
       const result = await PayPeriodTaxService.processPayPeriod('test-pay-period')
 
@@ -234,7 +261,7 @@ describe('PayPeriodTaxService', () => {
       expect(result.status).toBe('processing')
 
       // Should update pay period totals
-      expect(prismaMock.payPeriod.update).toHaveBeenCalledWith({
+      expect(mockPrisma.payPeriod.update).toHaveBeenCalledWith({
         where: { id: 'test-pay-period' },
         data: expect.objectContaining({
           totalHours: expect.any(Decimal),
@@ -243,7 +270,7 @@ describe('PayPeriodTaxService', () => {
       })
 
       // Should update status
-      expect(prismaMock.payPeriod.update).toHaveBeenCalledWith({
+      expect(mockPrisma.payPeriod.update).toHaveBeenCalledWith({
         where: { id: 'test-pay-period' },
         data: {
           status: 'processing',
@@ -254,7 +281,7 @@ describe('PayPeriodTaxService', () => {
   })
 
   describe('Tax Settings Management', () => {
-    test('should get user tax settings', async () => {
+    it('should get user tax settings', async () => {
       const mockTaxSettings = {
         id: 'test-tax-settings',
         userId: 'test-user',
@@ -267,14 +294,14 @@ describe('PayPeriodTaxService', () => {
         updatedAt: new Date(),
       }
 
-      prismaMock.taxSettings.findUnique.mockResolvedValue(mockTaxSettings as any)
+      mockPrisma.taxSettings.findUnique.mockResolvedValue(mockTaxSettings as any)
 
       const result = await PayPeriodTaxService.getUserTaxSettings('test-user')
 
       expect(result).toEqual(mockTaxSettings)
     })
 
-    test('should create default tax settings if none exist', async () => {
+    it('should create default tax settings if none exist', async () => {
       const mockTaxSettings = {
         id: 'new-tax-settings',
         userId: 'test-user',
@@ -287,12 +314,12 @@ describe('PayPeriodTaxService', () => {
         updatedAt: new Date(),
       }
 
-      prismaMock.taxSettings.findUnique.mockResolvedValue(null)
-      prismaMock.taxSettings.create.mockResolvedValue(mockTaxSettings as any)
+      mockPrisma.taxSettings.findUnique.mockResolvedValue(null)
+      mockPrisma.taxSettings.create.mockResolvedValue(mockTaxSettings as any)
 
       const result = await PayPeriodTaxService.getUserTaxSettings('test-user')
 
-      expect(prismaMock.taxSettings.create).toHaveBeenCalledWith({
+      expect(mockPrisma.taxSettings.create).toHaveBeenCalledWith({
         data: {
           userId: 'test-user',
           claimedTaxFreeThreshold: true,
@@ -304,7 +331,7 @@ describe('PayPeriodTaxService', () => {
       })
     })
 
-    test('should update user tax settings', async () => {
+    it('should update user tax settings', async () => {
       const updatedSettings = {
         id: 'test-tax-settings',
         userId: 'test-user',
@@ -317,7 +344,7 @@ describe('PayPeriodTaxService', () => {
         updatedAt: new Date(),
       }
 
-      prismaMock.taxSettings.upsert.mockResolvedValue(updatedSettings as any)
+      mockPrisma.taxSettings.upsert.mockResolvedValue(updatedSettings as any)
 
       const result = await PayPeriodTaxService.updateUserTaxSettings('test-user', {
         claimedTaxFreeThreshold: false,
@@ -327,7 +354,7 @@ describe('PayPeriodTaxService', () => {
       })
 
       expect(result).toEqual(updatedSettings)
-      expect(prismaMock.taxSettings.upsert).toHaveBeenCalledWith({
+      expect(mockPrisma.taxSettings.upsert).toHaveBeenCalledWith({
         where: { userId: 'test-user' },
         update: expect.objectContaining({
           claimedTaxFreeThreshold: false,
@@ -348,7 +375,7 @@ describe('PayPeriodTaxService', () => {
   })
 
   describe('Year-to-Date Tax Tracking', () => {
-    test('should get year-to-date tax summary', async () => {
+    it('should get year-to-date tax summary', async () => {
       const mockYearToDateTax = {
         id: 'test-ytd',
         userId: 'test-user',
@@ -363,14 +390,14 @@ describe('PayPeriodTaxService', () => {
         updatedAt: new Date(),
       }
 
-      prismaMock.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
+      mockPrisma.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
 
       const result = await PayPeriodTaxService.getYearToDateTaxSummary('test-user')
 
       expect(result).toEqual(mockYearToDateTax)
     })
 
-    test('should create year-to-date tax tracking if none exists', async () => {
+    it('should create year-to-date tax tracking if none exists', async () => {
       const mockYearToDateTax = {
         id: 'new-ytd',
         userId: 'test-user',
@@ -385,12 +412,12 @@ describe('PayPeriodTaxService', () => {
         updatedAt: new Date(),
       }
 
-      prismaMock.yearToDateTax.findUnique.mockResolvedValue(null)
-      prismaMock.yearToDateTax.create.mockResolvedValue(mockYearToDateTax as any)
+      mockPrisma.yearToDateTax.findUnique.mockResolvedValue(null)
+      mockPrisma.yearToDateTax.create.mockResolvedValue(mockYearToDateTax as any)
 
       const result = await PayPeriodTaxService.getYearToDateTaxSummary('test-user')
 
-      expect(prismaMock.yearToDateTax.create).toHaveBeenCalledWith({
+      expect(mockPrisma.yearToDateTax.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           userId: 'test-user',
           taxYear: '2024-25',
@@ -401,6 +428,292 @@ describe('PayPeriodTaxService', () => {
           totalWithholdings: new Decimal(0),
         })
       })
+    })
+  })
+
+  describe('Database Integration and Tax Year Logic', () => {
+    it('should use tax year from pay period start date, not current date', async () => {
+      const mockPayPeriod = {
+        id: 'test-pay-period',
+        userId: 'test-user',
+        startDate: new Date('2023-08-15'), // Should use 2023-24 tax year
+        totalPay: new Decimal(2000),
+        user: {
+          payPeriodType: 'FORTNIGHTLY' as PayPeriodType,
+          taxSettings: {
+            id: 'test-tax-settings',
+            userId: 'test-user',
+            claimedTaxFreeThreshold: true,
+            isForeignResident: false,
+            hasTaxFileNumber: true,
+            medicareExemption: 'none',
+            hecsHelpRate: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+        },
+        shifts: []
+      }
+
+      const mockYearToDateTax = {
+        id: 'test-ytd',
+        userId: 'test-user',
+        taxYear: '2023-24',
+        grossIncome: new Decimal(10000),
+        payGWithholding: new Decimal(1000),
+        medicareLevy: new Decimal(200),
+        hecsHelpAmount: new Decimal(0),
+        totalWithholdings: new Decimal(1200),
+        lastUpdated: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      mockPrisma.payPeriod.findUnique.mockResolvedValue(mockPayPeriod as any)
+      mockPrisma.taxSettings.findUnique.mockResolvedValue(mockPayPeriod.user.taxSettings as any)
+      mockPrisma.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
+      mockPrisma.payPeriod.update.mockResolvedValue(mockPayPeriod as any)
+      mockPrisma.yearToDateTax.update.mockResolvedValue(mockYearToDateTax as any)
+
+      await PayPeriodTaxService.calculatePayPeriodTax('test-pay-period')
+
+      // Should have called TaxCalculator.createFromDatabase with 2023-24 tax year
+      expect(require('../calculations/tax-calculator').TaxCalculator.createFromDatabase)
+        .toHaveBeenCalledWith(
+          expect.any(Object),
+          '2023-24'
+        )
+    })
+
+    it('should determine correct tax year for dates around financial year boundary', async () => {
+      // Test cases for Australian financial year (July 1 - June 30)
+      const testCases = [
+        { date: new Date('2024-06-30'), expectedTaxYear: '2023-24' }, // Last day of 2023-24
+        { date: new Date('2024-07-01'), expectedTaxYear: '2024-25' }, // First day of 2024-25
+        { date: new Date('2024-12-31'), expectedTaxYear: '2024-25' }, // Middle of 2024-25
+        { date: new Date('2025-01-01'), expectedTaxYear: '2024-25' }, // Start of calendar year
+        { date: new Date('2025-06-30'), expectedTaxYear: '2024-25' }, // Last day of 2024-25
+      ]
+
+      for (const testCase of testCases) {
+        vi.clearAllMocks()
+
+        const mockPayPeriod = {
+          id: 'test-pay-period',
+          userId: 'test-user',
+          startDate: testCase.date,
+          totalPay: new Decimal(2000),
+          user: {
+            payPeriodType: 'FORTNIGHTLY' as PayPeriodType,
+            taxSettings: {
+              id: 'test-tax-settings',
+              userId: 'test-user',
+              claimedTaxFreeThreshold: true,
+              isForeignResident: false,
+              hasTaxFileNumber: true,
+              medicareExemption: 'none',
+              hecsHelpRate: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }
+          },
+          shifts: []
+        }
+
+        const mockYearToDateTax = {
+          id: 'test-ytd',
+          userId: 'test-user',
+          taxYear: testCase.expectedTaxYear,
+          grossIncome: new Decimal(10000),
+          payGWithholding: new Decimal(1000),
+          medicareLevy: new Decimal(200),
+          hecsHelpAmount: new Decimal(0),
+          totalWithholdings: new Decimal(1200),
+          lastUpdated: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+
+        mockPrisma.payPeriod.findUnique.mockResolvedValue(mockPayPeriod as any)
+        mockPrisma.taxSettings.findUnique.mockResolvedValue(mockPayPeriod.user.taxSettings as any)
+        mockPrisma.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
+        mockPrisma.payPeriod.update.mockResolvedValue(mockPayPeriod as any)
+        mockPrisma.yearToDateTax.update.mockResolvedValue(mockYearToDateTax as any)
+
+        await PayPeriodTaxService.calculatePayPeriodTax('test-pay-period')
+
+        expect(require('../calculations/tax-calculator').TaxCalculator.createFromDatabase)
+          .toHaveBeenCalledWith(
+            expect.any(Object),
+            testCase.expectedTaxYear
+          )
+      }
+    })
+
+    it('should use database-backed TaxCalculator instead of hardcoded coefficients', async () => {
+      const mockPayPeriod = {
+        id: 'test-pay-period',
+        userId: 'test-user',
+        startDate: new Date('2024-08-01'),
+        totalPay: new Decimal(2000),
+        user: {
+          payPeriodType: 'FORTNIGHTLY' as PayPeriodType,
+          taxSettings: {
+            id: 'test-tax-settings',
+            userId: 'test-user',
+            claimedTaxFreeThreshold: true,
+            isForeignResident: false,
+            hasTaxFileNumber: true,
+            medicareExemption: 'none',
+            hecsHelpRate: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+        },
+        shifts: []
+      }
+
+      const mockYearToDateTax = {
+        id: 'test-ytd',
+        userId: 'test-user',
+        taxYear: '2024-25',
+        grossIncome: new Decimal(10000),
+        payGWithholding: new Decimal(1000),
+        medicareLevy: new Decimal(200),
+        hecsHelpAmount: new Decimal(0),
+        totalWithholdings: new Decimal(1200),
+        lastUpdated: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      mockPrisma.payPeriod.findUnique.mockResolvedValue(mockPayPeriod as any)
+      mockPrisma.taxSettings.findUnique.mockResolvedValue(mockPayPeriod.user.taxSettings as any)
+      mockPrisma.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
+      mockPrisma.payPeriod.update.mockResolvedValue(mockPayPeriod as any)
+      mockPrisma.yearToDateTax.update.mockResolvedValue(mockYearToDateTax as any)
+
+      await PayPeriodTaxService.calculatePayPeriodTax('test-pay-period')
+
+      // Verify TaxCalculator.createFromDatabase was called (not constructor with hardcoded values)
+      expect(require('../calculations/tax-calculator').TaxCalculator.createFromDatabase)
+        .toHaveBeenCalledWith(
+          expect.objectContaining({
+            claimedTaxFreeThreshold: true,
+            isForeignResident: false,
+            hasTaxFileNumber: true,
+            medicareExemption: 'none',
+          }),
+          '2024-25'
+        )
+
+      // Verify the database-backed calculator's method was called
+      expect(mockTaxCalculator.calculatePayPeriodTax).toHaveBeenCalledWith(
+        'test-pay-period',
+        new Decimal(2000),
+        'FORTNIGHTLY',
+        mockYearToDateTax
+      )
+    })
+
+    it('should use specified tax year in preview calculation', async () => {
+      const mockTaxSettings = {
+        id: 'test-tax-settings',
+        userId: 'test-user',
+        claimedTaxFreeThreshold: true,
+        isForeignResident: false,
+        hasTaxFileNumber: true,
+        medicareExemption: 'none',
+        hecsHelpRate: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      const mockYearToDateTax = {
+        id: 'test-ytd',
+        userId: 'test-user',
+        taxYear: '2023-24',
+        grossIncome: new Decimal(10000),
+        payGWithholding: new Decimal(1000),
+        medicareLevy: new Decimal(200),
+        hecsHelpAmount: new Decimal(0),
+        totalWithholdings: new Decimal(1200),
+        lastUpdated: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      mockPrisma.taxSettings.findUnique.mockResolvedValue(mockTaxSettings as any)
+      mockPrisma.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
+
+      await PayPeriodTaxService.previewTaxCalculation(
+        'test-user',
+        new Decimal(2000),
+        'FORTNIGHTLY',
+        '2023-24' // Specify historical tax year
+      )
+
+      // Should use the specified tax year
+      expect(require('../calculations/tax-calculator').TaxCalculator.createFromDatabase)
+        .toHaveBeenCalledWith(
+          expect.any(Object),
+          '2023-24'
+        )
+    })
+
+    it('should handle database failure gracefully in tax calculation', async () => {
+      const mockPayPeriod = {
+        id: 'test-pay-period',
+        userId: 'test-user',
+        startDate: new Date('2024-08-01'),
+        totalPay: new Decimal(2000),
+        user: {
+          payPeriodType: 'FORTNIGHTLY' as PayPeriodType,
+          taxSettings: {
+            id: 'test-tax-settings',
+            userId: 'test-user',
+            claimedTaxFreeThreshold: true,
+            isForeignResident: false,
+            hasTaxFileNumber: true,
+            medicareExemption: 'none',
+            hecsHelpRate: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+        },
+        shifts: []
+      }
+
+      const mockYearToDateTax = {
+        id: 'test-ytd',
+        userId: 'test-user',
+        taxYear: '2024-25',
+        grossIncome: new Decimal(10000),
+        payGWithholding: new Decimal(1000),
+        medicareLevy: new Decimal(200),
+        hecsHelpAmount: new Decimal(0),
+        totalWithholdings: new Decimal(1200),
+        lastUpdated: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      // Mock database failure, but TaxCalculator.createFromDatabase should handle gracefully
+      require('../calculations/tax-calculator').TaxCalculator.createFromDatabase
+        .mockRejectedValueOnce(new Error('Database connection failed'))
+        .mockResolvedValueOnce(mockTaxCalculator) // Fallback should work
+
+      mockPrisma.payPeriod.findUnique.mockResolvedValue(mockPayPeriod as any)
+      mockPrisma.taxSettings.findUnique.mockResolvedValue(mockPayPeriod.user.taxSettings as any)
+      mockPrisma.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
+      mockPrisma.payPeriod.update.mockResolvedValue(mockPayPeriod as any)
+      mockPrisma.yearToDateTax.update.mockResolvedValue(mockYearToDateTax as any)
+
+      const result = await PayPeriodTaxService.calculatePayPeriodTax('test-pay-period')
+
+      // Should still return valid results due to fallback
+      expect(result.breakdown.grossPay.toNumber()).toBe(2000)
+      expect(result.breakdown.paygWithholding.toNumber()).toBe(300)
     })
   })
 })

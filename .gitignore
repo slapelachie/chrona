@@ -84,3 +84,5 @@ temp/
 /generated/prisma
 
 *.db
+
+.code/

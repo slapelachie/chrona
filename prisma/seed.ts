@@ -499,6 +499,140 @@ async function main() {
     `✅ Created previous pay period: ${previousPayPeriod.startDate.toDateString()} - ${previousPayPeriod.endDate.toDateString()}`
   )
 
+  // Seed tax coefficients for 2024-25 tax year
+  console.log('💰 Seeding ATO tax coefficients for 2024-25...')
+  const taxYear = '2024-25'
+  
+  // Tax Rate Configuration for 2024-25
+  const taxRateConfig = await prisma.taxRateConfig.upsert({
+    where: { taxYear },
+    update: {},
+    create: {
+      taxYear,
+      medicareRate: new Decimal('0.02'), // 2%
+      medicareLowIncomeThreshold: new Decimal('26000'),
+      medicareHighIncomeThreshold: new Decimal('32500'),
+      description: 'Medicare levy rates and thresholds for 2024-25 tax year',
+      isActive: true,
+    },
+  })
+  console.log(`✅ Created tax rate config for ${taxYear}`)
+
+  // Tax Coefficients - Scale 2 (Claimed tax-free threshold - most common)
+  const scale2Coefficients = [
+    { earningsFrom: new Decimal(0), earningsTo: new Decimal(371), coefficientA: new Decimal(0), coefficientB: new Decimal(0), description: 'Tax-free threshold bracket' },
+    { earningsFrom: new Decimal(371), earningsTo: new Decimal(515), coefficientA: new Decimal(0.19), coefficientB: new Decimal(70.5385), description: '19% tax bracket' },
+    { earningsFrom: new Decimal(515), earningsTo: new Decimal(721), coefficientA: new Decimal(0.2348), coefficientB: new Decimal(93.4615), description: '23.48% effective rate bracket' },
+    { earningsFrom: new Decimal(721), earningsTo: new Decimal(1282), coefficientA: new Decimal(0.219), coefficientB: new Decimal(82.1154), description: '21.9% effective rate bracket' },
+    { earningsFrom: new Decimal(1282), earningsTo: new Decimal(2307), coefficientA: new Decimal(0.3477), coefficientB: new Decimal(247.1154), description: '34.77% effective rate bracket' },
+    { earningsFrom: new Decimal(2307), earningsTo: null, coefficientA: new Decimal(0.45), coefficientB: new Decimal(482.6731), description: '45% top tax bracket' },
+  ]
+
+  // Tax Coefficients - Scale 1 (Did not claim tax-free threshold)
+  const scale1Coefficients = [
+    { earningsFrom: new Decimal(0), earningsTo: new Decimal(88), coefficientA: new Decimal(0.19), coefficientB: new Decimal(0), description: '19% from first dollar' },
+    { earningsFrom: new Decimal(88), earningsTo: new Decimal(371), coefficientA: new Decimal(0.2348), coefficientB: new Decimal(12.7692), description: '23.48% effective rate bracket' },
+    { earningsFrom: new Decimal(371), earningsTo: new Decimal(515), coefficientA: new Decimal(0.219), coefficientB: new Decimal(6.5385), description: '21.9% effective rate bracket' },
+    { earningsFrom: new Decimal(515), earningsTo: new Decimal(721), coefficientA: new Decimal(0.3477), coefficientB: new Decimal(72.5385), description: '34.77% effective rate bracket' },
+    { earningsFrom: new Decimal(721), earningsTo: new Decimal(1282), coefficientA: new Decimal(0.45), coefficientB: new Decimal(146.0769), description: '45% tax bracket' },
+    { earningsFrom: new Decimal(1282), earningsTo: null, coefficientA: new Decimal(0.45), coefficientB: new Decimal(146.0769), description: '45% top tax bracket' },
+  ]
+
+  // Insert Scale 2 coefficients
+  for (const coeff of scale2Coefficients) {
+    await prisma.taxCoefficient.upsert({
+      where: {
+        taxYear_scale_earningsFrom: {
+          taxYear,
+          scale: 'scale2',
+          earningsFrom: coeff.earningsFrom,
+        },
+      },
+      update: {},
+      create: {
+        taxYear,
+        scale: 'scale2',
+        earningsFrom: coeff.earningsFrom,
+        earningsTo: coeff.earningsTo,
+        coefficientA: coeff.coefficientA,
+        coefficientB: coeff.coefficientB,
+        description: coeff.description,
+        isActive: true,
+      },
+    })
+  }
+
+  // Insert Scale 1 coefficients
+  for (const coeff of scale1Coefficients) {
+    await prisma.taxCoefficient.upsert({
+      where: {
+        taxYear_scale_earningsFrom: {
+          taxYear,
+          scale: 'scale1',
+          earningsFrom: coeff.earningsFrom,
+        },
+      },
+      update: {},
+      create: {
+        taxYear,
+        scale: 'scale1',
+        earningsFrom: coeff.earningsFrom,
+        earningsTo: coeff.earningsTo,
+        coefficientA: coeff.coefficientA,
+        coefficientB: coeff.coefficientB,
+        description: coeff.description,
+        isActive: true,
+      },
+    })
+  }
+
+  console.log(`✅ Created ${scale1Coefficients.length + scale2Coefficients.length} tax coefficients`)
+
+  // HECS-HELP thresholds for 2024-25
+  console.log('🎓 Seeding HECS-HELP thresholds for 2024-25...')
+  const hecsThresholds = [
+    { incomeFrom: new Decimal(51550), incomeTo: new Decimal(59518), rate: new Decimal(0.01), description: '1% repayment rate' },
+    { incomeFrom: new Decimal(59518), incomeTo: new Decimal(63090), rate: new Decimal(0.02), description: '2% repayment rate' },
+    { incomeFrom: new Decimal(63090), incomeTo: new Decimal(66662), rate: new Decimal(0.025), description: '2.5% repayment rate' },
+    { incomeFrom: new Decimal(66662), incomeTo: new Decimal(70235), rate: new Decimal(0.03), description: '3% repayment rate' },
+    { incomeFrom: new Decimal(70235), incomeTo: new Decimal(74808), rate: new Decimal(0.035), description: '3.5% repayment rate' },
+    { incomeFrom: new Decimal(74808), incomeTo: new Decimal(79381), rate: new Decimal(0.04), description: '4% repayment rate' },
+    { incomeFrom: new Decimal(79381), incomeTo: new Decimal(84981), rate: new Decimal(0.045), description: '4.5% repayment rate' },
+    { incomeFrom: new Decimal(84981), incomeTo: new Decimal(90554), rate: new Decimal(0.05), description: '5% repayment rate' },
+    { incomeFrom: new Decimal(90554), incomeTo: new Decimal(96127), rate: new Decimal(0.055), description: '5.5% repayment rate' },
+    { incomeFrom: new Decimal(96127), incomeTo: new Decimal(101700), rate: new Decimal(0.06), description: '6% repayment rate' },
+    { incomeFrom: new Decimal(101700), incomeTo: new Decimal(109177), rate: new Decimal(0.065), description: '6.5% repayment rate' },
+    { incomeFrom: new Decimal(109177), incomeTo: new Decimal(116653), rate: new Decimal(0.07), description: '7% repayment rate' },
+    { incomeFrom: new Decimal(116653), incomeTo: new Decimal(124130), rate: new Decimal(0.075), description: '7.5% repayment rate' },
+    { incomeFrom: new Decimal(124130), incomeTo: new Decimal(131607), rate: new Decimal(0.08), description: '8% repayment rate' },
+    { incomeFrom: new Decimal(131607), incomeTo: new Decimal(139083), rate: new Decimal(0.085), description: '8.5% repayment rate' },
+    { incomeFrom: new Decimal(139083), incomeTo: new Decimal(147560), rate: new Decimal(0.09), description: '9% repayment rate' },
+    { incomeFrom: new Decimal(147560), incomeTo: new Decimal(156037), rate: new Decimal(0.095), description: '9.5% repayment rate' },
+    { incomeFrom: new Decimal(156037), incomeTo: null, rate: new Decimal(0.10), description: '10% maximum repayment rate' },
+  ]
+
+  for (const threshold of hecsThresholds) {
+    await prisma.hecsThreshold.upsert({
+      where: {
+        taxYear_incomeFrom: {
+          taxYear,
+          incomeFrom: threshold.incomeFrom,
+        },
+      },
+      update: {},
+      create: {
+        taxYear,
+        incomeFrom: threshold.incomeFrom,
+        incomeTo: threshold.incomeTo,
+        rate: threshold.rate,
+        description: threshold.description,
+        isActive: true,
+      },
+    })
+  }
+
+  console.log(`✅ Created ${hecsThresholds.length} HECS-HELP thresholds`)
+
   console.log('✨ Database seeding completed successfully!')
   console.log('\n📈 Seeded data summary:')
   console.log(`   👤 Users: ${1}`)
@@ -509,6 +643,9 @@ async function main() {
   console.log(`   🕒 Shifts: ${6}`)
   console.log(`   ☕ Break Periods: ${7}`)
   console.log(`   📅 Pay Periods: ${2}`)
+  console.log(`   🧮 Tax Coefficients: ${scale1Coefficients.length + scale2Coefficients.length}`)
+  console.log(`   🎓 HECS-HELP Thresholds: ${hecsThresholds.length}`)
+  console.log(`   ⚙️  Tax Rate Configs: ${1}`)
 }
 
 main()

@@ -251,3 +251,54 @@ model YearToDateTax {
   @@unique([userId, taxYear]) // One record per user per tax year
   @@map("year_to_date_tax")
 }
+
+// Tax coefficients for PAYG withholding calculations (ATO Schedule 1)
+model TaxCoefficient {
+  id            String   @id @default(cuid())
+  taxYear       String   // "2024-25" format
+  scale         String   // "scale1", "scale2", "scale3", "scale4", "scale5", "scale6"
+  earningsFrom  Decimal  // Weekly earnings threshold (lower bound)
+  earningsTo    Decimal? // Weekly earnings threshold (upper bound, null for highest bracket)
+  coefficientA  Decimal  // Multiplier in formula: (a × weekly earnings) - b
+  coefficientB  Decimal  // Constant adjustment in formula
+  description   String?  // Optional description of the bracket
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([taxYear, scale, earningsFrom]) // Prevent duplicate brackets
+  @@index([taxYear, scale, isActive])
+  @@map("tax_coefficients")
+}
+
+// HECS-HELP repayment thresholds and rates
+model HecsThreshold {
+  id          String   @id @default(cuid())
+  taxYear     String   // "2024-25" format
+  incomeFrom  Decimal  // Annual income threshold (lower bound)
+  incomeTo    Decimal? // Annual income threshold (upper bound, null for highest bracket)
+  rate        Decimal  // Repayment rate as decimal (e.g., 0.01 for 1%)
+  description String?  // Optional description
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([taxYear, incomeFrom]) // Prevent duplicate thresholds
+  @@index([taxYear, isActive])
+  @@map("hecs_thresholds")
+}
+
+// Tax rate configuration metadata (Medicare rates, thresholds, etc.)
+model TaxRateConfig {
+  id                           String   @id @default(cuid())
+  taxYear                      String   @unique // "2024-25" format
+  medicareRate                 Decimal  @default(0.02) // 2%
+  medicareLowIncomeThreshold   Decimal  @default(26000)
+  medicareHighIncomeThreshold  Decimal  @default(32500)
+  description                  String?
+  isActive                     Boolean  @default(true)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@map("tax_rate_configs")
+}

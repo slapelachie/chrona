@@ -2,6 +2,9 @@ import '@testing-library/jest-dom'
 import { expect, afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import * as matchers from '@testing-library/jest-dom/matchers'
+import { beforeAll, afterAll } from 'vitest'
+import { prisma } from '@/lib/db'
+import { seedTaxConfigForYear, clearTaxConfig } from '@/lib/__tests__/helpers/tax-config'
 
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers)
@@ -46,3 +49,26 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
   unobserve() {}
 }
+
+// Seed a minimal current-year tax configuration for tests that rely on DB-backed tax rates
+const currentTaxYear = (() => {
+  const now = new Date()
+  const y = now.getFullYear()
+  return now.getMonth() >= 6 ? `${y}-${(y + 1) % 100}` : `${y - 1}-${y % 100}`
+})()
+
+beforeAll(async () => {
+  try {
+    await seedTaxConfigForYear(prisma as any, currentTaxYear)
+  } catch {
+    // Best-effort; individual tests may seed as needed
+  }
+})
+
+afterAll(async () => {
+  try {
+    await clearTaxConfig(prisma as any, currentTaxYear)
+  } catch {
+    // ignore
+  }
+})

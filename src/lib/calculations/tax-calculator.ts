@@ -7,8 +7,10 @@ import {
   TaxCoefficient,
   HecsThreshold,
   YearToDateTax,
+  TaxRateConfig,
 } from '@/types'
 import { TimeCalculations } from './time-calculations'
+import { TaxCoefficientService } from '@/lib/tax-coefficient-service'
 
 /**
  * Australian Tax Calculator - ATO Compliant PAYG Withholding
@@ -38,6 +40,36 @@ export class TaxCalculator {
     this.medicareRate = medicareRate
     this.medicareLowIncomeThreshold = medicareLowIncomeThreshold
     this.medicareHighIncomeThreshold = medicareHighIncomeThreshold
+  }
+
+  /**
+   * Create TaxCalculator instance using database coefficients for specified tax year
+   */
+  static async createFromDatabase(
+    taxSettings: TaxSettings,
+    taxYear: string = '2024-25'
+  ): Promise<TaxCalculator> {
+    try {
+      const taxConfig = await TaxCoefficientService.getTaxRateConfig(taxYear)
+      
+      return new TaxCalculator(
+        taxSettings,
+        taxConfig.coefficients,
+        taxConfig.hecsHelpThresholds,
+        taxConfig.medicareRate,
+        taxConfig.medicareLowIncomeThreshold,
+        taxConfig.medicareHighIncomeThreshold
+      )
+    } catch (error) {
+      console.error('Failed to load tax configuration from database, using fallback:', error)
+      
+      // Fallback to hardcoded values if database fails
+      return new TaxCalculator(
+        taxSettings,
+        DEFAULT_TAX_COEFFICIENTS,
+        DEFAULT_HECS_THRESHOLDS
+      )
+    }
   }
 
   /**

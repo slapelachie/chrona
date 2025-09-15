@@ -1,6 +1,16 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Decimal } from 'decimal.js'
 import { TaxCalculator, DEFAULT_TAX_COEFFICIENTS, DEFAULT_HECS_THRESHOLDS } from '../calculations/tax-calculator'
 import { TaxSettings, PayPeriodType, YearToDateTax } from '@/types'
+
+// Hoisted mock for '@/lib/tax-coefficient-service'. We route calls
+// to a per-test mutable handler so we can set expectations.
+let __mockSvc: { getTaxRateConfig: ReturnType<typeof vi.fn> }
+vi.mock('@/lib/tax-coefficient-service', () => ({
+  TaxCoefficientService: {
+    getTaxRateConfig: (...args: any[]) => __mockSvc.getTaxRateConfig(...args),
+  },
+}))
 
 describe('TaxCalculator', () => {
   // Mock tax settings for testing
@@ -33,6 +43,7 @@ describe('TaxCalculator', () => {
   let calculator: TaxCalculator
 
   beforeEach(() => {
+    vi.clearAllMocks()
     calculator = new TaxCalculator(
       mockTaxSettings,
       DEFAULT_TAX_COEFFICIENTS,
@@ -433,6 +444,260 @@ describe('TaxCalculator', () => {
       expect(result.breakdown.hecsHelpAmount.decimalPlaces()).toBeLessThanOrEqual(2)
       expect(result.breakdown.totalWithholdings.decimalPlaces()).toBeLessThanOrEqual(2)
       expect(result.breakdown.netPay.decimalPlaces()).toBeLessThanOrEqual(2)
+    })
+  })
+
+  describe('Database Integration (createFromDatabase)', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+      __mockSvc = { getTaxRateConfig: vi.fn() }
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('should create TaxCalculator instance from database successfully', async () => {
+      const mockTaxConfig = {
+        taxYear: '2024-25',
+        medicareRate: new Decimal(0.02),
+        medicareLowIncomeThreshold: new Decimal(26000),
+        medicareHighIncomeThreshold: new Decimal(32500),
+        hecsHelpThresholds: [
+          {
+            incomeFrom: new Decimal(51550),
+            incomeTo: new Decimal(59518),
+            rate: new Decimal(0.01),
+          },
+        ],
+        coefficients: [
+          {
+            scale: 'scale2',
+            earningsFrom: new Decimal(0),
+            earningsTo: new Decimal(371),
+            coefficientA: new Decimal(0),
+            coefficientB: new Decimal(0),
+          },
+        ],
+      }
+
+      __mockSvc.getTaxRateConfig.mockResolvedValue(mockTaxConfig)
+
+      const calculator = await TaxCalculator.createFromDatabase(mockTaxSettings, '2024-25')
+
+      expect(__mockSvc.getTaxRateConfig).toHaveBeenCalledWith('2024-25')
+      expect(calculator).toBeInstanceOf(TaxCalculator)
+
+      // Test that the calculator works with database coefficients
+      const result = calculator.calculatePayPeriodTax(
+        'test-pay-period',
+        new Decimal(1000),
+        'FORTNIGHTLY',
+        mockYearToDateTax
+      )
+
+      expect(result.breakdown.grossPay).toEqual(new Decimal(1000))
+    })
+
+    it('should default to current tax year when none specified', async () => {
+      const mockTaxConfig = {
+        taxYear: '2024-25',
+        medicareRate: new Decimal(0.02),
+        medicareLowIncomeThreshold: new Decimal(26000),
+        medicareHighIncomeThreshold: new Decimal(32500),
+        hecsHelpThresholds: [],
+        coefficients: [],
+      }
+
+      __mockSvc.getTaxRateConfig.mockResolvedValue(mockTaxConfig)
+
+      await TaxCalculator.createFromDatabase(mockTaxSettings)
+
+      expect(__mockSvc.getTaxRateConfig).toHaveBeenCalledWith('2024-25')
+    })
+
+    it('should fallback to hardcoded coefficients when database fails', async () => {
+      __mockSvc.getTaxRateConfig.mockRejectedValue(
+        new Error('Database connection failed')
+      )
+
+      const calculator = await TaxCalculator.createFromDatabase(mockTaxSettings, '2024-25')
+
+      expect(calculator).toBeInstanceOf(TaxCalculator)
+
+      // Should still work with fallback coefficients
+      const result = calculator.calculatePayPeriodTax(
+        'test-pay-period',
+        new Decimal(1000),
+        'FORTNIGHTLY',
+        mockYearToDateTax
+      )
+
+      expect(result.breakdown.grossPay).toEqual(new Decimal(1000))
+    })
+
+    it('should use custom Medicare rates from database', async () => {
+      const customMedicareRate = new Decimal(0.025) // 2.5% instead of 2%
+      const mockTaxConfig = {
+        taxYear: '2024-25',
+        medicareRate: customMedicareRate,
+        medicareLowIncomeThreshold: new Decimal(30000), // Higher threshold
+        medicareHighIncomeThreshold: new Decimal(40000),
+        hecsHelpThresholds: [],
+        coefficients: DEFAULT_TAX_COEFFICIENTS,
+      }
+
+      __mockSvc.getTaxRateConfig.mockResolvedValue(mockTaxConfig)
+
+      const calculator = await TaxCalculator.createFromDatabase(mockTaxSettings, '2024-25')
+
+      // High income to ensure full Medicare levy applies
+      const highIncomeYtd: YearToDateTax = {
+        ...mockYearToDateTax,
+        grossIncome: new Decimal(60000),
+      }
+
+      const result = calculator.calculatePayPeriodTax(
+        'test-pay-period',
+        new Decimal(3000),
+        'FORTNIGHTLY',
+        highIncomeYtd
+      )
+
+      // Should use custom 2.5% rate instead of default 2%
+      const expectedMedicareLevy = new Decimal(3000).times(0.025)
+      expect(result.breakdown.medicareLevy.toNumber()).toBeCloseTo(
+        expectedMedicareLevy.toNumber(),
+        2
+      )
+    })
+
+    it('should use custom HECS thresholds from database', async () => {
+      const customHecsThresholds = [
+        {
+          incomeFrom: new Decimal(50000), // Lower threshold than default
+          incomeTo: new Decimal(60000),
+          rate: new Decimal(0.015), // 1.5% rate
+        },
+      ]
+
+      const mockTaxConfig = {
+        taxYear: '2024-25',
+        medicareRate: new Decimal(0.02),
+        medicareLowIncomeThreshold: new Decimal(26000),
+        medicareHighIncomeThreshold: new Decimal(32500),
+        hecsHelpThresholds: customHecsThresholds,
+        coefficients: DEFAULT_TAX_COEFFICIENTS,
+      }
+
+      __mockSvc.getTaxRateConfig.mockResolvedValue(mockTaxConfig)
+
+      const hecsSettings: TaxSettings = {
+        ...mockTaxSettings,
+        hecsHelpRate: new Decimal(0.015), // Enable HECS
+      }
+
+      const calculator = await TaxCalculator.createFromDatabase(hecsSettings, '2024-25')
+
+      // Income within custom HECS threshold range
+      const result = calculator.calculatePayPeriodTax(
+        'test-pay-period',
+        new Decimal(2100), // ~$54,600 annually, within $50k-$60k range
+        'FORTNIGHTLY',
+        mockYearToDateTax
+      )
+
+      // Should apply custom 1.5% HECS rate
+      expect(result.breakdown.hecsHelpAmount.toNumber()).toBeGreaterThan(0)
+      const expectedHecs = new Decimal(2100).times(0.015)
+      expect(result.breakdown.hecsHelpAmount.toNumber()).toBeCloseTo(
+        expectedHecs.toNumber(),
+        2
+      )
+    })
+
+    it('should use custom tax coefficients from database', async () => {
+      // Custom coefficients with different rates
+      const customCoefficients = [
+        {
+          scale: 'scale2',
+          earningsFrom: new Decimal(0),
+          earningsTo: new Decimal(500),
+          coefficientA: new Decimal(0.15), // Lower rate than default
+          coefficientB: new Decimal(50),
+        },
+        {
+          scale: 'scale2',
+          earningsFrom: new Decimal(500),
+          earningsTo: null,
+          coefficientA: new Decimal(0.25), // Different rate structure
+          coefficientB: new Decimal(100),
+        },
+      ]
+
+      const mockTaxConfig = {
+        taxYear: '2024-25',
+        medicareRate: new Decimal(0.02),
+        medicareLowIncomeThreshold: new Decimal(26000),
+        medicareHighIncomeThreshold: new Decimal(32500),
+        hecsHelpThresholds: [],
+        coefficients: customCoefficients,
+      }
+
+      __mockSvc.getTaxRateConfig.mockResolvedValue(mockTaxConfig)
+
+      const calculator = await TaxCalculator.createFromDatabase(mockTaxSettings, '2024-25')
+      const defaultCalculator = new TaxCalculator(
+        mockTaxSettings,
+        DEFAULT_TAX_COEFFICIENTS,
+        DEFAULT_HECS_THRESHOLDS
+      )
+
+      const customResult = calculator.calculatePayPeriodTax(
+        'test-pay-period',
+        new Decimal(1000),
+        'FORTNIGHTLY',
+        mockYearToDateTax
+      )
+
+      const defaultResult = defaultCalculator.calculatePayPeriodTax(
+        'test-pay-period',
+        new Decimal(1000),
+        'FORTNIGHTLY',
+        mockYearToDateTax
+      )
+
+      // Results should be different due to custom coefficients
+      expect(customResult.breakdown.paygWithholding.toNumber()).not.toBeCloseTo(
+        defaultResult.breakdown.paygWithholding.toNumber(),
+        2
+      )
+    })
+
+    it('should handle historical tax years', async () => {
+      const historicalTaxConfig = {
+        taxYear: '2023-24',
+        medicareRate: new Decimal(0.02),
+        medicareLowIncomeThreshold: new Decimal(25000), // Different thresholds for older year
+        medicareHighIncomeThreshold: new Decimal(31000),
+        hecsHelpThresholds: [],
+        coefficients: DEFAULT_TAX_COEFFICIENTS,
+      }
+
+      __mockSvc.getTaxRateConfig.mockResolvedValue(historicalTaxConfig)
+
+      const calculator = await TaxCalculator.createFromDatabase(mockTaxSettings, '2023-24')
+
+      expect(__mockSvc.getTaxRateConfig).toHaveBeenCalledWith('2023-24')
+
+      const result = calculator.calculatePayPeriodTax(
+        'test-pay-period',
+        new Decimal(1000),
+        'FORTNIGHTLY',
+        { ...mockYearToDateTax, taxYear: '2023-24' }
+      )
+
+      expect(result.breakdown.grossPay).toEqual(new Decimal(1000))
     })
   })
 })

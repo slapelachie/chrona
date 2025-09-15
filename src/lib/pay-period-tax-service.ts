@@ -7,7 +7,7 @@ import {
   TaxCalculationResult,
   PayPeriodType
 } from '@/types'
-import { TaxCalculator, DEFAULT_TAX_COEFFICIENTS, DEFAULT_HECS_THRESHOLDS } from './calculations/tax-calculator'
+import { TaxCalculator } from './calculations/tax-calculator'
 import { TimeCalculations } from './calculations/time-calculations'
 
 /**
@@ -46,15 +46,14 @@ export class PayPeriodTaxService {
     // Get or create user tax settings
     const taxSettings = await this.getOrCreateTaxSettings(payPeriod.userId)
     
-    // Get or create year-to-date tax tracking
-    const taxYear = this.getCurrentTaxYear()
+    // Get tax year from pay period dates (not current date)
+    const taxYear = this.getTaxYearFromDate(payPeriod.startDate)
     const yearToDateTax = await this.getOrCreateYearToDateTax(payPeriod.userId, taxYear)
 
-    // Initialize tax calculator
-    const taxCalculator = new TaxCalculator(
+    // Initialize tax calculator using database coefficients for the pay period's tax year
+    const taxCalculator = await TaxCalculator.createFromDatabase(
       taxSettings,
-      DEFAULT_TAX_COEFFICIENTS,
-      DEFAULT_HECS_THRESHOLDS
+      taxYear
     )
 
     // Calculate tax breakdown
@@ -104,20 +103,20 @@ export class PayPeriodTaxService {
   static async previewTaxCalculation(
     userId: string,
     grossPay: Decimal,
-    payPeriodType: PayPeriodType
+    payPeriodType: PayPeriodType,
+    taxYear?: string
   ): Promise<TaxCalculationResult> {
     // Get user tax settings
     const taxSettings = await this.getOrCreateTaxSettings(userId)
     
     // Get year-to-date tax tracking
-    const taxYear = this.getCurrentTaxYear()
-    const yearToDateTax = await this.getOrCreateYearToDateTax(userId, taxYear)
+    const currentTaxYear = taxYear || this.getCurrentTaxYear()
+    const yearToDateTax = await this.getOrCreateYearToDateTax(userId, currentTaxYear)
 
-    // Initialize tax calculator
-    const taxCalculator = new TaxCalculator(
+    // Initialize tax calculator using database coefficients
+    const taxCalculator = await TaxCalculator.createFromDatabase(
       taxSettings,
-      DEFAULT_TAX_COEFFICIENTS,
-      DEFAULT_HECS_THRESHOLDS
+      currentTaxYear
     )
 
     // Calculate tax breakdown (preview only)
@@ -244,18 +243,24 @@ export class PayPeriodTaxService {
   }
 
   /**
-   * Get current Australian tax year (July 1 - June 30)
+   * Get Australian tax year from a specific date (July 1 - June 30)
    */
-  private static getCurrentTaxYear(): string {
-    const now = new Date()
-    const year = now.getFullYear()
+  private static getTaxYearFromDate(date: Date): string {
+    const year = date.getFullYear()
     
     // Australian tax year runs from July 1 to June 30
-    if (now.getMonth() >= 6) { // July (6) onwards
+    if (date.getMonth() >= 6) { // July (6) onwards
       return `${year}-${(year + 1) % 100}`
     } else {
       return `${year - 1}-${year % 100}`
     }
+  }
+
+  /**
+   * Get current Australian tax year (July 1 - June 30)
+   */
+  private static getCurrentTaxYear(): string {
+    return this.getTaxYearFromDate(new Date())
   }
 
   /**
