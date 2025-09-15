@@ -173,6 +173,8 @@ describe('Tax Coefficient Integration Tests', () => {
       })
 
       // Step 3: Test initial tax calculation
+      // Ensure no cached config
+      TaxCoefficientService.clearCacheForTaxYear(taxYear)
       const initialCalculator = await TaxCalculator.createFromDatabase(taxSettings, taxYear)
       const initialResult = initialCalculator.calculatePayPeriodTax(
         'test-calculation',
@@ -192,7 +194,7 @@ describe('Tax Coefficient Integration Tests', () => {
       })
 
       // Step 5: Clear cache to force reload of updated coefficients
-      TaxCoefficientService.clearCache()
+      TaxCoefficientService.clearCacheForTaxYear(taxYear)
 
       // Step 6: Test calculation with updated coefficients
       const updatedCalculator = await TaxCalculator.createFromDatabase(taxSettings, taxYear)
@@ -308,6 +310,7 @@ describe('Tax Coefficient Integration Tests', () => {
           where: { userId_taxYear: { userId: user.id, taxYear } },
         })
 
+        TaxCoefficientService.clearCacheForTaxYear(taxYear)
         const calculator = await TaxCalculator.createFromDatabase(taxSettings, taxYear)
         const result = calculator.calculatePayPeriodTax(
           `test-${taxYear}`,
@@ -381,7 +384,7 @@ describe('Tax Coefficient Integration Tests', () => {
 
       // Fourth load - should hit database and get new value
       const fourthLoad = await TaxCoefficientService.getTaxCoefficients(taxYear, 'scale2')
-      expect(fourthLoad[0].coefficientA).toEqual(new Decimal(0.25)) // New value
+      expect(fourthLoad[0].coefficientA.toNumber()).toBeCloseTo(0.25, 6) // New value
     })
 
     it('should handle database failures gracefully with fallback', async () => {

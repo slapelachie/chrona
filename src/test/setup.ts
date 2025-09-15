@@ -5,6 +5,7 @@ import * as matchers from '@testing-library/jest-dom/matchers'
 import { beforeAll, afterAll } from 'vitest'
 import { prisma } from '@/lib/db'
 import { seedTaxConfigForYear, clearTaxConfig } from '@/lib/__tests__/helpers/tax-config'
+import { beforeEach } from 'vitest'
 
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers)
@@ -64,6 +65,10 @@ beforeAll(async () => {
     // Best-effort; individual tests may seed as needed
   }
 })
+
+// Ensure application tables are clean before each test to avoid cross-suite leakage
+// Note: Do not globally clear tables before each test.
+// Individual suites handle their own setup/teardown to avoid cross-file interference.
 
 afterAll(async () => {
   try {

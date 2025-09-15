@@ -13,6 +13,7 @@ describe('Tax Settings API', () => {
   }
 
   beforeEach(async () => {
+    process.env.DATABASE_URL = 'file:./dev.db'
     await prisma.yearToDateTax.deleteMany()
     await prisma.taxSettings.deleteMany()
     await prisma.user.deleteMany()
@@ -107,4 +108,3 @@ describe('Tax Settings API', () => {
     expect(body.data.claimedTaxFreeThreshold).toBe(false)
   })
 })
-

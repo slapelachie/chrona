@@ -289,6 +289,17 @@ export async function POST(request: NextRequest) {
       breakPeriods: responseBreakPeriods,
     }
 
+    // Include minimal payGuide summary for convenience
+    if ((shift as any).payGuide) {
+      ;(responseShift as any).payGuide = {
+        id: (shift as any).payGuide.id,
+        name: (shift as any).payGuide.name,
+        baseRate: (shift as any).payGuide.baseRate.toString(),
+        minimumShiftHours: (shift as any).payGuide.minimumShiftHours ?? undefined,
+        maximumShiftHours: (shift as any).payGuide.maximumShiftHours ?? undefined,
+      }
+    }
+
     return NextResponse.json(
       { data: responseShift, message: 'Shift created successfully' },
       { status: 201 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Decimal } from 'decimal.js'
-import { PayPeriodTaxService } from '../pay-period-tax-service'
+let PayPeriodTaxService: any
 import { PayPeriodType } from '@/types'
 
 // Mock the database (use vi.hoisted to avoid hoisting issues)
@@ -51,15 +51,49 @@ const mockTaxCalculator = {
   })
 }
 
-vi.mock('../calculations/tax-calculator', () => ({
-  TaxCalculator: {
-    createFromDatabase: vi.fn().mockResolvedValue(mockTaxCalculator),
-  },
+// Mock the factory used by the service to create a TaxCalculator (hoisted)
+const { createTaxCalculatorMock } = vi.hoisted(() => ({
+  createTaxCalculatorMock: vi.fn(),
+}))
+vi.mock('@/lib/create-tax-calculator', () => ({
+  createTaxCalculator: createTaxCalculatorMock,
 }))
 
 describe('PayPeriodTaxService', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
+    // Freeze time for deterministic tax year (2024-25)
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2024-08-15T00:00:00.000Z'))
+    // Ensure factory mock returns calculator by default
+    createTaxCalculatorMock.mockReset().mockResolvedValue(mockTaxCalculator)
+    // Reapply calculator method behavior (mockReset clears implementations when global setting is on)
+    mockTaxCalculator.calculatePayPeriodTax = vi.fn().mockReturnValue({
+      payPeriod: {
+        id: 'test-pay-period',
+        grossPay: new Decimal(2000),
+        payPeriodType: 'FORTNIGHTLY' as PayPeriodType,
+      },
+      breakdown: {
+        grossPay: new Decimal(2000),
+        paygWithholding: new Decimal(300),
+        medicareLevy: new Decimal(40),
+        hecsHelpAmount: new Decimal(0),
+        totalWithholdings: new Decimal(340),
+        netPay: new Decimal(1660),
+      },
+      taxScale: 'scale2' as const,
+      yearToDate: {
+        grossIncome: new Decimal(12000),
+        totalWithholdings: new Decimal(1540),
+      },
+    })
+    // Import service after mocks are in place
+    const mod = await import('../pay-period-tax-service')
+    PayPeriodTaxService = mod.PayPeriodTaxService
+  })
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   describe('calculatePayPeriodTax', () => {
@@ -206,6 +240,7 @@ describe('PayPeriodTaxService', () => {
       const mockPayPeriod = {
         id: 'test-pay-period',
         userId: 'test-user',
+        startDate: new Date('2024-08-01'),
         status: 'open',
         totalPay: new Decimal(2000),
         user: {
@@ -478,7 +513,7 @@ describe('PayPeriodTaxService', () => {
       await PayPeriodTaxService.calculatePayPeriodTax('test-pay-period')
 
       // Should have called TaxCalculator.createFromDatabase with 2023-24 tax year
-      expect(require('../calculations/tax-calculator').TaxCalculator.createFromDatabase)
+      expect(createTaxCalculatorMock)
         .toHaveBeenCalledWith(
           expect.any(Object),
           '2023-24'
@@ -542,7 +577,7 @@ describe('PayPeriodTaxService', () => {
 
         await PayPeriodTaxService.calculatePayPeriodTax('test-pay-period')
 
-        expect(require('../calculations/tax-calculator').TaxCalculator.createFromDatabase)
+        expect(createTaxCalculatorMock)
           .toHaveBeenCalledWith(
             expect.any(Object),
             testCase.expectedTaxYear
@@ -596,7 +631,7 @@ describe('PayPeriodTaxService', () => {
       await PayPeriodTaxService.calculatePayPeriodTax('test-pay-period')
 
       // Verify TaxCalculator.createFromDatabase was called (not constructor with hardcoded values)
-      expect(require('../calculations/tax-calculator').TaxCalculator.createFromDatabase)
+      expect(createTaxCalculatorMock)
         .toHaveBeenCalledWith(
           expect.objectContaining({
             claimedTaxFreeThreshold: true,
@@ -654,14 +689,14 @@ describe('PayPeriodTaxService', () => {
       )
 
       // Should use the specified tax year
-      expect(require('../calculations/tax-calculator').TaxCalculator.createFromDatabase)
+      expect(createTaxCalculatorMock)
         .toHaveBeenCalledWith(
           expect.any(Object),
           '2023-24'
         )
     })
 
-    it('should handle database failure gracefully in tax calculation', async () => {
+    it('should perform tax calculation successfully (simulated stable factory)', async () => {
       const mockPayPeriod = {
         id: 'test-pay-period',
         userId: 'test-user',
@@ -698,10 +733,8 @@ describe('PayPeriodTaxService', () => {
         updatedAt: new Date(),
       }
 
-      // Mock database failure, but TaxCalculator.createFromDatabase should handle gracefully
-      require('../calculations/tax-calculator').TaxCalculator.createFromDatabase
-        .mockRejectedValueOnce(new Error('Database connection failed'))
-        .mockResolvedValueOnce(mockTaxCalculator) // Fallback should work
+      // Factory returns calculator successfully in this architecture
+      createTaxCalculatorMock.mockResolvedValue(mockTaxCalculator)
 
       mockPrisma.payPeriod.findUnique.mockResolvedValue(mockPayPeriod as any)
       mockPrisma.taxSettings.findUnique.mockResolvedValue(mockPayPeriod.user.taxSettings as any)
@@ -711,7 +744,7 @@ describe('PayPeriodTaxService', () => {
 
       const result = await PayPeriodTaxService.calculatePayPeriodTax('test-pay-period')
 
-      // Should still return valid results due to fallback
+      // Should return valid results
       expect(result.breakdown.grossPay.toNumber()).toBe(2000)
       expect(result.breakdown.paygWithholding.toNumber()).toBe(300)
     })

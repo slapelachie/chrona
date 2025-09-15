@@ -1,5 +1,4 @@
 import { Decimal } from 'decimal.js'
-import { prisma } from '@/lib/db'
 import { TaxCoefficient, HecsThreshold, TaxRateConfig } from '@/types'
 
 /**
@@ -40,6 +39,7 @@ export class TaxCoefficientService {
         where.scale = scale
       }
 
+      const { prisma } = await import('@/lib/db')
       const dbCoefficients = await prisma.taxCoefficient.findMany({
         where,
         orderBy: [
@@ -86,6 +86,7 @@ export class TaxCoefficientService {
     }
 
     try {
+      const { prisma } = await import('@/lib/db')
       const dbThresholds = await prisma.hecsThreshold.findMany({
         where: {
           taxYear,
@@ -132,6 +133,7 @@ export class TaxCoefficientService {
     }
 
     try {
+      const { prisma } = await import('@/lib/db')
       const dbConfig = await prisma.taxRateConfig.findUnique({
         where: { taxYear },
       })
@@ -161,10 +163,13 @@ export class TaxCoefficientService {
       this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
 
       return config
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading tax configuration from database:', error)
-      
-      // Fallback to hardcoded values if database fails
+      // If configuration truly not found, rethrow to allow caller/tests to handle
+      if (error instanceof Error && error.message.includes('No tax configuration found')) {
+        throw error
+      }
+      // Fallback to hardcoded values only on database failures
       console.warn('Falling back to hardcoded tax configuration')
       return this.getFallbackTaxConfig()
     }

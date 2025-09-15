@@ -96,6 +96,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       })),
     }
 
+    // Include minimal payGuide summary for convenience
+    if (shift.payGuide) {
+      ;(responseShift as any).payGuide = {
+        id: shift.payGuide.id,
+        name: shift.payGuide.name,
+        baseRate: shift.payGuide.baseRate.toString(),
+        minimumShiftHours: shift.payGuide.minimumShiftHours ?? undefined,
+        maximumShiftHours: shift.payGuide.maximumShiftHours ?? undefined,
+        timezone: shift.payGuide.timezone,
+      }
+    }
+
     return NextResponse.json({ data: responseShift })
   } catch (error) {
     console.error('Error fetching shift:', error)

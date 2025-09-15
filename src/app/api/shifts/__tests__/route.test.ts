@@ -176,7 +176,7 @@ describe('Shifts Route API', () => {
     describe('Successful Retrieval', () => {
       it('should retrieve empty list when no shifts exist', async () => {
         const { GET } = await import('@/app/api/shifts/route')
-        const request = new MockRequest('http://localhost/api/shifts')
+        const request = new MockRequest('http://localhost/api/shifts?include=payGuide,breakPeriods')
 
         const response = await GET(request as any)
         const result = await response.json()
@@ -210,7 +210,7 @@ describe('Shifts Route API', () => {
         })
 
         const { GET } = await import('@/app/api/shifts/route')
-        const request = new MockRequest('http://localhost/api/shifts')
+        const request = new MockRequest('http://localhost/api/shifts?include=payGuide,breakPeriods')
 
         const response = await GET(request as any)
         const result = await response.json()

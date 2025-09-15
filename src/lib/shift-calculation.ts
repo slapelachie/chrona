@@ -188,16 +188,26 @@ export async function updateShiftWithCalculation(
   shiftId: string,
   calculation: ShiftCalculationResult
 ): Promise<void> {
-  await prisma.shift.update({
-    where: { id: shiftId },
-    data: {
-      totalHours: calculation.totalHours,
-      basePay: calculation.basePay,
-      overtimePay: calculation.overtimePay,
-      penaltyPay: calculation.penaltyPay,
-      totalPay: calculation.totalPay
+  try {
+    await prisma.shift.update({
+      where: { id: shiftId },
+      data: {
+        totalHours: calculation.totalHours,
+        basePay: calculation.basePay,
+        overtimePay: calculation.overtimePay,
+        penaltyPay: calculation.penaltyPay,
+        totalPay: calculation.totalPay
+      }
+    })
+  } catch (err: any) {
+    // In test/mock flows, the shift may have been removed or updated concurrently.
+    // Swallow Prisma P2025 (record not found for update) to keep sync idempotent.
+    if (err && err.code === 'P2025') {
+      console.warn('Skipping shift update; record not found:', shiftId)
+      return
     }
-  })
+    throw err
+  }
 }
 
 /**

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { prisma } from '@/lib/db'
 import { GET, PUT, DELETE } from '../route'
 import { NextRequest } from 'next/server'
@@ -7,27 +7,45 @@ import { NextRequest } from 'next/server'
 const mockUser = {
   id: 'test-user-id',
   name: 'Test User',
-  email: 'test@example.com',
+  email: 'payperiods-id-test@example.com',
   timezone: 'Australia/Sydney',
   payPeriodType: 'FORTNIGHTLY' as const,
 }
 
 const mockPayGuide = {
   id: 'test-pay-guide-id',
-  name: 'Test Award',
+  name: `Test Award PPID`,
   baseRate: 25.0,
   effectiveFrom: new Date('2024-01-01'),
   isActive: true,
   timezone: 'Australia/Sydney',
 }
 
+const originalDbUrl = process.env.DATABASE_URL
+const DB_URL = 'file:./pay-periods-id-route-test.db'
+
 describe('Individual Pay Period API Routes', () => {
   let testPayPeriod: any
 
+  beforeAll(async () => {
+    process.env.DATABASE_URL = DB_URL
+    const { execSync } = await import('child_process')
+    execSync('npx prisma db push --skip-generate', { stdio: 'pipe' })
+  })
+
+  afterAll(async () => {
+    process.env.DATABASE_URL = originalDbUrl
+  })
+
   beforeEach(async () => {
-    // Clean database
-    await prisma.payPeriod.deleteMany()
+    process.env.DATABASE_URL = DB_URL
+    // Clean database (respect FK constraints)
+    await prisma.breakPeriod.deleteMany()
     await prisma.shift.deleteMany()
+    await prisma.penaltyTimeFrame.deleteMany()
+    await prisma.overtimeTimeFrame.deleteMany()
+    await prisma.publicHoliday.deleteMany()
+    await prisma.payPeriod.deleteMany()
     await prisma.user.deleteMany()
     await prisma.payGuide.deleteMany()
 
@@ -48,9 +66,13 @@ describe('Individual Pay Period API Routes', () => {
   })
 
   afterEach(async () => {
-    // Clean up
-    await prisma.payPeriod.deleteMany()
+    // Clean up (respect FK constraints)
+    await prisma.breakPeriod.deleteMany()
     await prisma.shift.deleteMany()
+    await prisma.penaltyTimeFrame.deleteMany()
+    await prisma.overtimeTimeFrame.deleteMany()
+    await prisma.publicHoliday.deleteMany()
+    await prisma.payPeriod.deleteMany()
     await prisma.user.deleteMany()
     await prisma.payGuide.deleteMany()
   })

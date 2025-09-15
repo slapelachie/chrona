@@ -1,21 +1,41 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { PrismaClient } from '@prisma/client'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'vitest'
+// Use the app's prisma proxy so tests and services share the same client/DB
+import { prisma as appPrisma } from '@/lib/db'
+import { execSync } from 'child_process'
 import { Decimal } from 'decimal.js'
 import { PayPeriodSyncService } from '../pay-period-sync-service'
 
-const prisma = new PrismaClient()
+const DB_URL = 'file:./pay-period-sync-service-test.db'
+const originalDbUrl = process.env.DATABASE_URL
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 describe('PayPeriodSyncService', () => {
+  beforeAll(async () => {
+    process.env.DATABASE_URL = DB_URL
+    // Push schema for isolated sqlite DB without regenerating client
+    execSync('npx prisma db push --skip-generate', { stdio: 'pipe' })
+  })
   let userId: string
   let payGuideId: string
   let payPeriodId: string
 
   beforeEach(async () => {
+    // Ensure isolated DB is used by app code
+    process.env.DATABASE_URL = DB_URL
+    // Pre-clean potential collisions
+    await appPrisma.breakPeriod.deleteMany()
+    await appPrisma.shift.deleteMany()
+    await appPrisma.yearToDateTax.deleteMany()
+    await appPrisma.taxSettings.deleteMany()
+    await appPrisma.payPeriod.deleteMany()
+    await appPrisma.payGuide.deleteMany()
+    await appPrisma.user.deleteMany()
     // Create test user
-    const user = await prisma.user.create({
+    const user = await appPrisma.user.create({
       data: {
         name: 'Test User',
-        email: 'test@example.com',
+        email: `pps-${Date.now()}@example.com`,
         timezone: 'Australia/Sydney',
         payPeriodType: 'FORTNIGHTLY',
       },
@@ -23,9 +43,9 @@ describe('PayPeriodSyncService', () => {
     userId = user.id
 
     // Create test pay guide
-    const payGuide = await prisma.payGuide.create({
+    const payGuide = await appPrisma.payGuide.create({
       data: {
-        name: 'Test Pay Guide',
+        name: `Test Pay Guide ${Date.now()}`,
         baseRate: new Decimal('25.00'),
         minimumShiftHours: 3,
         maximumShiftHours: 11,
@@ -37,7 +57,7 @@ describe('PayPeriodSyncService', () => {
     payGuideId = payGuide.id
 
     // Create test pay period
-    const payPeriod = await prisma.payPeriod.create({
+    const payPeriod = await appPrisma.payPeriod.create({
       data: {
         userId,
         startDate: new Date('2024-09-01T00:00:00Z'),
@@ -48,7 +68,7 @@ describe('PayPeriodSyncService', () => {
     payPeriodId = payPeriod.id
 
     // Create tax settings for the user
-    await prisma.taxSettings.create({
+    await appPrisma.taxSettings.create({
       data: {
         userId,
         claimedTaxFreeThreshold: true,
@@ -62,19 +82,23 @@ describe('PayPeriodSyncService', () => {
 
   afterEach(async () => {
     // Clean up test data
-    await prisma.breakPeriod.deleteMany()
-    await prisma.shift.deleteMany()
-    await prisma.yearToDateTax.deleteMany()
-    await prisma.taxSettings.deleteMany()
-    await prisma.payPeriod.deleteMany()
-    await prisma.payGuide.deleteMany()
-    await prisma.user.deleteMany()
+    await appPrisma.breakPeriod.deleteMany()
+    await appPrisma.shift.deleteMany()
+    await appPrisma.yearToDateTax.deleteMany()
+    await appPrisma.taxSettings.deleteMany()
+    await appPrisma.payPeriod.deleteMany()
+    await appPrisma.payGuide.deleteMany()
+    await appPrisma.user.deleteMany()
+  })
+
+  afterAll(async () => {
+    process.env.DATABASE_URL = originalDbUrl
   })
 
   describe('syncPayPeriod', () => {
     it('should calculate pay period totals from shifts', async () => {
       // Create test shifts with calculated values
-      const shift1 = await prisma.shift.create({
+      const shift1 = await appPrisma.shift.create({
         data: {
           userId,
           payGuideId,
@@ -86,7 +110,7 @@ describe('PayPeriodSyncService', () => {
         },
       })
 
-      const shift2 = await prisma.shift.create({
+      const shift2 = await appPrisma.shift.create({
         data: {
           userId,
           payGuideId,
@@ -101,10 +125,14 @@ describe('PayPeriodSyncService', () => {
       // Sync the pay period
       await PayPeriodSyncService.syncPayPeriod(payPeriodId)
 
-      // Check that pay period totals were updated
-      const updatedPayPeriod = await prisma.payPeriod.findUnique({
-        where: { id: payPeriodId },
-      })
+      // Check that pay period totals were updated (allow brief async)
+      let updatedPayPeriod = await appPrisma.payPeriod.findUnique({ where: { id: payPeriodId } })
+      let tries1 = 0
+      while (tries1 < 20 && (!updatedPayPeriod?.totalHours || !updatedPayPeriod?.totalPay)) {
+        await sleep(50)
+        tries1++
+        updatedPayPeriod = await appPrisma.payPeriod.findUnique({ where: { id: payPeriodId } })
+      }
 
       expect(updatedPayPeriod?.totalHours?.toNumber()).toBe(14.00)
       expect(updatedPayPeriod?.totalPay?.toNumber()).toBe(350.00)
@@ -112,7 +140,7 @@ describe('PayPeriodSyncService', () => {
 
     it('should calculate taxes when pay period has calculated totals', async () => {
       // Create a shift with calculated pay
-      await prisma.shift.create({
+      await appPrisma.shift.create({
         data: {
           userId,
           payGuideId,
@@ -127,10 +155,15 @@ describe('PayPeriodSyncService', () => {
       // Sync the pay period
       await PayPeriodSyncService.syncPayPeriod(payPeriodId)
 
-      // Check that tax calculations were performed
-      const updatedPayPeriod = await prisma.payPeriod.findUnique({
-        where: { id: payPeriodId },
-      })
+      // Check that tax calculations were performed (allow brief async)
+      const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+      let updatedPayPeriod = await appPrisma.payPeriod.findUnique({ where: { id: payPeriodId } })
+      let tries = 0
+      while (tries < 10 && !updatedPayPeriod?.totalPay) {
+        await wait(50)
+        tries++
+        updatedPayPeriod = await appPrisma.payPeriod.findUnique({ where: { id: payPeriodId } })
+      }
 
       expect(updatedPayPeriod?.totalPay?.toNumber()).toBe(800.00)
       expect(updatedPayPeriod?.paygWithholding).toBeDefined()
@@ -143,7 +176,7 @@ describe('PayPeriodSyncService', () => {
       await PayPeriodSyncService.syncPayPeriod(payPeriodId)
 
       // Check that totals are zero
-      const updatedPayPeriod = await prisma.payPeriod.findUnique({
+      const updatedPayPeriod = await appPrisma.payPeriod.findUnique({
         where: { id: payPeriodId },
       })
 
@@ -154,7 +187,7 @@ describe('PayPeriodSyncService', () => {
 
   describe('onShiftCreated', () => {
     it('should sync pay period when shift is created', async () => {
-      const shift = await prisma.shift.create({
+      const shift = await appPrisma.shift.create({
         data: {
           userId,
           payGuideId,
@@ -168,10 +201,13 @@ describe('PayPeriodSyncService', () => {
 
       await PayPeriodSyncService.onShiftCreated(shift.id)
 
-      const updatedPayPeriod = await prisma.payPeriod.findUnique({
-        where: { id: payPeriodId },
-      })
-
+      let updatedPayPeriod = await appPrisma.payPeriod.findUnique({ where: { id: payPeriodId } })
+      let tries2 = 0
+      while (tries2 < 20 && (!updatedPayPeriod?.totalHours || !updatedPayPeriod?.totalPay)) {
+        await sleep(50)
+        tries2++
+        updatedPayPeriod = await appPrisma.payPeriod.findUnique({ where: { id: payPeriodId } })
+      }
       expect(updatedPayPeriod?.totalHours?.toNumber()).toBe(8.00)
       expect(updatedPayPeriod?.totalPay?.toNumber()).toBe(200.00)
     })
@@ -180,7 +216,7 @@ describe('PayPeriodSyncService', () => {
   describe('onShiftUpdated', () => {
     it('should sync both old and new pay periods when shift moves', async () => {
       // Create second pay period
-      const payPeriod2 = await prisma.payPeriod.create({
+      const payPeriod2 = await appPrisma.payPeriod.create({
         data: {
           userId,
           startDate: new Date('2024-09-15T00:00:00Z'),
@@ -190,7 +226,7 @@ describe('PayPeriodSyncService', () => {
       })
 
       // Create shift in first pay period
-      const shift = await prisma.shift.create({
+      const shift = await appPrisma.shift.create({
         data: {
           userId,
           payGuideId,
@@ -203,7 +239,7 @@ describe('PayPeriodSyncService', () => {
       })
 
       // Update shift to move to second pay period
-      await prisma.shift.update({
+      await appPrisma.shift.update({
         where: { id: shift.id },
         data: { payPeriodId: payPeriod2.id },
       })
@@ -211,10 +247,10 @@ describe('PayPeriodSyncService', () => {
       await PayPeriodSyncService.onShiftUpdated(shift.id, payPeriodId)
 
       // Check both pay periods
-      const originalPayPeriod = await prisma.payPeriod.findUnique({
+      const originalPayPeriod = await appPrisma.payPeriod.findUnique({
         where: { id: payPeriodId },
       })
-      const newPayPeriod = await prisma.payPeriod.findUnique({
+      const newPayPeriod = await appPrisma.payPeriod.findUnique({
         where: { id: payPeriod2.id },
       })
 
@@ -231,7 +267,7 @@ describe('PayPeriodSyncService', () => {
   describe('onShiftDeleted', () => {
     it('should sync pay period when shift is deleted', async () => {
       // Create two shifts
-      const shift1 = await prisma.shift.create({
+      const shift1 = await appPrisma.shift.create({
         data: {
           userId,
           payGuideId,
@@ -243,7 +279,7 @@ describe('PayPeriodSyncService', () => {
         },
       })
 
-      const shift2 = await prisma.shift.create({
+      const shift2 = await appPrisma.shift.create({
         data: {
           userId,
           payGuideId,
@@ -259,12 +295,12 @@ describe('PayPeriodSyncService', () => {
       await PayPeriodSyncService.syncPayPeriod(payPeriodId)
 
       // Delete one shift
-      await prisma.shift.delete({ where: { id: shift1.id } })
+      await appPrisma.shift.delete({ where: { id: shift1.id } })
 
       // Sync after deletion
       await PayPeriodSyncService.onShiftDeleted(payPeriodId)
 
-      const updatedPayPeriod = await prisma.payPeriod.findUnique({
+      const updatedPayPeriod = await appPrisma.payPeriod.findUnique({
         where: { id: payPeriodId },
       })
 
@@ -277,7 +313,7 @@ describe('PayPeriodSyncService', () => {
   describe('validatePayPeriodTotals', () => {
     it('should validate consistent pay period totals', async () => {
       // Create shift and manually set pay period totals
-      await prisma.shift.create({
+      await appPrisma.shift.create({
         data: {
           userId,
           payGuideId,
@@ -289,7 +325,7 @@ describe('PayPeriodSyncService', () => {
         },
       })
 
-      await prisma.payPeriod.update({
+      await appPrisma.payPeriod.update({
         where: { id: payPeriodId },
         data: {
           totalHours: new Decimal('8.00'),
@@ -306,7 +342,7 @@ describe('PayPeriodSyncService', () => {
 
     it('should detect inconsistent pay period totals', async () => {
       // Create shift
-      await prisma.shift.create({
+      await appPrisma.shift.create({
         data: {
           userId,
           payGuideId,
@@ -319,7 +355,7 @@ describe('PayPeriodSyncService', () => {
       })
 
       // Set incorrect pay period totals
-      await prisma.payPeriod.update({
+      await appPrisma.payPeriod.update({
         where: { id: payPeriodId },
         data: {
           totalHours: new Decimal('10.00'), // Incorrect

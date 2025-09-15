@@ -331,7 +331,6 @@ describe('Database Models - Blackbox Tests', () => {
           basePay: new Decimal('200.00'),
           overtimePay: new Decimal('0.00'),
           penaltyPay: new Decimal('0.00'),
-          casualPay: new Decimal('50.00'),
           totalPay: new Decimal('250.00'),
         },
       })

@@ -266,18 +266,6 @@ describe('/api/admin/tax-coefficients', () => {
         coefficients: validUpdateData.coefficients,
       }
 
-      vi.doMock('@/lib/validation', () => ({
-        ValidationResult: {
-          create: () => ({
-            addError: vi.fn(),
-            isValid: () => false,
-            getErrors: () => ({ taxYear: 'Tax year is required and must be a string' }),
-          }),
-        },
-        validateString: vi.fn(),
-        validateDecimal: vi.fn(),
-      }))
-
       const request = new NextRequest('http://localhost:3000/api/admin/tax-coefficients', {
         method: 'PUT',
         body: JSON.stringify(invalidData),
@@ -296,18 +284,6 @@ describe('/api/admin/tax-coefficients', () => {
         taxYear: '2024-25',
         coefficients: 'not-an-array',
       }
-
-      vi.doMock('@/lib/validation', () => ({
-        ValidationResult: {
-          create: () => ({
-            addError: vi.fn(),
-            isValid: () => false,
-            getErrors: () => ({ coefficients: 'Coefficients must be an array' }),
-          }),
-        },
-        validateString: vi.fn(),
-        validateDecimal: vi.fn(),
-      }))
 
       const request = new NextRequest('http://localhost:3000/api/admin/tax-coefficients', {
         method: 'PUT',
@@ -334,23 +310,6 @@ describe('/api/admin/tax-coefficients', () => {
           },
         ],
       }
-
-      // Mock validation to fail for the coefficient
-      let validationCallCount = 0
-      vi.doMock('@/lib/validation', () => ({
-        ValidationResult: {
-          create: () => ({
-            addError: vi.fn(),
-            isValid: () => {
-              validationCallCount++
-              return validationCallCount === 1 // First call (main validation) passes, second fails
-            },
-            getErrors: () => ({ earningsFrom: 'Invalid earnings from value' }),
-          }),
-        },
-        validateString: vi.fn(),
-        validateDecimal: vi.fn(),
-      }))
 
       const request = new NextRequest('http://localhost:3000/api/admin/tax-coefficients', {
         method: 'PUT',

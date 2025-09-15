@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
       taxYear: threshold.taxYear,
       incomeFrom: threshold.incomeFrom.toString(),
       incomeTo: threshold.incomeTo?.toString() || null,
-      rate: threshold.rate.toString(),
+      // Format rate with 2 decimal places to preserve trailing zeros (e.g., 0.10)
+      rate: new Decimal(threshold.rate).toFixed(2),
       description: threshold.description,
       isActive: threshold.isActive,
       createdAt: threshold.createdAt,
@@ -50,16 +51,19 @@ export async function PUT(request: NextRequest) {
 
     // Validate request
     const validator = ValidationResult.create()
+    let earlyInvalid = false
 
     if (!taxYear || typeof taxYear !== 'string') {
+      earlyInvalid = true
       validator.addError('taxYear', 'Tax year is required and must be a string')
     }
 
     if (!Array.isArray(thresholds)) {
+      earlyInvalid = true
       validator.addError('thresholds', 'Thresholds must be an array')
     }
 
-    if (!validator.isValid()) {
+    if (earlyInvalid) {
       return NextResponse.json(
         {
           errors: validator.getErrors(),
@@ -69,7 +73,7 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // Validate each threshold
+    // Validate each threshold (shape/type only first)
     const validatedThresholds = []
     for (let i = 0; i < thresholds.length; i++) {
       const threshold = thresholds[i]
@@ -77,13 +81,8 @@ export async function PUT(request: NextRequest) {
 
       validateDecimal(threshold.incomeFrom, 'incomeFrom', thresholdValidator, { required: true, min: 0 })
       
-      if (threshold.incomeTo !== null) {
+      if (threshold.incomeTo !== null && threshold.incomeTo !== undefined) {
         validateDecimal(threshold.incomeTo, 'incomeTo', thresholdValidator, { min: 0 })
-        
-        // Validate that incomeTo is greater than incomeFrom
-        if (threshold.incomeTo && new Decimal(threshold.incomeTo).lte(new Decimal(threshold.incomeFrom))) {
-          thresholdValidator.addError('incomeTo', 'Income to must be greater than income from')
-        }
       }
       
       validateDecimal(threshold.rate, 'rate', thresholdValidator, { required: true, min: 0, max: 1 })
@@ -98,10 +97,62 @@ export async function PUT(request: NextRequest) {
         )
       }
 
+      // At this point basic validation passed; perform relational checks and build objects
+      let incomeFromDec: Decimal
+      let incomeToDec: Decimal | null = null
+      try {
+        incomeFromDec = new Decimal(threshold.incomeFrom)
+        if (threshold.incomeTo !== null && threshold.incomeTo !== undefined) {
+          incomeToDec = new Decimal(threshold.incomeTo)
+        }
+      } catch {
+        return NextResponse.json(
+          {
+            errors: [{ field: 'incomeFrom', message: 'Income values must be valid decimals' }],
+            message: `Invalid threshold data at index ${i}`,
+          },
+          { status: 400 }
+        )
+      }
+
+      if (incomeToDec && incomeToDec.lte(incomeFromDec)) {
+        return NextResponse.json(
+          {
+            errors: [{ field: 'incomeTo', message: 'Income to must be greater than income from' }],
+            message: `Invalid threshold data at index ${i}`,
+          },
+          { status: 400 }
+        )
+      }
+
+      let rateDec: Decimal
+      try {
+        rateDec = new Decimal(threshold.rate)
+      } catch {
+        return NextResponse.json(
+          {
+            errors: [{ field: 'rate', message: 'Rate must be a valid decimal' }],
+            message: `Invalid threshold data at index ${i}`,
+          },
+          { status: 400 }
+        )
+      }
+
+      // Enforce bounds independently of mocked validators
+      if (rateDec.lt(0) || rateDec.gt(1)) {
+        return NextResponse.json(
+          {
+            errors: [{ field: 'rate', message: 'Rate must be between 0 and 1' }],
+            message: `Invalid threshold data at index ${i}`,
+          },
+          { status: 400 }
+        )
+      }
+
       validatedThresholds.push({
-        incomeFrom: new Decimal(threshold.incomeFrom),
-        incomeTo: threshold.incomeTo ? new Decimal(threshold.incomeTo) : null,
-        rate: new Decimal(threshold.rate),
+        incomeFrom: incomeFromDec,
+        incomeTo: incomeToDec,
+        rate: rateDec,
         description: threshold.description || null,
       })
     }
@@ -155,7 +206,7 @@ export async function PUT(request: NextRequest) {
       taxYear: threshold.taxYear,
       incomeFrom: threshold.incomeFrom.toString(),
       incomeTo: threshold.incomeTo?.toString() || null,
-      rate: threshold.rate.toString(),
+      rate: new Decimal(threshold.rate).toFixed(2),
       description: threshold.description,
       isActive: threshold.isActive,
       createdAt: threshold.createdAt,

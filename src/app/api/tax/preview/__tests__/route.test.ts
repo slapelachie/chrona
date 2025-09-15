@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { prisma } from '@/lib/db'
 import { GET, POST } from '../route'
 import { NextRequest } from 'next/server'
 import { seedTaxConfigForYear, clearTaxConfig } from '@/lib/__tests__/helpers/tax-config'
+
+const originalDbUrl = process.env.DATABASE_URL
+const DB_URL = 'file:./tax-preview-route-test.db'
 
 describe('Tax Preview API', () => {
   const user = {
@@ -18,7 +21,19 @@ describe('Tax Preview API', () => {
     return now.getMonth() >= 6 ? `${y}-${(y + 1) % 100}` : `${y - 1}-${y % 100}`
   })()
 
+  beforeAll(async () => {
+    process.env.DATABASE_URL = DB_URL
+    // Ensure schema exists without regenerating client
+    const { execSync } = await import('child_process')
+    execSync('npx prisma db push --skip-generate', { stdio: 'pipe' })
+  })
+
+  afterAll(async () => {
+    process.env.DATABASE_URL = originalDbUrl
+  })
+
   beforeEach(async () => {
+    process.env.DATABASE_URL = DB_URL
     await prisma.yearToDateTax.deleteMany()
     await prisma.taxSettings.deleteMany()
     await prisma.payPeriod.deleteMany()

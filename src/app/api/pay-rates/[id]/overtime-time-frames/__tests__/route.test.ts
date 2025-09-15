@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/db'
 import { execSync } from 'child_process'
 import { Decimal } from 'decimal.js'
 import {
@@ -72,22 +72,16 @@ class MockResponse {
   }
 }
 
-// Setup test database connection
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: 'file:./overtime-time-frames-test.db',
-    },
-  },
-})
+// Preserve original DATABASE_URL to avoid leaking into other suites
+const originalDbUrl = process.env.DATABASE_URL
 
 describe('Overtime Time Frames Route API', () => {
   let testPayGuideId: string
 
   beforeAll(async () => {
-    // Set up test database
+    // Set up isolated test database (push schema without regenerating client)
     process.env.DATABASE_URL = 'file:./overtime-time-frames-test.db'
-    execSync('npx prisma migrate dev --name init', { stdio: 'pipe' })
+    execSync('npx prisma db push --skip-generate', { stdio: 'pipe' })
 
     // Clean any existing data first (order matters due to foreign keys)
     await prisma.shift.deleteMany()
@@ -121,6 +115,8 @@ describe('Overtime Time Frames Route API', () => {
   })
 
   afterAll(async () => {
+    // Restore original DATABASE_URL to prevent cross-suite interference
+    process.env.DATABASE_URL = originalDbUrl
     await prisma.$disconnect()
   })
 

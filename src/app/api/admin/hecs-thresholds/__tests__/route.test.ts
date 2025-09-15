@@ -250,18 +250,6 @@ describe('/api/admin/hecs-thresholds', () => {
         thresholds: validUpdateData.thresholds,
       }
 
-      vi.doMock('@/lib/validation', () => ({
-        ValidationResult: {
-          create: () => ({
-            addError: vi.fn(),
-            isValid: () => false,
-            getErrors: () => ({ taxYear: 'Tax year is required and must be a string' }),
-          }),
-        },
-        validateString: vi.fn(),
-        validateDecimal: vi.fn(),
-      }))
-
       const request = new NextRequest('http://localhost:3000/api/admin/hecs-thresholds', {
         method: 'PUT',
         body: JSON.stringify(invalidData),
@@ -279,18 +267,6 @@ describe('/api/admin/hecs-thresholds', () => {
         taxYear: '2024-25',
         thresholds: 'not-an-array',
       }
-
-      vi.doMock('@/lib/validation', () => ({
-        ValidationResult: {
-          create: () => ({
-            addError: vi.fn(),
-            isValid: () => false,
-            getErrors: () => ({ thresholds: 'Thresholds must be an array' }),
-          }),
-        },
-        validateString: vi.fn(),
-        validateDecimal: vi.fn(),
-      }))
 
       const request = new NextRequest('http://localhost:3000/api/admin/hecs-thresholds', {
         method: 'PUT',
@@ -310,27 +286,11 @@ describe('/api/admin/hecs-thresholds', () => {
         thresholds: [
           {
             incomeFrom: 'invalid-number',
-            incomeTo: '59518',
+            incomeTo: null,
             rate: '0.01',
           },
         ],
       }
-
-      let validationCallCount = 0
-      vi.doMock('@/lib/validation', () => ({
-        ValidationResult: {
-          create: () => ({
-            addError: vi.fn(),
-            isValid: () => {
-              validationCallCount++
-              return validationCallCount === 1 // First call passes, second fails
-            },
-            getErrors: () => ({ incomeFrom: 'Invalid income from value' }),
-          }),
-        },
-        validateString: vi.fn(),
-        validateDecimal: vi.fn(),
-      }))
 
       const request = new NextRequest('http://localhost:3000/api/admin/hecs-thresholds', {
         method: 'PUT',
@@ -355,22 +315,6 @@ describe('/api/admin/hecs-thresholds', () => {
           },
         ],
       }
-
-      let validationCallCount = 0
-      vi.doMock('@/lib/validation', () => ({
-        ValidationResult: {
-          create: () => ({
-            addError: vi.fn(),
-            isValid: () => {
-              validationCallCount++
-              return validationCallCount === 1
-            },
-            getErrors: () => ({ incomeTo: 'Income to must be greater than income from' }),
-          }),
-        },
-        validateString: vi.fn(),
-        validateDecimal: vi.fn(),
-      }))
 
       const request = new NextRequest('http://localhost:3000/api/admin/hecs-thresholds', {
         method: 'PUT',

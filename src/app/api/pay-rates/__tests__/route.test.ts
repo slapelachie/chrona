@@ -187,7 +187,7 @@ describe('Pay Rates API', () => {
          * - Decimal values are converted to strings
          */
         const { GET } = await import('@/app/api/pay-rates/route')
-        const request = new MockRequest('http://localhost/api/pay-rates')
+        const request = new MockRequest('http://localhost/api/pay-rates?include=metadata')
 
         const response = await GET(request as any)
         const result = await response.json()
@@ -234,7 +234,7 @@ describe('Pay Rates API', () => {
         await prisma.payGuide.deleteMany()
 
         const { GET } = await import('@/app/api/pay-rates/route')
-        const request = new MockRequest('http://localhost/api/pay-rates')
+        const request = new MockRequest('http://localhost/api/pay-rates?include=metadata')
 
         const response = await GET(request as any)
         const result = await response.json()
@@ -951,7 +951,7 @@ describe('Pay Rates API', () => {
         })
 
         const { GET } = await import('@/app/api/pay-rates/route')
-        const request = new MockRequest('http://localhost/api/pay-rates')
+        const request = new MockRequest('http://localhost/api/pay-rates?include=metadata')
         const response = await GET(request as any)
         const result = await response.json()
 

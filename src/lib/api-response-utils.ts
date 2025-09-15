@@ -48,6 +48,17 @@ export function transformShiftToListItem(
     }))
   }
 
+  // Include payGuide summary when requested
+  if (includes.has('payGuide') && shift.payGuide) {
+    ;(listItem as any).payGuide = {
+      id: shift.payGuide.id,
+      name: shift.payGuide.name,
+      baseRate: shift.payGuide.baseRate.toString(),
+      minimumShiftHours: shift.payGuide.minimumShiftHours ?? undefined,
+      maximumShiftHours: shift.payGuide.maximumShiftHours ?? undefined,
+    }
+  }
+
   return listItem
 }
 

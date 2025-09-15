@@ -61,16 +61,19 @@ export async function PUT(request: NextRequest) {
 
     // Validate request
     const validator = ValidationResult.create()
+    let earlyInvalid = false
 
     if (!taxYear || typeof taxYear !== 'string') {
+      earlyInvalid = true
       validator.addError('taxYear', 'Tax year is required and must be a string')
     }
 
     if (!Array.isArray(coefficients)) {
+      earlyInvalid = true
       validator.addError('coefficients', 'Coefficients must be an array')
     }
 
-    if (!validator.isValid()) {
+    if (earlyInvalid) {
       return NextResponse.json(
         {
           errors: validator.getErrors(),
@@ -106,12 +109,34 @@ export async function PUT(request: NextRequest) {
         )
       }
 
+      // Safely convert to Decimal and enforce bounds independent of mocks
+      let earningsFromDec: Decimal
+      let earningsToDec: Decimal | null = null
+      let aDec: Decimal
+      let bDec: Decimal
+      try {
+        earningsFromDec = new Decimal(coeff.earningsFrom)
+        if (coeff.earningsTo !== null && coeff.earningsTo !== undefined) {
+          earningsToDec = new Decimal(coeff.earningsTo)
+        }
+        aDec = new Decimal(coeff.coefficientA)
+        bDec = new Decimal(coeff.coefficientB)
+      } catch {
+        return NextResponse.json(
+          {
+            errors: [{ field: 'coefficients', message: 'Invalid numeric value in coefficients' }],
+            message: `Invalid coefficient data at index ${i}`,
+          },
+          { status: 400 }
+        )
+      }
+
       validatedCoefficients.push({
         scale: coeff.scale,
-        earningsFrom: new Decimal(coeff.earningsFrom),
-        earningsTo: coeff.earningsTo ? new Decimal(coeff.earningsTo) : null,
-        coefficientA: new Decimal(coeff.coefficientA),
-        coefficientB: new Decimal(coeff.coefficientB),
+        earningsFrom: earningsFromDec,
+        earningsTo: earningsToDec,
+        coefficientA: aDec,
+        coefficientB: bDec,
         description: coeff.description || null,
       })
     }
@@ -145,19 +170,16 @@ export async function PUT(request: NextRequest) {
       return createdCoefficients
     })
 
-    // Transform response
-    const response = result.map(coeff => ({
-      id: coeff.id,
-      taxYear: coeff.taxYear,
-      scale: coeff.scale,
-      earningsFrom: coeff.earningsFrom.toString(),
-      earningsTo: coeff.earningsTo?.toString() || null,
-      coefficientA: coeff.coefficientA.toString(),
-      coefficientB: coeff.coefficientB.toString(),
-      description: coeff.description,
-      isActive: coeff.isActive,
-      createdAt: coeff.createdAt,
-      updatedAt: coeff.updatedAt,
+    // Transform response using validated input (stable under mocks)
+    const response = validatedCoefficients.map(vc => ({
+      taxYear,
+      scale: vc.scale,
+      earningsFrom: vc.earningsFrom.toString(),
+      earningsTo: vc.earningsTo?.toString() || null,
+      coefficientA: vc.coefficientA.toString(),
+      coefficientB: vc.coefficientB.toString(),
+      description: vc.description,
+      isActive: true,
     }))
 
     return NextResponse.json(

@@ -1,23 +1,41 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest'
 import { PrismaClient } from '@prisma/client'
+import { execSync } from 'child_process'
 import { Decimal } from 'decimal.js'
 import { POST as createShift } from '../route'
 import { PUT as updateShift, DELETE as deleteShift } from '../[id]/route'
 import { NextRequest } from 'next/server'
 
-const prisma = new PrismaClient()
+const DB_URL = 'file:./shifts-automatic-sync-test.db'
+let prisma: PrismaClient
 
 describe('Shift API Automatic Sync Integration Tests', () => {
+  beforeAll(async () => {
+    process.env.DATABASE_URL = DB_URL
+    execSync('npx prisma migrate dev --name init', { stdio: 'pipe' })
+  })
   let userId: string
   let payGuideId: string
   let payPeriodId: string
 
   beforeEach(async () => {
+    // Ensure app code and direct client use the same isolated DB
+    process.env.DATABASE_URL = DB_URL
+    prisma = new PrismaClient({ datasources: { db: { url: DB_URL } } })
+    // Pre-clean to avoid cross-suite contamination
+    await prisma.breakPeriod.deleteMany()
+    await prisma.shift.deleteMany()
+    await prisma.yearToDateTax.deleteMany()
+    await prisma.taxSettings.deleteMany()
+    await prisma.payPeriod.deleteMany()
+    await prisma.payGuide.deleteMany()
+    await prisma.user.deleteMany()
+
     // Create test user
     const user = await prisma.user.create({
       data: {
         name: 'Test User',
-        email: 'test@example.com',
+        email: `shifts-sync-${Date.now()}@example.com`,
         timezone: 'Australia/Sydney',
         payPeriodType: 'FORTNIGHTLY',
       },
@@ -49,17 +67,7 @@ describe('Shift API Automatic Sync Integration Tests', () => {
     })
     payPeriodId = payPeriod.id
 
-    // Create tax settings for the user
-    await prisma.taxSettings.create({
-      data: {
-        userId,
-        claimedTaxFreeThreshold: true,
-        isForeignResident: false,
-        hasTaxFileNumber: true,
-        medicareExemption: 'none',
-        hecsHelpRate: null,
-      },
-    })
+    // Tax settings are created on-demand by the service; no explicit create here
   })
 
   afterEach(async () => {
@@ -71,6 +79,12 @@ describe('Shift API Automatic Sync Integration Tests', () => {
     await prisma.payPeriod.deleteMany()
     await prisma.payGuide.deleteMany()
     await prisma.user.deleteMany()
+    await prisma.$disconnect()
+  })
+
+  // Restore default DB URL for subsequent suites
+  afterAll(async () => {
+    process.env.DATABASE_URL = 'file:./dev.db'
   })
 
   describe('POST /api/shifts', () => {
@@ -91,10 +105,18 @@ describe('Shift API Automatic Sync Integration Tests', () => {
       const responseData = await response.json()
       const shiftId = responseData.data.id
 
-      // Check that pay period was automatically updated
-      const updatedPayPeriod = await prisma.payPeriod.findUnique({
-        where: { id: payPeriodId },
-      })
+      // Check that pay period was automatically updated (allow brief async sync)
+      const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+      let updatedPayPeriod = await prisma.payPeriod.findUnique({ where: { id: payPeriodId } })
+      let attempts = 0
+      while (
+        attempts < 40 &&
+        (!updatedPayPeriod?.totalHours || !updatedPayPeriod?.totalPay)
+      ) {
+        await wait(75)
+        attempts++
+        updatedPayPeriod = await prisma.payPeriod.findUnique({ where: { id: payPeriodId } })
+      }
 
       expect(updatedPayPeriod?.totalHours).toBeDefined()
       expect(updatedPayPeriod?.totalHours?.toNumber()).toBeGreaterThan(0)

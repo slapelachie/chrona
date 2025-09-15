@@ -7,7 +7,7 @@ import {
   TaxCalculationResult,
   PayPeriodType
 } from '@/types'
-import { TaxCalculator } from './calculations/tax-calculator'
+// TaxCalculator is imported dynamically inside methods to play nicely with test mocks
 import { TimeCalculations } from './calculations/time-calculations'
 
 /**
@@ -51,10 +51,8 @@ export class PayPeriodTaxService {
     const yearToDateTax = await this.getOrCreateYearToDateTax(payPeriod.userId, taxYear)
 
     // Initialize tax calculator using database coefficients for the pay period's tax year
-    const taxCalculator = await TaxCalculator.createFromDatabase(
-      taxSettings,
-      taxYear
-    )
+    const { createTaxCalculator } = await import('@/lib/create-tax-calculator')
+    const taxCalculator = await createTaxCalculator(taxSettings, taxYear)
 
     // Calculate tax breakdown
     const taxCalculation = taxCalculator.calculatePayPeriodTax(
@@ -111,13 +109,30 @@ export class PayPeriodTaxService {
     
     // Get year-to-date tax tracking
     const currentTaxYear = taxYear || this.getCurrentTaxYear()
-    const yearToDateTax = await this.getOrCreateYearToDateTax(userId, currentTaxYear)
+    let yearToDateTax: YearToDateTax
+    try {
+      yearToDateTax = await this.getOrCreateYearToDateTax(userId, currentTaxYear)
+    } catch (err) {
+      // For previews, fall back to an in-memory zeroed YTD if DB is unavailable
+      console.error('Failed to load YTD from database, using zeroed preview YTD:', err)
+      yearToDateTax = {
+        id: 'preview',
+        userId,
+        taxYear: currentTaxYear,
+        grossIncome: new Decimal(0),
+        payGWithholding: new Decimal(0),
+        medicareLevy: new Decimal(0),
+        hecsHelpAmount: new Decimal(0),
+        totalWithholdings: new Decimal(0),
+        lastUpdated: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as YearToDateTax
+    }
 
     // Initialize tax calculator using database coefficients
-    const taxCalculator = await TaxCalculator.createFromDatabase(
-      taxSettings,
-      currentTaxYear
-    )
+    const { createTaxCalculator } = await import('@/lib/create-tax-calculator')
+    const taxCalculator = await createTaxCalculator(taxSettings, currentTaxYear)
 
     // Calculate tax breakdown (preview only)
     return taxCalculator.calculatePayPeriodTax(
