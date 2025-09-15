@@ -5,7 +5,7 @@ import {
   TaxScale,
   PayPeriodType,
   TaxCoefficient,
-  HecsThreshold,
+  StslRate,
   YearToDateTax,
   TaxRateConfig,
 } from '@/types'
@@ -21,7 +21,8 @@ import { TaxCoefficientService } from '@/lib/tax-coefficient-service'
 export class TaxCalculator {
   private taxSettings: TaxSettings
   private coefficients: TaxCoefficient[]
-  private hecsThresholds: HecsThreshold[]
+  // STSL coefficients (Schedule 8) – using formula A/B only (no versioning/threshold tables)
+  private stslRates: StslRate[]
   private medicareRate: Decimal
   private medicareLowIncomeThreshold: Decimal
   private medicareHighIncomeThreshold: Decimal
@@ -29,14 +30,14 @@ export class TaxCalculator {
   constructor(
     taxSettings: TaxSettings,
     coefficients: TaxCoefficient[],
-    hecsThresholds: HecsThreshold[] = [],
+    stslRates: StslRate[] = [],
     medicareRate: Decimal = new Decimal(0.02), // 2%
     medicareLowIncomeThreshold: Decimal = new Decimal(26000),
     medicareHighIncomeThreshold: Decimal = new Decimal(32500)
   ) {
     this.taxSettings = taxSettings
     this.coefficients = coefficients
-    this.hecsThresholds = hecsThresholds
+    this.stslRates = stslRates
     this.medicareRate = medicareRate
     this.medicareLowIncomeThreshold = medicareLowIncomeThreshold
     this.medicareHighIncomeThreshold = medicareHighIncomeThreshold
@@ -55,7 +56,7 @@ export class TaxCalculator {
       return new TaxCalculator(
         taxSettings,
         taxConfig.coefficients,
-        taxConfig.hecsHelpThresholds,
+        (taxConfig.stslRates || []).filter(r => r.coefficientA && r.coefficientB),
         taxConfig.medicareRate,
         taxConfig.medicareLowIncomeThreshold,
         taxConfig.medicareHighIncomeThreshold
@@ -67,7 +68,7 @@ export class TaxCalculator {
       return new TaxCalculator(
         taxSettings,
         DEFAULT_TAX_COEFFICIENTS,
-        DEFAULT_HECS_THRESHOLDS
+        []
       )
     }
   }
@@ -79,7 +80,8 @@ export class TaxCalculator {
     payPeriodId: string,
     grossPay: Decimal,
     payPeriodType: PayPeriodType,
-    yearToDateTax: YearToDateTax
+    yearToDateTax: YearToDateTax,
+    opts?: { taxYear?: string; onDate?: Date }
   ): TaxCalculationResult {
     // Convert gross pay to weekly equivalent for ATO calculations
     const weeklyGrossPay = this.convertToWeeklyPay(grossPay, payPeriodType)
@@ -98,12 +100,7 @@ export class TaxCalculator {
     // Calculate HECS-HELP amount
     const hecsHelpAmountRaw = this.calculateHecsHelp(grossPay, payPeriodType, yearToDateTax)
     
-    // Calculate totals
-    // Apply rounding rules: taxes are rounded down to the nearest dollar
-    const paygWithholding = TimeCalculations.roundDownToDollar(paygWithholdingRaw)
-    const medicareLevy = TimeCalculations.roundDownToDollar(medicareLevyRaw) // always 0
     const hecsHelpAmount = TimeCalculations.roundDownToDollar(hecsHelpAmountRaw)
-    // Total withholdings exclude Medicare levy (already included in PAYG)
     const totalWithholdings = paygWithholding.plus(hecsHelpAmount)
     const netPay = grossPay.minus(totalWithholdings)
     
@@ -115,7 +112,7 @@ export class TaxCalculator {
       medicareLevy,
       hecsHelpAmount
     )
-
+    
     return {
       payPeriod: {
         id: payPeriodId,
@@ -130,6 +127,56 @@ export class TaxCalculator {
         hecsHelpAmount,
         totalWithholdings,
         // Net pay keeps cents and is rounded to two decimals for display
+        netPay: TimeCalculations.roundToCents(netPay),
+      },
+      taxScale,
+      yearToDate: {
+        grossIncome: updatedYtd.grossIncome,
+        totalWithholdings: updatedYtd.totalWithholdings,
+      },
+    }
+  }
+
+  async calculatePayPeriodTaxAsync(
+    payPeriodId: string,
+    grossPay: Decimal,
+    payPeriodType: PayPeriodType,
+    yearToDateTax: YearToDateTax,
+    opts?: { taxYear?: string; onDate?: Date }
+  ): Promise<TaxCalculationResult> {
+    const weeklyGrossPay = this.convertToWeeklyPay(grossPay, payPeriodType)
+    const taxScale = this.determineTaxScale()
+    const weeklyPaygWithholding = this.calculatePaygWithholding(weeklyGrossPay, taxScale)
+    const paygWithholdingRaw = this.convertFromWeeklyPay(weeklyPaygWithholding, payPeriodType)
+    const medicareLevyRaw = new Decimal(0)
+    const hecsHelpAmountRaw = await this.calculateHecsHelpAsync(
+      grossPay,
+      payPeriodType,
+      { taxYear: opts?.taxYear ?? this.getCurrentTaxYear(), onDate: opts?.onDate ?? new Date() }
+    )
+
+    const paygWithholding = TimeCalculations.roundDownToDollar(paygWithholdingRaw)
+    const medicareLevy = TimeCalculations.roundDownToDollar(medicareLevyRaw)
+    const hecsHelpAmount = TimeCalculations.roundDownToDollar(hecsHelpAmountRaw)
+    const totalWithholdings = paygWithholding.plus(hecsHelpAmount)
+    const netPay = grossPay.minus(totalWithholdings)
+
+    const updatedYtd = this.updateYearToDate(
+      yearToDateTax,
+      grossPay,
+      paygWithholding,
+      medicareLevy,
+      hecsHelpAmount
+    )
+
+    return {
+      payPeriod: { id: payPeriodId, grossPay, payPeriodType },
+      breakdown: {
+        grossPay: TimeCalculations.roundToCents(grossPay),
+        paygWithholding,
+        medicareLevy,
+        hecsHelpAmount,
+        totalWithholdings,
         netPay: TimeCalculations.roundToCents(netPay),
       },
       taxScale,
@@ -177,29 +224,43 @@ export class TaxCalculator {
   private calculateHecsHelp(
     grossPay: Decimal,
     payPeriodType: PayPeriodType,
-    yearToDateTax: YearToDateTax
+    _yearToDateTax: YearToDateTax
   ): Decimal {
-    // Calculate HECS strictly from configured thresholds; no user override rate
-    if (this.hecsThresholds.length === 0) {
-      return new Decimal(0)
+    // Determine STSL scale per Schedule 8
+    const stslScale = (this.taxSettings.claimedTaxFreeThreshold || this.taxSettings.isForeignResident)
+      ? 'WITH_TFT_OR_FR'
+      : 'NO_TFT'
+
+    // Convert to weekly equivalent per Schedule 8 (exact factors)
+    let weeklyEquivalent: Decimal
+    switch (payPeriodType) {
+      case 'WEEKLY':
+        weeklyEquivalent = grossPay
+        break
+      case 'FORTNIGHTLY':
+        weeklyEquivalent = grossPay.div(2)
+        break
+      case 'MONTHLY':
+        weeklyEquivalent = grossPay.times(3).div(13)
+        break
+      default:
+        throw new Error(`Unsupported pay period type: ${payPeriodType}`)
     }
 
-    // Project annual income based on current pay period frequency
-    const periodsPerYear = this.getPeriodsPerYear(payPeriodType)
-    const projectedAnnualIncome = grossPay.times(periodsPerYear)
+    // x: ignore cents and add 99 cents
+    const x = weeklyEquivalent.floor().plus(0.99)
 
-    // Find applicable HECS threshold
-    const threshold = this.hecsThresholds.find(h => 
-      projectedAnnualIncome.gte(h.incomeFrom) && 
-      (h.incomeTo === null || projectedAnnualIncome.lt(h.incomeTo))
-    )
+    // Find A/B bracket from in-memory STSL set (formula-only)
+    const row = this.stslRates.find(r => r.scale === stslScale && r.coefficientA && r.coefficientB && x.gte(r.earningsFrom) && (r.earningsTo === null || x.lt(r.earningsTo)))
+    if (!row) return new Decimal(0)
+    const weekly = Decimal.max(new Decimal(0), x.times(row.coefficientA!).minus(row.coefficientB!))
 
-    if (!threshold) {
-      return new Decimal(0)
+    switch (payPeriodType) {
+      case 'WEEKLY': return weekly
+      case 'FORTNIGHTLY': return weekly.times(2)
+      case 'MONTHLY': return weekly.times(13).div(3)
+      default: throw new Error(`Unsupported pay period type: ${payPeriodType}`)
     }
-
-    // Calculate HECS-HELP amount for this pay period using the threshold rate
-    return grossPay.times(threshold.rate)
   }
 
   /**

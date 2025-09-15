@@ -59,7 +59,8 @@ export class PayPeriodTaxService {
       payPeriodId,
       payPeriod.totalPay,
       payPeriod.user.payPeriodType,
-      yearToDateTax
+      yearToDateTax,
+      { taxYear }
     )
 
     // Update pay period with tax calculations
@@ -139,7 +140,8 @@ export class PayPeriodTaxService {
       'preview',
       grossPay,
       payPeriodType,
-      yearToDateTax
+      yearToDateTax,
+      { taxYear: currentTaxYear }
     )
   }
 

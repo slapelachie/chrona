@@ -711,6 +711,7 @@ export interface TaxRateConfig {
   medicareLowIncomeThreshold: Decimal
   medicareHighIncomeThreshold: Decimal
   hecsHelpThresholds: HecsThreshold[]
+  stslRates?: StslRate[]
   coefficients: TaxCoefficient[]
 }
 
@@ -718,4 +719,17 @@ export interface HecsThreshold {
   incomeFrom: Decimal
   incomeTo: Decimal | null
   rate: Decimal // e.g., 0.01 for 1%
+}
+
+// STSL component rates (Schedule 8), two scales:
+//  - WITH_TFT_OR_FR: claimed tax-free threshold OR foreign resident
+//  - NO_TFT: did not claim tax-free threshold
+export type StslScale = 'WITH_TFT_OR_FR' | 'NO_TFT'
+export interface StslRate {
+  scale: StslScale
+  earningsFrom: Decimal
+  earningsTo: Decimal | null
+  coefficientA: Decimal
+  coefficientB: Decimal
+  description?: string
 }

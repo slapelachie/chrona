@@ -339,6 +339,27 @@ model HecsThreshold {
   @@map("hecs_thresholds")
 }
 
+// Study and training support loans (STSL) component rates (Schedule 8)
+model StslRate {
+  id          String   @id @default(cuid())
+  taxYear     String
+  // Two groups per ATO Schedule 8: with tax‑free threshold (or foreign resident) vs no tax‑free threshold
+  // We'll use values: "WITH_TFT_OR_FR" and "NO_TFT"
+  scale       String
+  earningsFrom Decimal
+  earningsTo   Decimal?
+  coefficientA  Decimal // 'a' in y = a*x - b
+  coefficientB  Decimal // 'b' in y = a*x - b
+  description  String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([taxYear, scale, earningsFrom])
+  @@index([taxYear, scale, isActive])
+  @@map("stsl_rates")
+}
+
 // Tax rate configuration metadata (Medicare rates, thresholds, etc.)
 model TaxRateConfig {
   id                           String   @id @default(cuid())

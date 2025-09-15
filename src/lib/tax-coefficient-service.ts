@@ -1,5 +1,5 @@
 import { Decimal } from 'decimal.js'
-import { TaxCoefficient, HecsThreshold, TaxRateConfig } from '@/types'
+import { TaxCoefficient, HecsThreshold, TaxRateConfig, StslRate } from '@/types'
 
 /**
  * Service for loading tax coefficients, HECS thresholds, and tax configuration
@@ -9,6 +9,7 @@ export class TaxCoefficientService {
   private static coefficientsCache = new Map<string, TaxCoefficient[]>()
   private static hecsThresholdsCache = new Map<string, HecsThreshold[]>()
   private static taxConfigCache = new Map<string, TaxRateConfig>()
+  private static stslRatesCache = new Map<string, StslRate[]>()
   private static cacheExpiry = new Map<string, number>()
   
   // Cache TTL: 1 hour (tax rates don't change frequently)
@@ -142,10 +143,11 @@ export class TaxCoefficientService {
         throw new Error(`No tax configuration found for tax year ${taxYear}`)
       }
 
-      // Get coefficients and HECS thresholds for this tax year
-      const [coefficients, hecsThresholds] = await Promise.all([
+      // Get coefficients and STSL rates for this tax year
+      const [coefficients, hecsThresholds, stslRates] = await Promise.all([
         this.getTaxCoefficients(taxYear),
-        this.getHecsThresholds(taxYear),
+        this.getHecsThresholds(taxYear), // legacy
+        this.getStslRates(taxYear),
       ])
 
       // Transform to domain type
@@ -155,6 +157,7 @@ export class TaxCoefficientService {
         medicareLowIncomeThreshold: dbConfig.medicareLowIncomeThreshold,
         medicareHighIncomeThreshold: dbConfig.medicareHighIncomeThreshold,
         hecsHelpThresholds: hecsThresholds,
+        stslRates,
         coefficients,
       }
 
@@ -182,6 +185,7 @@ export class TaxCoefficientService {
     this.coefficientsCache.clear()
     this.hecsThresholdsCache.clear()
     this.taxConfigCache.clear()
+    this.stslRatesCache.clear()
     this.cacheExpiry.clear()
   }
 
@@ -201,6 +205,7 @@ export class TaxCoefficientService {
       this.coefficientsCache.delete(key)
       this.hecsThresholdsCache.delete(key)
       this.taxConfigCache.delete(key)
+      this.stslRatesCache.delete(key)
       this.cacheExpiry.delete(key)
     })
   }
@@ -267,7 +272,41 @@ export class TaxCoefficientService {
       medicareLowIncomeThreshold: new Decimal(26000),
       medicareHighIncomeThreshold: new Decimal(32500),
       hecsHelpThresholds: this.getFallbackHecsThresholds(),
+      stslRates: [],
       coefficients: this.getFallbackCoefficients(),
     }
   }
+
+  // STSL component rates per Schedule 8
+  static async getStslRates(taxYear: string): Promise<StslRate[]> {
+    const cacheKey = `stsl:${taxYear}`
+    if (this.isCacheValid(cacheKey)) {
+      const cached = this.stslRatesCache.get(cacheKey)
+      if (cached) return cached
+    }
+
+    try {
+      const { prisma } = await import('@/lib/db')
+      const rows = await prisma.stslRate.findMany({
+        where: { taxYear, isActive: true },
+        orderBy: [{ scale: 'asc' }, { earningsFrom: 'asc' }],
+      })
+      const result: StslRate[] = rows.map(r => ({
+        scale: r.scale as any,
+        earningsFrom: r.earningsFrom,
+        earningsTo: r.earningsTo,
+        coefficientA: r.coefficientA,
+        coefficientB: r.coefficientB,
+        description: r.description || undefined,
+      }))
+      this.stslRatesCache.set(cacheKey, result)
+      this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+      return result
+    } catch (error) {
+      console.error('Error loading STSL rates from database:', error)
+      return []
+    }
+  }
+
+  // No date-based STSL lookups; formulas use the single configured A/B set.
 }

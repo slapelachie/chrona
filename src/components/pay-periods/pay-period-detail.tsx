@@ -167,6 +167,17 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
 
   return (
     <div className="mobile-container" style={{ display: 'grid', gap: '1rem' }}>
+      {pp && new Date(pp.endDate) < new Date('2025-09-24') && (
+        <div style={{
+          padding: '0.75rem',
+          border: '1px solid var(--color-warning, #FFC107)',
+          borderRadius: 6,
+          background: 'rgba(255,193,7,0.1)',
+          color: 'var(--color-text-primary)'
+        }}>
+          Heads up: STSL (HECS/HELP) amounts for pay periods ending before 24 Sep 2025 may differ from ATO tables. This app applies Schedule 8 formulas without legacy thresholds.
+        </div>
+      )}
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Loader2 size={18} className="loading-pulse" /> Loading pay period...
@@ -252,7 +263,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                   </div>
                   {/* Medicare levy is included in PAYG; no separate line */}
                   <div>
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>HECS/HELP</div>
+                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>STSL (HECS/HELP)</div>
                     <div style={{ fontWeight: 700 }}>${formatCurrency(tax.data.breakdown.hecsHelpAmount.toString())}</div>
                   </div>
                   <div>
