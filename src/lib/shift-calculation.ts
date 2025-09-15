@@ -189,14 +189,54 @@ export async function updateShiftWithCalculation(
   calculation: ShiftCalculationResult
 ): Promise<void> {
   try {
-    await prisma.shift.update({
-      where: { id: shiftId },
-      data: {
-        totalHours: calculation.totalHours,
-        basePay: calculation.basePay,
-        overtimePay: calculation.overtimePay,
-        penaltyPay: calculation.penaltyPay,
-        totalPay: calculation.totalPay
+    // Persist shift aggregate fields and replace per-segment rows atomically
+    const { penalties, overtimes } = calculation.calculationDetails
+
+    await prisma.$transaction(async (tx) => {
+      // 1) Update aggregate totals on the shift
+      await tx.shift.update({
+        where: { id: shiftId },
+        data: {
+          totalHours: calculation.totalHours,
+          basePay: calculation.basePay,
+          overtimePay: calculation.overtimePay,
+          penaltyPay: calculation.penaltyPay,
+          totalPay: calculation.totalPay,
+        },
+      })
+
+      // 2) Replace penalty segments
+      await tx.shiftPenaltySegment.deleteMany({ where: { shiftId } })
+      if (penalties && penalties.length > 0) {
+        await tx.shiftPenaltySegment.createMany({
+          data: penalties.map((p) => ({
+            shiftId,
+            timeFrameId: p.timeFrameId,
+            name: p.name,
+            multiplier: p.multiplier,
+            hours: p.hours,
+            pay: p.pay,
+            startTime: p.startTime,
+            endTime: p.endTime,
+          })),
+        })
+      }
+
+      // 3) Replace overtime segments
+      await tx.shiftOvertimeSegment.deleteMany({ where: { shiftId } })
+      if (overtimes && overtimes.length > 0) {
+        await tx.shiftOvertimeSegment.createMany({
+          data: overtimes.map((o) => ({
+            shiftId,
+            timeFrameId: o.timeFrameId,
+            name: o.name,
+            multiplier: o.multiplier,
+            hours: o.hours,
+            pay: o.pay,
+            startTime: o.startTime,
+            endTime: o.endTime,
+          })),
+        })
       }
     })
   } catch (err: any) {

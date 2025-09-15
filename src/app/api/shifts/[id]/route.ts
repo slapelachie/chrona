@@ -21,6 +21,7 @@ import {
 } from '@/lib/shift-calculation'
 import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
+import { parseIncludeParams } from '@/lib/api-response-utils'
 
 interface RouteParams {
   params: Promise<{
@@ -32,6 +33,8 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params
+    const { searchParams } = new URL(request.url)
+    const includes = parseIncludeParams(searchParams.get('include') || undefined)
 
     // Validate shift ID
     const validator = ValidationResult.create()
@@ -105,6 +108,74 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         minimumShiftHours: shift.payGuide.minimumShiftHours ?? undefined,
         maximumShiftHours: shift.payGuide.maximumShiftHours ?? undefined,
         timezone: shift.payGuide.timezone,
+      }
+    }
+
+    // Optionally attach calculation snapshot if requested
+    if (includes.has('calculation')) {
+      try {
+        const [penaltySegments, overtimeSegments] = await Promise.all([
+          prisma.shiftPenaltySegment.findMany({ where: { shiftId: id }, orderBy: { startTime: 'asc' } }),
+          prisma.shiftOvertimeSegment.findMany({ where: { shiftId: id }, orderBy: { startTime: 'asc' } }),
+        ])
+
+        const sum = (arr: any[], key: 'hours' | 'pay') =>
+          arr.reduce((acc, it) => acc + parseFloat(it[key].toString()), 0)
+
+        const totalHours = shift.totalHours ? parseFloat(shift.totalHours.toString()) : 0
+        const penaltyHours = sum(penaltySegments, 'hours')
+        const overtimeHours = sum(overtimeSegments, 'hours')
+        const baseHours = Math.max(0, totalHours - penaltyHours - overtimeHours)
+
+        const calculation: any = {
+          shift: {
+            startTime: shift.startTime,
+            endTime: shift.endTime,
+            breakPeriods: shift.breakPeriods.map((bp) => ({
+              id: bp.id,
+              shiftId: bp.shiftId,
+              startTime: bp.startTime,
+              endTime: bp.endTime,
+              createdAt: bp.createdAt,
+              updatedAt: bp.updatedAt,
+            })),
+            totalHours: shift.totalHours ?? '0',
+          },
+          breakdown: {
+            baseHours: baseHours.toFixed(2),
+            basePay: shift.basePay ?? '0',
+            overtimeHours: overtimeHours.toFixed(2),
+            overtimePay: shift.overtimePay ?? '0',
+            penaltyHours: penaltyHours.toFixed(2),
+            penaltyPay: shift.penaltyPay ?? '0',
+            totalPay: shift.totalPay ?? '0',
+          },
+          penalties: penaltySegments.map((p) => ({
+            timeFrameId: p.timeFrameId ?? '',
+            name: p.name,
+            multiplier: p.multiplier,
+            hours: p.hours,
+            pay: p.pay,
+            startTime: p.startTime,
+            endTime: p.endTime,
+          })),
+          overtimes: overtimeSegments.map((o) => ({
+            timeFrameId: o.timeFrameId ?? '',
+            name: o.name,
+            multiplier: o.multiplier,
+            hours: o.hours,
+            pay: o.pay,
+            startTime: o.startTime,
+            endTime: o.endTime,
+          })),
+          payGuide: shift.payGuide
+            ? { name: shift.payGuide.name, baseRate: shift.payGuide.baseRate }
+            : { name: 'Unknown', baseRate: 0 },
+        }
+
+        ;(responseShift as any).calculation = calculation
+      } catch (e) {
+        console.warn('Failed to attach calculation snapshot for shift', id, e)
       }
     }
 

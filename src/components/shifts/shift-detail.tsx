@@ -14,6 +14,8 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { PayCalculationResult } from '@/types'
+import { PayBreakdown } from './pay-breakdown'
 
 interface ShiftData {
   id: string
@@ -46,6 +48,7 @@ interface ShiftData {
     startTime: string
     endTime: string
   }>
+  calculation?: PayCalculationResult
 }
 
 interface ShiftDetailProps {
@@ -70,7 +73,7 @@ export const ShiftDetail: React.FC<ShiftDetailProps> = ({ shiftId }) => {
       setLoading(true)
       setError(null)
       
-      const response = await fetch(`/api/shifts/${shiftId}`)
+      const response = await fetch(`/api/shifts/${shiftId}?include=calculation`)
       
       if (response.ok) {
         const data = await response.json()
@@ -322,87 +325,98 @@ export const ShiftDetail: React.FC<ShiftDetailProps> = ({ shiftId }) => {
 
       {/* Pay Breakdown */}
       {shift.totalPay && (
-        <Card>
-          <CardBody>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-              <DollarSign size={20} style={{ color: 'var(--color-primary)' }} />
-              <h3 style={{ 
-                color: 'var(--color-text-primary)', 
-                margin: 0,
-                fontSize: '1.25rem',
-                fontWeight: '600'
-              }}>
-                Pay Breakdown
-              </h3>
-            </div>
-            
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
-              gap: '1.5rem',
-              marginBottom: '1rem'
-            }}>
-              {shift.totalHours && (
-                <div>
-                  <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
-                    Total Hours
-                  </div>
-                  <div style={{ fontSize: '1.5rem', color: 'var(--color-text-primary)', fontWeight: '600' }}>
-                    {parseFloat(shift.totalHours).toFixed(2)}h
+        <>
+          {shift.calculation ? (
+            <PayBreakdown 
+              calculation={shift.calculation}
+              isPreview={false}
+              showHeader={true}
+              defaultExpanded={true}
+            />
+          ) : (
+            <Card>
+              <CardBody>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <DollarSign size={20} style={{ color: 'var(--color-primary)' }} />
+                  <h3 style={{ 
+                    color: 'var(--color-text-primary)', 
+                    margin: 0,
+                    fontSize: '1.25rem',
+                    fontWeight: '600'
+                  }}>
+                    Pay Breakdown
+                  </h3>
+                </div>
+                
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
+                  gap: '1.5rem',
+                  marginBottom: '1rem'
+                }}>
+                  {shift.totalHours && (
+                    <div>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
+                        Total Hours
+                      </div>
+                      <div style={{ fontSize: '1.5rem', color: 'var(--color-text-primary)', fontWeight: '600' }}>
+                        {parseFloat(shift.totalHours).toFixed(2)}h
+                      </div>
+                    </div>
+                  )}
+                  
+                  {shift.basePay && (
+                    <div>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
+                        Base Pay
+                      </div>
+                      <div style={{ fontSize: '1.5rem', color: 'var(--color-text-primary)', fontWeight: '600' }}>
+                        ${parseFloat(shift.basePay).toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {shift.overtimePay && parseFloat(shift.overtimePay) > 0 && (
+                    <div>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
+                        Overtime Pay
+                      </div>
+                      <div style={{ fontSize: '1.5rem', color: 'var(--color-warning)', fontWeight: '600' }}>
+                        ${parseFloat(shift.overtimePay).toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {shift.penaltyPay && parseFloat(shift.penaltyPay) > 0 && (
+                    <div>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
+                        Penalty Pay
+                      </div>
+                      <div style={{ fontSize: '1.5rem', color: 'var(--color-primary)', fontWeight: '600' }}>
+                        ${parseFloat(shift.penaltyPay).toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div style={{ 
+                    gridColumn: 'span 1',
+                    padding: '1rem',
+                    backgroundColor: 'var(--color-success-bg)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-success)'
+                  }}>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--color-success)', marginBottom: '0.25rem' }}>
+                      Total Pay
+                    </div>
+                    <div style={{ fontSize: '2rem', color: 'var(--color-success)', fontWeight: '700' }}>
+                      ${parseFloat(shift.totalPay).toFixed(2)}
+                    </div>
                   </div>
                 </div>
-              )}
-              
-              {shift.basePay && (
-                <div>
-                  <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
-                    Base Pay
-                  </div>
-                  <div style={{ fontSize: '1.5rem', color: 'var(--color-text-primary)', fontWeight: '600' }}>
-                    ${parseFloat(shift.basePay).toFixed(2)}
-                  </div>
-                </div>
-              )}
-              
-              {shift.overtimePay && parseFloat(shift.overtimePay) > 0 && (
-                <div>
-                  <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
-                    Overtime Pay
-                  </div>
-                  <div style={{ fontSize: '1.5rem', color: 'var(--color-warning)', fontWeight: '600' }}>
-                    ${parseFloat(shift.overtimePay).toFixed(2)}
-                  </div>
-                </div>
-              )}
-              
-              {shift.penaltyPay && parseFloat(shift.penaltyPay) > 0 && (
-                <div>
-                  <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
-                    Penalty Pay
-                  </div>
-                  <div style={{ fontSize: '1.5rem', color: 'var(--color-primary)', fontWeight: '600' }}>
-                    ${parseFloat(shift.penaltyPay).toFixed(2)}
-                  </div>
-                </div>
-              )}
-              
-              <div style={{ 
-                gridColumn: 'span 1',
-                padding: '1rem',
-                backgroundColor: 'var(--color-success-bg)',
-                borderRadius: '8px',
-                border: '1px solid var(--color-success)'
-              }}>
-                <div style={{ fontSize: '0.875rem', color: 'var(--color-success)', marginBottom: '0.25rem' }}>
-                  Total Pay
-                </div>
-                <div style={{ fontSize: '2rem', color: 'var(--color-success)', fontWeight: '700' }}>
-                  ${parseFloat(shift.totalPay).toFixed(2)}
-                </div>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
+              </CardBody>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Additional Information */}

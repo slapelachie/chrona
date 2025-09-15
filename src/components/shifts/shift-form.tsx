@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation'
 import { Form } from 'react-bootstrap'
 import { PayCalculationResult } from '@/types'
 import { BreakPeriodsInput, BreakPeriodInput } from './break-periods-input'
+import { PayBreakdown } from './pay-breakdown'
+import { usePreferences } from '@/hooks/use-preferences'
 
 interface PayGuide {
   id: string
@@ -37,6 +39,7 @@ interface ShiftData {
 }
 
 export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
+  const { prefs } = usePreferences()
   const [formData, setFormData] = useState<ShiftData>({
     payGuideId: '',
     startTime: '',
@@ -47,6 +50,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   
   const [payGuides, setPayGuides] = useState<PayGuide[]>([])
   const [payPreview, setPayPreview] = useState<PayPreview | null>(null)
+  const [payCalculation, setPayCalculation] = useState<PayCalculationResult | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -75,6 +79,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       return () => clearTimeout(timeoutId)
     } else {
       setPayPreview(null)
+      setPayCalculation(null)
     }
   }, [formData.payGuideId, formData.startTime, formData.endTime, formData.breakPeriods])
 
@@ -90,6 +95,17 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     }
   }
 
+  // Auto-select default pay guide for new shifts if available
+  useEffect(() => {
+    if (mode !== 'create') return
+    if (formData.payGuideId) return
+    if (!prefs?.defaultPayGuideId) return
+    const exists = payGuides.some(pg => pg.id === prefs.defaultPayGuideId)
+    if (exists) {
+      setFormData(prev => ({ ...prev, payGuideId: prefs.defaultPayGuideId! }))
+    }
+  }, [mode, prefs?.defaultPayGuideId, payGuides, formData.payGuideId])
+
   const fetchShiftData = async () => {
     if (!shiftId) return
     
@@ -104,11 +120,17 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
         const startTime = new Date(shift.startTime)
         const endTime = new Date(shift.endTime)
         
+        const breakPeriods = (shift.breakPeriods || []).map((bp: any) => ({
+          id: bp.id,
+          startTime: bp.startTime,
+          endTime: bp.endTime,
+        }))
         setFormData({
           payGuideId: shift.payGuideId,
           startTime: formatDateTimeLocal(startTime),
           endTime: formatDateTimeLocal(endTime),
-          notes: shift.notes || ''
+          notes: shift.notes || '',
+          breakPeriods,
         })
       }
     } catch (error) {
@@ -145,7 +167,10 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
         const data = await response.json()
         const calculation = data.data.calculation
         
-        // Transform the PayCalculationResult to PayPreview format
+        // Store the complete calculation for breakdown
+        setPayCalculation(calculation)
+        
+        // Transform the PayCalculationResult to PayPreview format for backward compatibility
         const preview: PayPreview = {
           totalHours: calculation.shift.totalHours.toString(),
           basePay: calculation.breakdown.basePay.toString(),
@@ -170,6 +195,43 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     const hours = String(date.getHours()).padStart(2, '0')
     const minutes = String(date.getMinutes()).padStart(2, '0')
     return `${year}-${month}-${day}T${hours}:${minutes}`
+  }
+
+  const handleStartTimeChange = (value: string) => {
+    // Always set start time
+    // Adjust end time depending on whether we already have one
+    setFormData(prev => {
+      const next = { ...prev, startTime: value }
+      try {
+        const newStart = value ? new Date(value) : null
+        const hasEnd = !!prev.endTime
+        if (newStart) {
+          if (hasEnd) {
+            // Preserve existing duration
+            const prevStart = prev.startTime ? new Date(prev.startTime) : null
+            const prevEnd = new Date(prev.endTime as string)
+            const prevDuration = prevStart ? (prevEnd.getTime() - prevStart.getTime()) : 0
+            if (prevDuration > 0) {
+              const newEnd = new Date(newStart.getTime() + prevDuration)
+              next.endTime = formatDateTimeLocal(newEnd)
+            }
+          } else {
+            // Default to 3 hours after new start
+            const newEnd = new Date(newStart.getTime() + 3 * 60 * 60 * 1000)
+            next.endTime = formatDateTimeLocal(newEnd)
+          }
+        }
+      } catch {
+        // ignore parse errors; keep user's input
+      }
+      return next
+    })
+    if (errors.startTime) setErrors(prev => ({ ...prev, startTime: '' }))
+  }
+
+  const handleEndTimeChange = (value: string) => {
+    setFormData(prev => ({ ...prev, endTime: value }))
+    if (errors.endTime) setErrors(prev => ({ ...prev, endTime: '' }))
   }
 
   const validateForm = (): boolean => {
@@ -405,17 +467,14 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
             {/* Date and Time Inputs */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: '1fr 1fr', 
-              gap: '1rem',
-              '@media (max-width: 576px)': {
-                gridTemplateColumns: '1fr'
-              }
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '1rem'
             }}>
               <Input
                 type="datetime-local"
                 label="Start Time"
                 value={formData.startTime}
-                onChange={(e) => handleInputChange('startTime', e.target.value)}
+                onChange={(e) => handleStartTimeChange(e.target.value)}
                 error={errors.startTime}
                 leftIcon={<Calendar size={16} />}
                 required
@@ -425,7 +484,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
                 type="datetime-local"
                 label="End Time"
                 value={formData.endTime}
-                onChange={(e) => handleInputChange('endTime', e.target.value)}
+                onChange={(e) => handleEndTimeChange(e.target.value)}
                 error={errors.endTime}
                 leftIcon={<Clock size={16} />}
                 required
@@ -443,79 +502,46 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
               errors={errors}
             />
 
-            {/* Pay Preview */}
-            {(payPreview || previewLoading) && (
-              <Card variant="outlined">
-                <CardBody>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                    <DollarSign size={16} style={{ color: 'var(--color-primary)' }} />
-                    <h4 style={{ 
-                      color: 'var(--color-text-primary)', 
-                      margin: 0, 
-                      fontSize: '1rem',
-                      fontWeight: '600'
-                    }}>
-                      Pay Preview
-                    </h4>
-                    {previewLoading && (
-                      <Loader size={16} style={{ color: 'var(--color-primary)' }} className="spinner" />
-                    )}
-                  </div>
-                  
-                  {payPreview && !previewLoading && (
-                    <div style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', 
-                      gap: '1rem' 
-                    }}>
-                      <div>
-                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                          Total Hours
-                        </div>
-                        <div style={{ fontSize: '1.1rem', color: 'var(--color-text-primary)', fontWeight: '600' }}>
-                          {parseFloat(payPreview.totalHours).toFixed(2)}h
-                        </div>
+            {/* Pay Preview with Detailed Breakdown */}
+            {(payCalculation || previewLoading) && (
+              <>
+                {previewLoading && (
+                  <Card variant="outlined">
+                    <CardBody>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                        <DollarSign size={16} style={{ color: 'var(--color-primary)' }} />
+                        <h4 style={{ 
+                          color: 'var(--color-text-primary)', 
+                          margin: 0, 
+                          fontSize: '1rem',
+                          fontWeight: '600'
+                        }}>
+                          Pay Preview
+                        </h4>
+                        <Loader size={16} style={{ color: 'var(--color-primary)' }} className="spinner" />
                       </div>
-                      <div>
-                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                          Base Pay
-                        </div>
-                        <div style={{ fontSize: '1.1rem', color: 'var(--color-text-primary)', fontWeight: '600' }}>
-                          ${parseFloat(payPreview.basePay).toFixed(2)}
-                        </div>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        padding: '2rem',
+                        color: 'var(--color-text-secondary)'
+                      }}>
+                        Calculating pay breakdown...
                       </div>
-                      {parseFloat(payPreview.overtimePay) > 0 && (
-                        <div>
-                          <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                            Overtime
-                          </div>
-                          <div style={{ fontSize: '1.1rem', color: 'var(--color-warning)', fontWeight: '600' }}>
-                            ${parseFloat(payPreview.overtimePay).toFixed(2)}
-                          </div>
-                        </div>
-                      )}
-                      {parseFloat(payPreview.penaltyPay) > 0 && (
-                        <div>
-                          <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                            Penalties
-                          </div>
-                          <div style={{ fontSize: '1.1rem', color: 'var(--color-primary)', fontWeight: '600' }}>
-                            ${parseFloat(payPreview.penaltyPay).toFixed(2)}
-                          </div>
-                        </div>
-                      )}
-                      <div>
-                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                          Total Pay
-                        </div>
-                        <div style={{ fontSize: '1.25rem', color: 'var(--color-success)', fontWeight: '700' }}>
-                          ${parseFloat(payPreview.totalPay).toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </CardBody>
-              </Card>
+                    </CardBody>
+                  </Card>
+                )}
+                
+                {payCalculation && !previewLoading && (
+                  <PayBreakdown 
+                    calculation={payCalculation}
+                    isPreview={true}
+                    showHeader={true}
+                    defaultExpanded={false}
+                  />
+                )}
+              </>
             )}
 
             {/* Notes */}

@@ -89,20 +89,30 @@ export class TaxCalculator {
     
     // Calculate PAYG withholding using ATO coefficients
     const weeklyPaygWithholding = this.calculatePaygWithholding(weeklyGrossPay, taxScale)
-    const paygWithholding = this.convertFromWeeklyPay(weeklyPaygWithholding, payPeriodType)
+    const paygWithholdingRaw = this.convertFromWeeklyPay(weeklyPaygWithholding, payPeriodType)
     
     // Calculate Medicare levy
-    const medicareLevy = this.calculateMedicareLevy(grossPay, payPeriodType, yearToDateTax)
+    const medicareLevyRaw = this.calculateMedicareLevy(grossPay, payPeriodType, yearToDateTax)
     
     // Calculate HECS-HELP amount
-    const hecsHelpAmount = this.calculateHecsHelp(grossPay, payPeriodType, yearToDateTax)
+    const hecsHelpAmountRaw = this.calculateHecsHelp(grossPay, payPeriodType, yearToDateTax)
     
     // Calculate totals
+    // Apply rounding rules: taxes are rounded down to the nearest dollar
+    const paygWithholding = TimeCalculations.roundDownToDollar(paygWithholdingRaw)
+    const medicareLevy = TimeCalculations.roundDownToDollar(medicareLevyRaw)
+    const hecsHelpAmount = TimeCalculations.roundDownToDollar(hecsHelpAmountRaw)
     const totalWithholdings = paygWithholding.plus(medicareLevy).plus(hecsHelpAmount)
     const netPay = grossPay.minus(totalWithholdings)
     
     // Update year-to-date tracking
-    const updatedYtd = this.updateYearToDate(yearToDateTax, grossPay, paygWithholding, medicareLevy, hecsHelpAmount)
+    const updatedYtd = this.updateYearToDate(
+      yearToDateTax,
+      grossPay,
+      paygWithholding,
+      medicareLevy,
+      hecsHelpAmount
+    )
 
     return {
       payPeriod: {
@@ -112,10 +122,12 @@ export class TaxCalculator {
       },
       breakdown: {
         grossPay: TimeCalculations.roundToCents(grossPay),
-        paygWithholding: TimeCalculations.roundToCents(paygWithholding),
-        medicareLevy: TimeCalculations.roundToCents(medicareLevy),
-        hecsHelpAmount: TimeCalculations.roundToCents(hecsHelpAmount),
-        totalWithholdings: TimeCalculations.roundToCents(totalWithholdings),
+        // Taxes are whole dollars (floored)
+        paygWithholding,
+        medicareLevy,
+        hecsHelpAmount,
+        totalWithholdings,
+        // Net pay keeps cents and is rounded to two decimals for display
         netPay: TimeCalculations.roundToCents(netPay),
       },
       taxScale,

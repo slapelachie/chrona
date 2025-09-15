@@ -141,33 +141,82 @@ export async function PUT(request: NextRequest) {
       })
     }
 
-    // Use transaction to update coefficients
-    const result = await prisma.$transaction(async (tx) => {
-      // First, deactivate existing coefficients for this tax year
-      await tx.taxCoefficient.updateMany({
-        where: { taxYear },
-        data: { isActive: false },
-      })
+    // Server-side guard: prevent duplicate (scale, earningsFrom) within payload
+    {
+      const seen = new Set<string>()
+      for (const c of validatedCoefficients) {
+        const key = `${c.scale}|${c.earningsFrom.toString()}`
+        if (seen.has(key)) {
+          return NextResponse.json(
+            {
+              errors: [{ field: 'coefficients', message: `Duplicate bracket for scale ${c.scale} at earningsFrom=${c.earningsFrom.toString()}` }],
+              message: 'Duplicate coefficients in request',
+            },
+            { status: 400 }
+          )
+        }
+        seen.add(key)
+      }
+    }
 
-      // Then create new coefficients
-      const createdCoefficients = []
-      for (const coeff of validatedCoefficients) {
-        const created = await tx.taxCoefficient.create({
-          data: {
-            taxYear,
-            scale: coeff.scale,
-            earningsFrom: coeff.earningsFrom,
-            earningsTo: coeff.earningsTo,
-            coefficientA: coeff.coefficientA,
-            coefficientB: coeff.coefficientB,
-            description: coeff.description,
-            isActive: true,
-          },
-        })
-        createdCoefficients.push(created)
+    // Use transaction: update existing in-place, create new, then deactivate leftovers
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.taxCoefficient.findMany({ where: { taxYear } })
+      const existingMap = new Map<string, typeof existing[number]>()
+      for (const e of existing) {
+        existingMap.set(`${e.scale}|${e.earningsFrom.toString()}`, e)
       }
 
-      return createdCoefficients
+      const desiredKeys = new Set<string>()
+      const affectedIds: string[] = []
+
+      // Update or create
+      for (const coeff of validatedCoefficients) {
+        const key = `${coeff.scale}|${coeff.earningsFrom.toString()}`
+        desiredKeys.add(key)
+
+        const existingRow = existingMap.get(key)
+        if (existingRow) {
+          const updated = await tx.taxCoefficient.update({
+            where: { id: existingRow.id },
+            data: {
+              earningsTo: coeff.earningsTo,
+              coefficientA: coeff.coefficientA,
+              coefficientB: coeff.coefficientB,
+              description: coeff.description,
+              isActive: true,
+            },
+          })
+          affectedIds.push(updated.id)
+        } else {
+          const created = await tx.taxCoefficient.create({
+            data: {
+              taxYear,
+              scale: coeff.scale,
+              earningsFrom: coeff.earningsFrom,
+              earningsTo: coeff.earningsTo,
+              coefficientA: coeff.coefficientA,
+              coefficientB: coeff.coefficientB,
+              description: coeff.description,
+              isActive: true,
+            },
+          })
+          affectedIds.push(created.id)
+        }
+      }
+
+      // Deactivate any rows in this taxYear not present in payload
+      const toDeactivate = existing
+        .filter(e => !desiredKeys.has(`${e.scale}|${e.earningsFrom.toString()}`))
+        .map(e => e.id)
+      if (toDeactivate.length > 0) {
+        await tx.taxCoefficient.updateMany({
+          where: { id: { in: toDeactivate } },
+          data: { isActive: false },
+        })
+      }
+
+      return affectedIds
     })
 
     // Transform response using validated input (stable under mocks)
@@ -185,7 +234,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(
       { 
         data: response,
-        message: `Successfully updated ${result.length} tax coefficients for ${taxYear}`,
+        message: `Successfully upserted ${result.length} tax coefficients for ${taxYear}`,
       },
       { status: 200 }
     )

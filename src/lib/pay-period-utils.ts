@@ -49,22 +49,25 @@ export function calculateFortnightlyPeriod(date: Date): {
   startDate: Date
   endDate: Date
 } {
-  const targetDate = new Date(date)
-  
-  // Calculate start of fortnight
-  // This logic matches the seed file calculation
-  const payPeriodStart = new Date(targetDate)
-  payPeriodStart.setDate(targetDate.getDate() - ((targetDate.getDay() + 6) % 14))
-  payPeriodStart.setHours(0, 0, 0, 0)
+  // Define a fixed anchor Monday in UTC (1970-01-05 was a Monday)
+  const anchor = new Date(Date.UTC(1970, 0, 5, 0, 0, 0, 0))
 
-  // Calculate end of fortnight (13 days later)
-  const payPeriodEnd = new Date(payPeriodStart)
-  payPeriodEnd.setDate(payPeriodStart.getDate() + 13)
-  payPeriodEnd.setHours(23, 59, 59, 999)
+  // Work in UTC to avoid local-time DST/year crossover issues
+  const d = new Date(date)
+  const targetUTC = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0))
+
+  const dayMs = 24 * 60 * 60 * 1000
+  const daysSinceAnchor = Math.floor((targetUTC.getTime() - anchor.getTime()) / dayMs)
+
+  // Snap down to nearest 14-day boundary
+  const startDays = daysSinceAnchor - (daysSinceAnchor % 14)
+  const startUTC = new Date(anchor.getTime() + startDays * dayMs)
+  const endUTC = new Date(startUTC.getTime() + 13 * dayMs)
+  endUTC.setUTCHours(23, 59, 59, 999)
 
   return {
-    startDate: payPeriodStart,
-    endDate: payPeriodEnd
+    startDate: startUTC,
+    endDate: endUTC,
   }
 }
 

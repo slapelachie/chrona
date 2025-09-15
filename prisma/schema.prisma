@@ -84,6 +84,7 @@ model PenaltyTimeFrame {
 
   // Relations
   payGuide    PayGuide @relation(fields: [payGuideId], references: [id], onDelete: Cascade)
+  shiftSegments ShiftPenaltySegment[] @relation("PenaltyTimeFrame_ShiftPenaltySegments")
 
   @@map("penalty_time_frames")
 }
@@ -117,8 +118,57 @@ model Shift {
   payGuide     PayGuide  @relation(fields: [payGuideId], references: [id])
   payPeriod    PayPeriod? @relation(fields: [payPeriodId], references: [id], onDelete: Cascade)
   breakPeriods BreakPeriod[]
+  penaltySegments ShiftPenaltySegment[]
+  overtimeSegments ShiftOvertimeSegment[]
 
   @@map("shifts")
+}
+
+// Persisted penalty segments applied to a shift
+model ShiftPenaltySegment {
+  id         String   @id @default(cuid())
+  shiftId    String
+  timeFrameId String? // optional reference to the originating penalty rule
+  name       String
+  multiplier Decimal
+  hours      Decimal
+  pay        Decimal
+  startTime  DateTime
+  endTime    DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  shift      Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  // Keep a soft link to PenaltyTimeFrame if it still exists; allow SetNull when removed
+  timeFrame  PenaltyTimeFrame? @relation("PenaltyTimeFrame_ShiftPenaltySegments", fields: [timeFrameId], references: [id], onDelete: SetNull)
+
+  @@index([shiftId])
+  @@index([startTime])
+  @@map("shift_penalty_segments")
+}
+
+// Persisted overtime segments applied to a shift
+model ShiftOvertimeSegment {
+  id         String   @id @default(cuid())
+  shiftId    String
+  timeFrameId String? // optional reference to the originating overtime rule
+  name       String
+  multiplier Decimal
+  hours      Decimal
+  pay        Decimal
+  startTime  DateTime
+  endTime    DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  shift      Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  timeFrame  OvertimeTimeFrame? @relation("OvertimeTimeFrame_ShiftOvertimeSegments", fields: [timeFrameId], references: [id], onDelete: SetNull)
+
+  @@index([shiftId])
+  @@index([startTime])
+  @@map("shift_overtime_segments")
 }
 
 // Break periods for shifts - source of truth for break timing
@@ -157,6 +207,7 @@ model OvertimeTimeFrame {
 
   // Relations
   payGuide              PayGuide @relation(fields: [payGuideId], references: [id], onDelete: Cascade)
+  shiftSegments         ShiftOvertimeSegment[] @relation("OvertimeTimeFrame_ShiftOvertimeSegments")
 
   @@map("overtime_time_frames")
 }

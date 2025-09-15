@@ -25,6 +25,7 @@ export const BreakPeriodsInput: React.FC<BreakPeriodsInputProps> = ({
   shiftEndTime,
   errors = {}
 }) => {
+  const list = Array.isArray(breakPeriods) ? breakPeriods : []
   const [newBreakPeriod, setNewBreakPeriod] = useState<Omit<BreakPeriodInput, 'id'>>({
     startTime: '',
     endTime: ''
@@ -42,17 +43,17 @@ export const BreakPeriodsInput: React.FC<BreakPeriodsInputProps> = ({
       ...newBreakPeriod
     }
 
-    onBreakPeriodsChange([...breakPeriods, newBreak])
+    onBreakPeriodsChange([...list, newBreak])
     setNewBreakPeriod({ startTime: '', endTime: '' })
   }
 
   const handleRemoveBreakPeriod = (id: string) => {
-    onBreakPeriodsChange(breakPeriods.filter(bp => bp.id !== id))
+    onBreakPeriodsChange(list.filter(bp => bp.id !== id))
   }
 
   const handleUpdateBreakPeriod = (id: string, field: 'startTime' | 'endTime', value: string) => {
     onBreakPeriodsChange(
-      breakPeriods.map(bp => 
+      list.map(bp => 
         bp.id === id ? { ...bp, [field]: value } : bp
       )
     )
@@ -100,7 +101,7 @@ export const BreakPeriodsInput: React.FC<BreakPeriodsInputProps> = ({
     }
   }
 
-  const totalBreakTime = breakPeriods.reduce((total, bp) => {
+  const totalBreakTime = list.reduce((total, bp) => {
     if (!bp.startTime || !bp.endTime) return total
     const start = new Date(bp.startTime)
     const end = new Date(bp.endTime)
@@ -153,9 +154,9 @@ export const BreakPeriodsInput: React.FC<BreakPeriodsInputProps> = ({
       </div>
 
       {/* Existing Break Periods */}
-      {breakPeriods.length > 0 && (
+      {list.length > 0 && (
         <div style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {breakPeriods.map((breakPeriod, index) => {
+          {list.map((breakPeriod, index) => {
             const error = validateBreakPeriod(breakPeriod.startTime, breakPeriod.endTime)
             const duration = calculateBreakDuration(breakPeriod.startTime, breakPeriod.endTime)
             

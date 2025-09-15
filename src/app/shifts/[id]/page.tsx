@@ -1,16 +1,15 @@
 'use client'
 
 import React from 'react'
+import { useParams } from 'next/navigation'
 import { AppShell } from '@/components/layout'
 import { ShiftDetail } from '@/components/shifts'
 
-interface ShiftDetailPageProps {
-  params: {
-    id: string
-  }
-}
+type RouteParams = { id: string }
 
-export default function ShiftDetailPage({ params }: ShiftDetailPageProps) {
+export default function ShiftDetailPage() {
+  const params = useParams<RouteParams>()
+  const id = (params?.id ?? '') as string
   return (
     <AppShell 
       title="Shift Details" 
@@ -18,7 +17,7 @@ export default function ShiftDetailPage({ params }: ShiftDetailPageProps) {
       showBackButton={true}
       backButtonHref="/shifts"
     >
-      <ShiftDetail shiftId={params.id} />
+      <ShiftDetail shiftId={id} />
     </AppShell>
   )
 }

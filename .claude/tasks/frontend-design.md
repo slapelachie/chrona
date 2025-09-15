@@ -55,18 +55,18 @@ Implementing a modern, mobile-first frontend for Chrona with a black/grey and aq
 - [ ] Bulk operations interface
 
 ### Phase 5: Pay Periods & Calculations
-- [ ] Pay period overview cards
-- [ ] Detailed pay breakdown displays
-- [ ] Tax calculation visualization
-- [ ] Pay verification tools
-- [ ] Export functionality
+- [x] Pay period overview cards
+- [x] Detailed pay breakdown displays
+- [x] Tax calculation visualization
+- [x] Pay verification tools
+- [x] Export functionality
 
 ### Phase 6: Settings & Configuration
-- [ ] Personal information management
-- [ ] Pay guide selection interface
-- [ ] Tax settings configuration
-- [ ] Notification preferences
-- [ ] Data management tools
+- [x] Personal information management
+- [x] Pay guide selection interface
+- [x] Tax settings configuration
+- [x] Notification preferences
+- [x] Data management tools
 
 ### Phase 7: Data Visualization & Charts
 - [ ] Earnings trend charts
@@ -236,12 +236,18 @@ src/
 - **Type Safety**: Full TypeScript coverage with proper interfaces
 - **API Integration**: Seamless backend integration without API modifications
 
-### Next Steps (Phase 5: Pay Periods & Calculations)
-1. Implement pay period overview cards and listings
-2. Create detailed pay breakdown displays with visualizations
-3. Add tax calculation visualization components
-4. Build pay verification tools for accuracy checking
-5. Implement export functionality for pay periods
+### Phase 5: Pay Periods & Calculations (Completed 2025-09-15)
+- [x] Pages and routing:
+  - [x] Pay periods list page (`src/app/pay-periods/page.tsx`)
+  - [x] Pay period detail page (`src/app/pay-periods/[id]/page.tsx`)
+- [x] Components (`src/components/pay-periods`):
+  - [x] `PayPeriodsList`: listing with status filters, search, totals
+  - [x] `PayPeriodDetail`: overview, tax breakdown, verification, export
+- [x] Overview cards: date range, gross/net pay, status/verified chip
+- [x] Tax visualization: PAYG, Medicare, HECS, withholdings, net
+- [x] Pay verification tools: actual pay input, variance indicator, mark verified
+- [x] Export: CSV (shift rows) and JSON (full snapshot via `include=shifts`)
+- [x] API integration: list/detail, process, tax calculate/get
 
 ### Technical Achievements
 - **Dark Theme**: Complete dark theme with aqua accents and high contrast ratios
@@ -254,6 +260,31 @@ src/
 - **State Management**: Proper loading, error, and empty states for all data operations
 - **Navigation**: Enhanced routing with back button support and breadcrumb navigation
 - **Real-time Updates**: Components automatically refresh when data changes
+
+### Phase 6: Settings & Configuration (Completed 2025-09-15)
+- [x] Pages and routing:
+  - [x] Settings home (`src/app/settings/page.tsx`)
+  - [x] Personal (`src/app/settings/personal/page.tsx`)
+  - [x] Pay Guide (`src/app/settings/pay-guide/page.tsx`)
+  - [x] Tax (`src/app/settings/tax/page.tsx`)
+  - [x] Notifications (`src/app/settings/notifications/page.tsx`)
+  - [x] Data (`src/app/settings/data/page.tsx`)
+- [x] Components (`src/components/settings`):
+  - [x] `PersonalInfoForm`: name, email, timezone, pay period type with API persistence
+  - [x] `PayGuideSelector`: default pay guide with search; stored in local preferences
+  - [x] `TaxSettingsForm`: integrates with `/api/tax-settings` for full configuration
+  - [x] `NotificationPreferences`: toggles stored locally (email, pay period, shift reminders)
+  - [x] `DataManagement`: export JSON snapshot (user, pay periods+shifts, shifts, pay guides, tax settings) and import/clear local prefs
+- [x] API additions:
+  - [x] `GET/PUT /api/user` (`src/app/api/user/route.ts`) to manage personal info
+- [x] Utilities:
+  - [x] `usePreferences` (`src/hooks/use-preferences.ts`) for local preference storage
+
+Implementation notes:
+- Personal info uses server persistence via `/api/user`; timezone validated as IANA identifier; pay period type validated against supported values.
+- Pay guide default remains a client preference to avoid schema changes; shift forms can read `defaultPayGuideId` when prefilling.
+- Notifications are local-only; no backend dispatch is performed.
+- Data export aggregates API data and triggers a JSON download; import restores only local preferences to avoid destructive writes.
 
 ## Notes and Decisions
 - Using existing React Bootstrap foundation but heavily customizing for dark theme

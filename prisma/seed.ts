@@ -267,25 +267,21 @@ async function main() {
   // Create current pay period (fortnightly)
   console.log('📅 Creating current pay period...')
   const today = new Date()
-  const payPeriodStart = new Date(today)
-  payPeriodStart.setDate(today.getDate() - ((today.getDay() + 6) % 14)) // Start of current fortnight
-  payPeriodStart.setHours(0, 0, 0, 0)
+  const anchor = new Date(Date.UTC(1970, 0, 5, 0, 0, 0, 0)) // Monday UTC
+  const dayMs = 24 * 60 * 60 * 1000
+  const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
+  const daysSinceAnchor = Math.floor((todayUTC.getTime() - anchor.getTime()) / dayMs)
+  const startDays = daysSinceAnchor - (daysSinceAnchor % 14)
+  const payPeriodStart = new Date(anchor.getTime() + startDays * dayMs)
+  const payPeriodEnd = new Date(payPeriodStart.getTime() + 13 * dayMs)
+  payPeriodEnd.setUTCHours(23, 59, 59, 999)
 
-  const payPeriodEnd = new Date(payPeriodStart)
-  payPeriodEnd.setDate(payPeriodStart.getDate() + 13)
-  payPeriodEnd.setHours(23, 59, 59, 999)
-
-  const currentPayPeriod = await prisma.payPeriod.create({
-    data: {
-      userId: user.id,
-      startDate: payPeriodStart,
-      endDate: payPeriodEnd,
-      status: 'open',
-    },
+  const currentPayPeriod = await prisma.payPeriod.upsert({
+    where: { userId_startDate: { userId: user.id, startDate: payPeriodStart } },
+    update: {},
+    create: { userId: user.id, startDate: payPeriodStart, endDate: payPeriodEnd, status: 'open' },
   })
-  console.log(
-    `✅ Created current pay period: ${currentPayPeriod.startDate.toDateString()} - ${currentPayPeriod.endDate.toDateString()}`
-  )
+  console.log(`✅ Current pay period: ${currentPayPeriod.startDate.toDateString()} - ${currentPayPeriod.endDate.toDateString()}`)
 
   // Create sample shifts with various scenarios
   console.log('🕒 Creating sample shifts...')
@@ -298,7 +294,6 @@ async function main() {
       startTime: new Date('2024-09-02T09:00:00Z'), // Monday 9am
       endTime: new Date('2024-09-02T17:00:00Z'), // Monday 5pm
       notes: 'Regular weekday shift',
-      payPeriodId: currentPayPeriod.id,
     },
     // Weekend shift with penalty
     {
@@ -307,7 +302,6 @@ async function main() {
       startTime: new Date('2024-09-07T10:00:00Z'), // Saturday 10am
       endTime: new Date('2024-09-07T18:00:00Z'), // Saturday 6pm
       notes: 'Weekend shift with Saturday penalty',
-      payPeriodId: currentPayPeriod.id,
     },
     // Evening shift with penalty
     {
@@ -316,7 +310,6 @@ async function main() {
       startTime: new Date('2024-09-03T16:00:00Z'), // Tuesday 4pm
       endTime: new Date('2024-09-03T22:00:00Z'), // Tuesday 10pm
       notes: 'Evening shift crossing into penalty time',
-      payPeriodId: currentPayPeriod.id,
     },
     // Long shift with overtime
     {
@@ -325,7 +318,6 @@ async function main() {
       startTime: new Date('2024-09-04T08:00:00Z'), // Wednesday 8am
       endTime: new Date('2024-09-04T19:00:00Z'), // Wednesday 7pm (11 hours)
       notes: 'Long shift with overtime and evening penalty',
-      payPeriodId: currentPayPeriod.id,
     },
     // Sunday shift with high penalty
     {
@@ -334,7 +326,6 @@ async function main() {
       startTime: new Date('2024-09-08T11:00:00Z'), // Sunday 11am
       endTime: new Date('2024-09-08T17:00:00Z'), // Sunday 5pm
       notes: 'Sunday shift with 200% penalty rate',
-      payPeriodId: currentPayPeriod.id,
     },
     // Night shift
     {
@@ -343,13 +334,27 @@ async function main() {
       startTime: new Date('2024-09-05T22:00:00Z'), // Thursday 10pm
       endTime: new Date('2024-09-06T04:00:00Z'), // Friday 4am
       notes: 'Night shift crossing midnight',
-      payPeriodId: currentPayPeriod.id,
     },
   ]
 
   const createdShifts = []
   for (const shiftData of shifts) {
-    const shift = await prisma.shift.create({ data: shiftData })
+    // Determine pay period for each shift based on its own date
+    const s = shiftData.startTime
+    const sUTC = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()))
+    const sDays = Math.floor((sUTC.getTime() - anchor.getTime()) / dayMs)
+    const sStartDays = sDays - (sDays % 14)
+    const sPPStart = new Date(anchor.getTime() + sStartDays * dayMs)
+    const sPPEnd = new Date(sPPStart.getTime() + 13 * dayMs)
+    sPPEnd.setUTCHours(23, 59, 59, 999)
+
+    const shiftPayPeriod = await prisma.payPeriod.upsert({
+      where: { userId_startDate: { userId: user.id, startDate: sPPStart } },
+      update: {},
+      create: { userId: user.id, startDate: sPPStart, endDate: sPPEnd, status: 'open' },
+    })
+
+    const shift = await prisma.shift.create({ data: { ...shiftData, payPeriodId: shiftPayPeriod.id } })
     
     // Calculate pay for the shift (no break periods exist yet)
     const calculation = await calculateAndUpdateShift({
