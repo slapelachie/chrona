@@ -16,7 +16,7 @@ import { TaxCoefficientService } from '@/lib/tax-coefficient-service'
  * Australian Tax Calculator - ATO Compliant PAYG Withholding
  * 
  * Implements official ATO withholding formulas using coefficients from Schedule 1.
- * Handles PAYG withholding, Medicare levy, and HECS-HELP calculations.
+ * Handles PAYG withholding and HECS-HELP calculations.
  */
 export class TaxCalculator {
   private taxSettings: TaxSettings
@@ -92,7 +92,8 @@ export class TaxCalculator {
     const paygWithholdingRaw = this.convertFromWeeklyPay(weeklyPaygWithholding, payPeriodType)
     
     // Calculate Medicare levy
-    const medicareLevyRaw = this.calculateMedicareLevy(grossPay, payPeriodType, yearToDateTax)
+    // Medicare levy is included in PAYG for this product; set to zero
+    const medicareLevyRaw = new Decimal(0)
     
     // Calculate HECS-HELP amount
     const hecsHelpAmountRaw = this.calculateHecsHelp(grossPay, payPeriodType, yearToDateTax)
@@ -100,9 +101,10 @@ export class TaxCalculator {
     // Calculate totals
     // Apply rounding rules: taxes are rounded down to the nearest dollar
     const paygWithholding = TimeCalculations.roundDownToDollar(paygWithholdingRaw)
-    const medicareLevy = TimeCalculations.roundDownToDollar(medicareLevyRaw)
+    const medicareLevy = TimeCalculations.roundDownToDollar(medicareLevyRaw) // always 0
     const hecsHelpAmount = TimeCalculations.roundDownToDollar(hecsHelpAmountRaw)
-    const totalWithholdings = paygWithholding.plus(medicareLevy).plus(hecsHelpAmount)
+    // Total withholdings exclude Medicare levy (already included in PAYG)
+    const totalWithholdings = paygWithholding.plus(hecsHelpAmount)
     const netPay = grossPay.minus(totalWithholdings)
     
     // Update year-to-date tracking
@@ -161,39 +163,12 @@ export class TaxCalculator {
    * Calculate Medicare levy based on annual income thresholds
    */
   private calculateMedicareLevy(
-    grossPay: Decimal,
-    payPeriodType: PayPeriodType,
-    yearToDateTax: YearToDateTax
+    _grossPay: Decimal,
+    _payPeriodType: PayPeriodType,
+    _yearToDateTax: YearToDateTax
   ): Decimal {
-    if (this.taxSettings.medicareExemption === 'full') {
-      return new Decimal(0)
-    }
-
-    // Project annual income based on current pay period frequency
-    const periodsPerYear = this.getPeriodsPerYear(payPeriodType)
-    const projectedAnnualIncome = grossPay.times(periodsPerYear)
-
-    let medicareRate = this.medicareRate
-    if (this.taxSettings.medicareExemption === 'half') {
-      medicareRate = medicareRate.div(2)
-    }
-
-    // No Medicare levy if below low income threshold
-    if (projectedAnnualIncome.lte(this.medicareLowIncomeThreshold)) {
-      return new Decimal(0)
-    }
-
-    // Partial Medicare levy for income between thresholds
-    if (projectedAnnualIncome.lt(this.medicareHighIncomeThreshold)) {
-      const shadeOutRate = new Decimal(0.10) // 10% shade-out rate
-      const excessIncome = projectedAnnualIncome.minus(this.medicareLowIncomeThreshold)
-      const partialRate = excessIncome.times(shadeOutRate).div(this.medicareHighIncomeThreshold.minus(this.medicareLowIncomeThreshold))
-      const effectiveRate = Decimal.min(medicareRate, partialRate)
-      return grossPay.times(effectiveRate)
-    }
-
-    // Full Medicare levy
-    return grossPay.times(medicareRate)
+    // Medicare levy not calculated separately; included in PAYG withholding
+    return new Decimal(0)
   }
 
   /**
@@ -204,7 +179,8 @@ export class TaxCalculator {
     payPeriodType: PayPeriodType,
     yearToDateTax: YearToDateTax
   ): Decimal {
-    if (!this.taxSettings.hecsHelpRate || this.hecsThresholds.length === 0) {
+    // Calculate HECS strictly from configured thresholds; no user override rate
+    if (this.hecsThresholds.length === 0) {
       return new Decimal(0)
     }
 
@@ -222,7 +198,7 @@ export class TaxCalculator {
       return new Decimal(0)
     }
 
-    // Calculate HECS-HELP amount based on threshold rate
+    // Calculate HECS-HELP amount for this pay period using the threshold rate
     return grossPay.times(threshold.rate)
   }
 

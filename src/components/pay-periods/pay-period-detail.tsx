@@ -250,10 +250,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                     <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>PAYG</div>
                     <div style={{ fontWeight: 700 }}>${formatCurrency(tax.data.breakdown.paygWithholding.toString())}</div>
                   </div>
-                  <div>
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Medicare Levy</div>
-                    <div style={{ fontWeight: 700 }}>${formatCurrency(tax.data.breakdown.medicareLevy.toString())}</div>
-                  </div>
+                  {/* Medicare levy is included in PAYG; no separate line */}
                   <div>
                     <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>HECS/HELP</div>
                     <div style={{ fontWeight: 700 }}>${formatCurrency(tax.data.breakdown.hecsHelpAmount.toString())}</div>
@@ -307,4 +304,3 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
     </div>
   )
 }
-

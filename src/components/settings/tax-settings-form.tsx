@@ -51,7 +51,7 @@ export const TaxSettingsForm: React.FC = () => {
           isForeignResident: data.isForeignResident,
           hasTaxFileNumber: data.hasTaxFileNumber,
           medicareExemption: data.medicareExemption,
-          hecsHelpRate: data.hecsHelpRate ?? null,
+          // hecsHelpRate is derived from ATO thresholds; not configurable here
         }),
       })
       const json = await res.json()
@@ -96,18 +96,7 @@ export const TaxSettingsForm: React.FC = () => {
             <option value="full">Full</option>
           </select>
         </div>
-        <div className="mb-4">
-          <label className="form-label">HECS-HELP rate (0 - 0.10)</label>
-          <Input
-            type="number"
-            min={0}
-            max={0.1}
-            step={0.005}
-            value={data.hecsHelpRate ?? ''}
-            onChange={e => setData({ ...data, hecsHelpRate: e.target.value })}
-            placeholder="e.g. 0.01 for 1%"
-          />
-        </div>
+        {/* HECS-HELP rate is not user-configurable; applied per pay period thresholds */}
         <div className="d-flex gap-2">
           <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
           {msg && <span aria-live="polite" style={{ color: '#00E5FF' }}>{msg}</span>}
@@ -116,4 +105,3 @@ export const TaxSettingsForm: React.FC = () => {
     </Card>
   )
 }
-
