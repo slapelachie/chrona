@@ -8,7 +8,6 @@ import {
   PayPeriodType
 } from '@/types'
 // TaxCalculator is imported dynamically inside methods to play nicely with test mocks
-import { TimeCalculations } from './calculations/time-calculations'
 
 /**
  * Pay Period Tax Service
@@ -150,10 +149,13 @@ export class PayPeriodTaxService {
    * This is the main entry point for tax calculations
    */
   static async processPayPeriod(payPeriodId: string): Promise<PayPeriod> {
-    // First calculate/recalculate pay totals from shifts
-    const updatedPayPeriod = await this.calculatePayPeriodTotals(payPeriodId)
+    // Import sync service to ensure proper calculation including extras
+    const { PayPeriodSyncService } = await import('./pay-period-sync-service')
     
-    // Then calculate taxes
+    // First calculate/recalculate pay totals from shifts AND extras using sync service
+    await PayPeriodSyncService.syncPayPeriod(payPeriodId)
+    
+    // Then calculate taxes (which requires totalPay to be set)
     await this.calculatePayPeriodTax(payPeriodId)
     
     // Update status to processing
@@ -168,39 +170,6 @@ export class PayPeriodTaxService {
     return processedPayPeriod as PayPeriod
   }
 
-  /**
-   * Calculate total hours and pay for a pay period from its shifts
-   */
-  private static async calculatePayPeriodTotals(payPeriodId: string): Promise<PayPeriod> {
-    const payPeriod = await prisma.payPeriod.findUnique({
-      where: { id: payPeriodId },
-      include: { shifts: true }
-    })
-
-    if (!payPeriod) {
-      throw new Error(`Pay period not found: ${payPeriodId}`)
-    }
-
-    // Calculate totals from shifts
-    const totalHours = payPeriod.shifts.reduce(
-      (sum, shift) => sum.plus(shift.totalHours || new Decimal(0)), 
-      new Decimal(0)
-    )
-    
-    const totalPay = payPeriod.shifts.reduce(
-      (sum, shift) => sum.plus(shift.totalPay || new Decimal(0)), 
-      new Decimal(0)
-    )
-
-    // Update pay period with calculated totals
-    return await prisma.payPeriod.update({
-      where: { id: payPeriodId },
-      data: {
-        totalHours: TimeCalculations.roundToHours(totalHours),
-        totalPay: TimeCalculations.roundToCents(totalPay),
-      }
-    }) as PayPeriod
-  }
 
   /**
    * Get or create user tax settings with sensible defaults

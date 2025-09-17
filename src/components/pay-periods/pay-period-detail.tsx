@@ -28,9 +28,12 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
   const [verifyBusy, setVerifyBusy] = useState(false)
   const [processReady, setProcessReady] = useState<{ canProcess: boolean; message?: string; blockers?: string[] } | null>(null)
   const [processError, setProcessError] = useState<string | null>(null)
+  const [processSuccess, setProcessSuccess] = useState<string | null>(null)
   const [openBusy, setOpenBusy] = useState(false)
   const [extras, setExtras] = useState<Array<{ id: string; type: string; description?: string; amount: string; taxable: boolean }>>([])
   const [newExtra, setNewExtra] = useState<{ type: string; description: string; amount: string }>({ type: '', description: '', amount: '' })
+  const [shifts, setShifts] = useState<ShiftResponse[]>([])
+  const [shiftsExpanded, setShiftsExpanded] = useState(false)
 
   const fetchPayPeriod = async () => {
     try {
@@ -42,6 +45,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
       setPp(json.data as PayPeriodResponse)
       setActualPay((json.data as PayPeriodResponse).actualPay || '')
       setExtras((json.data as any).extras || [])
+      setShifts((json.data as any).shifts || [])
     } catch (e: any) {
       setError(e.message || 'Error loading pay period')
     } finally {
@@ -83,6 +87,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
     try {
       setVerifyBusy(true)
       setProcessError(null)
+      setProcessSuccess(null)
       const res = await fetch(`/api/pay-periods/${payPeriodId}/process`, { method: 'POST' })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
@@ -92,6 +97,9 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
       await fetchPayPeriod()
       await fetchTax()
       await fetchProcessReadiness()
+      setProcessSuccess('Pay period processed successfully! All shifts and extras have been calculated with taxes.')
+      // Clear success message after 5 seconds
+      setTimeout(() => setProcessSuccess(null), 5000)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Processing failed. Please try again.'
       setProcessError(msg)
@@ -238,7 +246,32 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
   }, [pp?.netPay, actualPay])
 
   return (
-    <div className="mobile-container" style={{ display: 'grid', gap: '1rem' }}>
+    <>
+      <style jsx>{`
+        .pay-period-layout {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1rem;
+          align-items: start;
+        }
+        
+        @media (min-width: 768px) {
+          .pay-period-layout {
+            grid-template-columns: 1fr 300px;
+          }
+        }
+        
+        @media (max-width: 767px) {
+          .sidebar-section {
+            order: -1;
+          }
+          
+          .main-content {
+            order: 1;
+          }
+        }
+      `}</style>
+      <div className="mobile-container" style={{ display: 'grid', gap: '1rem' }}>
       {pp && new Date(pp.endDate) < new Date('2025-09-24') && (
         <div style={{
           padding: '0.75rem',
@@ -258,176 +291,379 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
       {error && (
         <div style={{ color: 'var(--color-danger)' }}>{error}</div>
       )}
+      
+      {processError && (
+        <div style={{ 
+          padding: '0.75rem', 
+          border: '1px solid var(--color-danger)', 
+          borderRadius: '6px', 
+          backgroundColor: 'rgba(220, 53, 69, 0.1)', 
+          color: 'var(--color-danger)' 
+        }}>
+          <strong>Processing Error:</strong> {processError}
+        </div>
+      )}
+      
+      {processSuccess && (
+        <div style={{ 
+          padding: '0.75rem', 
+          border: '1px solid var(--color-success)', 
+          borderRadius: '6px', 
+          backgroundColor: 'rgba(40, 167, 69, 0.1)', 
+          color: 'var(--color-success)' 
+        }}>
+          <strong>Success:</strong> {processSuccess}
+        </div>
+      )}
 
       {pp && (
-        <>
-          {/* Overview */}
-          <Card variant="outlined">
-            <CardHeader>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <DollarSign size={18} style={{ color: 'var(--color-primary)' }} />
-                <h3 style={{ margin: 0, fontSize: '1rem' }}>Overview</h3>
-              </div>
-            </CardHeader>
-            <CardBody>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
-                <div>
-                  <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Date Range</div>
-                  <div style={{ fontWeight: 600 }}>
-                    {new Date(pp.startDate).toLocaleDateString('en-AU')} - {new Date(pp.endDate).toLocaleDateString('en-AU')}
+        <div className="pay-period-layout">
+          {/* Main Content Column */}
+          <div className="main-content" style={{ display: 'grid', gap: '1rem' }}>
+            {/* Overview Summary */}
+            <Card variant="outlined">
+              <CardHeader>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <DollarSign size={18} style={{ color: 'var(--color-primary)' }} />
+                    <h3 style={{ margin: 0, fontSize: '1rem' }}>Pay Period Summary</h3>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ 
+                      fontWeight: 600,
+                      color: pp.verified ? 'var(--color-success)' : 
+                             pp.status === 'processing' ? 'var(--color-warning)' :
+                             pp.status === 'paid' ? 'var(--color-info)' : 'var(--color-text-primary)'
+                    }}>
+                      {pp.verified ? 'Verified' : pp.status[0].toUpperCase()+pp.status.slice(1)}
+                    </div>
+                    {pp.status === 'processing' && (
+                      <Loader2 size={14} className="loading-pulse" style={{ color: 'var(--color-warning)' }} />
+                    )}
                   </div>
                 </div>
-                <div>
-                  <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Gross Pay</div>
-                  <div style={{ fontWeight: 700, fontSize: '1.125rem' }}>${formatCurrency(pp.totalPay)}</div>
-                </div>
-                <div>
-                  <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Net Pay</div>
-                  <div style={{ fontWeight: 700, fontSize: '1.125rem', color: 'var(--color-success)' }}>${formatCurrency(pp.netPay)}</div>
-                </div>
-                <div>
-                  <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Status</div>
-                  <div style={{ fontWeight: 600 }}>{pp.verified ? 'Verified' : pp.status[0].toUpperCase()+pp.status.slice(1)}</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-                <Button size="sm" leftIcon={<Play size={16} />} disabled={verifyBusy || !(processReady?.canProcess)} onClick={processPayPeriod} title={processReady?.canProcess ? undefined : (processReady?.blockers?.join(', ') || 'Not ready to process')}>
-                  Process
-                </Button>
-                <Button size="sm" variant="secondary" onClick={runTaxOnly} disabled={verifyBusy}>
-                  Calculate Tax
-                </Button>
-                {pp.status !== 'open' && (
-                  <Button size="sm" variant="outline" onClick={reopenAsOpen} disabled={openBusy}>
-                    {openBusy ? 'Opening…' : 'Open Period'}
-                  </Button>
-                )}
-                <Button size="sm" variant="ghost" leftIcon={<FileDown size={16} />} onClick={exportCSV}>
-                  Export CSV
-                </Button>
-                <Button size="sm" variant="ghost" leftIcon={<FileDown size={16} />} onClick={exportJSON}>
-                  Export JSON
-                </Button>
-              </div>
-            </CardBody>
-          </Card>
-
-          {/* Tax Visualization */}
-          <Card variant="outlined">
-            <CardHeader>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <ShieldCheck size={18} style={{ color: 'var(--color-primary)' }} />
-                <h3 style={{ margin: 0, fontSize: '1rem' }}>Tax Breakdown</h3>
-              </div>
-            </CardHeader>
-            <CardBody>
-              {tax.status === 'loading' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Loader2 size={18} className="loading-pulse" /> Loading...
-                </div>
-              )}
-              {tax.status === 'error' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)' }}>
-                  <TriangleAlert size={16} /> {tax.error}
-                </div>
-              )}
-              {tax.status === 'ready' && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
+              </CardHeader>
+              <CardBody>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                   <div>
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>PAYG</div>
-                    <div style={{ fontWeight: 700 }}>${formatCurrency(tax.data.breakdown.paygWithholding.toString())}</div>
-                  </div>
-                  {/* Medicare levy is included in PAYG; no separate line */}
-                  <div>
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>STSL (HECS/HELP)</div>
-                    <div style={{ fontWeight: 700 }}>${formatCurrency(tax.data.breakdown.hecsHelpAmount.toString())}</div>
+                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Period</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                      {new Date(pp.startDate).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })} - {new Date(pp.endDate).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Total Withholdings</div>
-                    <div style={{ fontWeight: 700 }}>${formatCurrency(tax.data.breakdown.totalWithholdings.toString())}</div>
+                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Hours</div>
+                    <div style={{ fontWeight: 600 }}>{pp.totalHours || '0'}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Gross Pay</div>
+                    <div style={{ fontWeight: 700, fontSize: '1.125rem' }}>${formatCurrency(pp.totalPay)}</div>
                   </div>
                   <div>
                     <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Net Pay</div>
-                    <div style={{ fontWeight: 700, color: 'var(--color-success)' }}>${formatCurrency(tax.data.breakdown.netPay.toString())}</div>
+                    <div style={{ fontWeight: 700, fontSize: '1.125rem', color: 'var(--color-success)' }}>${formatCurrency(pp.netPay)}</div>
                   </div>
                 </div>
-              )}
-            </CardBody>
-          </Card>
 
-          {/* Extras */}
-          <Card variant="outlined">
-            <CardHeader>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <DollarSign size={18} style={{ color: 'var(--color-primary)' }} />
-                <h3 style={{ margin: 0, fontSize: '1rem' }}>Extras (Taxable)</h3>
-              </div>
-            </CardHeader>
-            <CardBody>
-              <div className="d-grid" style={{ gap: '0.5rem' }}>
-                {extras.length === 0 && (
-                  <div className="text-secondary">No extras yet.</div>
+                {/* Tax Breakdown - Only show when processed */}
+                {(pp.status === 'processing' || pp.status === 'paid' || pp.verified) && tax.status === 'ready' && (
+                  <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '1rem' }}>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.75rem', fontWeight: 600 }}>
+                      Tax Breakdown
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem' }}>
+                      <div>
+                        <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>PAYG</div>
+                        <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>${formatCurrency(tax.data.breakdown.paygWithholding.toString())}</div>
+                      </div>
+                      <div>
+                        <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>HECS/HELP</div>
+                        <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>${formatCurrency(tax.data.breakdown.hecsHelpAmount.toString())}</div>
+                      </div>
+                      <div>
+                        <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>Total Tax</div>
+                        <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>${formatCurrency(tax.data.breakdown.totalWithholdings.toString())}</div>
+                      </div>
+                      {tax.status === 'loading' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Loader2 size={16} className="loading-pulse" />
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Loading...</span>
+                        </div>
+                      )}
+                      {tax.status === 'error' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)' }}>
+                          <TriangleAlert size={14} />
+                          <span style={{ fontSize: '0.75rem' }}>Tax calculation error</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
-                {extras.map(e => (
-                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{e.type}</div>
-                      {e.description && <div className="text-secondary" style={{ fontSize: 12 }}>{e.description}</div>}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div>${formatCurrency(e.amount)}</div>
-                      <Button size="sm" variant="ghost" onClick={() => deleteExtra(e.id)} title="Delete">
-                        <Trash2 size={16} />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+              </CardBody>
+            </Card>
 
-                {/* Add extra form */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr auto', gap: '0.5rem', alignItems: 'center' }}>
-                  <Input placeholder="Type (e.g., Uniform)" value={newExtra.type} onChange={e => setNewExtra(prev => ({ ...prev, type: e.target.value }))} />
-                  <Input placeholder="Description (optional)" value={newExtra.description} onChange={e => setNewExtra(prev => ({ ...prev, description: e.target.value }))} />
-                  <Input type="number" step="0.01" placeholder="Amount" value={newExtra.amount} onChange={e => setNewExtra(prev => ({ ...prev, amount: e.target.value }))} />
-                  <Button size="sm" onClick={addExtra} leftIcon={<Plus size={16} />}>Add</Button>
+            {/* Extras Section */}
+            <Card variant="outlined">
+              <CardHeader>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Plus size={18} style={{ color: 'var(--color-primary)' }} />
+                  <h3 style={{ margin: 0, fontSize: '1rem' }}>Extras & Allowances</h3>
                 </div>
-              </div>
-            </CardBody>
-          </Card>
+              </CardHeader>
+              <CardBody>
+                <div className="d-grid" style={{ gap: '0.5rem' }}>
+                  {extras.length === 0 && (
+                    <div className="text-secondary">No extras yet.</div>
+                  )}
+                  {extras.map(e => (
+                    <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{e.type}</div>
+                        {e.description && <div className="text-secondary" style={{ fontSize: 12 }}>{e.description}</div>}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div>${formatCurrency(e.amount)}</div>
+                        <Button size="sm" variant="ghost" onClick={() => deleteExtra(e.id)} title="Delete">
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
 
-          {/* Verification */}
-          <Card variant="outlined">
-            <CardHeader>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <ShieldCheck size={18} style={{ color: 'var(--color-primary)' }} />
-                <h3 style={{ margin: 0, fontSize: '1rem' }}>Pay Verification</h3>
-              </div>
-            </CardHeader>
-            <CardBody>
-              <div style={{ display: 'grid', gap: '0.75rem', maxWidth: 420 }}>
-                <label style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Actual Net Pay Received ($)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={actualPay}
-                  onChange={(e) => setActualPay(e.target.value)}
-                  placeholder="e.g. 1240.50"
-                />
-                <div style={{ fontSize: '0.875rem', color: variance === null ? 'var(--color-text-secondary)' : (variance === 0 ? 'var(--color-success)' : 'var(--color-warning)') }}>
-                  {variance === null ? 'Enter an amount to compare to calculated net pay.' : (
-                    variance === 0 ? 'Matches calculated net pay.' : `Variance: ${variance > 0 ? '+' : ''}${variance.toFixed(2)}`
+                  {/* Add extra form */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr auto', gap: '0.5rem', alignItems: 'center' }}>
+                    <Input placeholder="Type (e.g., Uniform)" value={newExtra.type} onChange={e => setNewExtra(prev => ({ ...prev, type: e.target.value }))} />
+                    <Input placeholder="Description (optional)" value={newExtra.description} onChange={e => setNewExtra(prev => ({ ...prev, description: e.target.value }))} />
+                    <Input type="number" step="0.01" placeholder="Amount" value={newExtra.amount} onChange={e => setNewExtra(prev => ({ ...prev, amount: e.target.value }))} />
+                    <Button size="sm" onClick={addExtra} leftIcon={<Plus size={16} />}>Add</Button>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+
+            {/* Shifts Section */}
+            <Card variant="outlined">
+              <CardHeader>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ fontSize: '1rem', fontWeight: 600 }}>Shifts ({shifts.length})</div>
+                  </div>
+                  {shifts.length > 0 && (
+                    <Button size="sm" variant="ghost" onClick={() => setShiftsExpanded(!shiftsExpanded)}>
+                      {shiftsExpanded ? 'Collapse' : 'Expand'}
+                    </Button>
                   )}
                 </div>
+              </CardHeader>
+              <CardBody>
+                {shifts.length === 0 ? (
+                  <div style={{ color: 'var(--color-text-secondary)', textAlign: 'center', padding: '1rem' }}>
+                    No shifts recorded for this period
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: '0.5rem' }}>
+                    {shifts.slice(0, shiftsExpanded ? shifts.length : 3).map((shift, index) => (
+                      <div key={shift.id} style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: '1fr auto auto', 
+                        gap: '1rem', 
+                        alignItems: 'center',
+                        padding: '0.75rem',
+                        backgroundColor: 'var(--color-background-secondary)',
+                        borderRadius: '6px'
+                      }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                            {new Date(shift.startTime).toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                            {new Date(shift.startTime).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} - {new Date(shift.endTime).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Hours</div>
+                          <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{shift.totalHours || '0'}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Total Pay</div>
+                          <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>${formatCurrency(shift.totalPay)}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {!shiftsExpanded && shifts.length > 3 && (
+                      <Button size="sm" variant="ghost" onClick={() => setShiftsExpanded(true)} style={{ marginTop: '0.5rem' }}>
+                        Show {shifts.length - 3} more shifts
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <Button size="sm" onClick={() => saveVerification(false)} disabled={verifyBusy}>Save</Button>
-                  <Button size="sm" variant="secondary" onClick={() => saveVerification(true)} disabled={verifyBusy}>Mark Verified</Button>
+          {/* Sidebar Column */}
+          <div className="sidebar-section" style={{ display: 'grid', gap: '1rem' }}>
+            {/* Status Progression */}
+            <Card variant="outlined">
+              <CardHeader>
+                <h3 style={{ margin: 0, fontSize: '0.875rem' }}>Progress</h3>
+              </CardHeader>
+              <CardBody style={{ padding: '0.75rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    color: pp.status === 'open' ? 'var(--color-primary)' : 'var(--color-success)',
+                    fontWeight: pp.status === 'open' ? 600 : 400
+                  }}>
+                    {pp.status === 'open' ? '○' : '●'} Open
+                  </div>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    color: pp.status === 'processing' ? 'var(--color-warning)' : 
+                           ['paid', 'verified'].includes(pp.status) || pp.verified ? 'var(--color-success)' : 'var(--color-text-secondary)',
+                    fontWeight: pp.status === 'processing' ? 600 : 400
+                  }}>
+                    {pp.status === 'processing' ? '◉' : (['paid', 'verified'].includes(pp.status) || pp.verified) ? '●' : '○'} Processing
+                  </div>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    color: pp.status === 'paid' ? 'var(--color-info)' : 
+                           pp.verified ? 'var(--color-success)' : 'var(--color-text-secondary)',
+                    fontWeight: pp.status === 'paid' ? 600 : 400
+                  }}>
+                    {pp.status === 'paid' ? '◉' : pp.verified ? '●' : '○'} Paid
+                  </div>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    color: pp.verified ? 'var(--color-success)' : 'var(--color-text-secondary)',
+                    fontWeight: pp.verified ? 600 : 400
+                  }}>
+                    {pp.verified ? '●' : '○'} Verified
+                  </div>
                 </div>
-              </div>
-            </CardBody>
-          </Card>
-        </>
+              </CardBody>
+            </Card>
+
+            {/* Actions */}
+            <Card variant="outlined">
+              <CardHeader>
+                <h3 style={{ margin: 0, fontSize: '0.875rem' }}>Actions</h3>
+              </CardHeader>
+              <CardBody style={{ padding: '0.75rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {/* Primary Action based on status */}
+                  {pp.status === 'open' && (
+                    <Button 
+                      size="sm" 
+                      leftIcon={<Play size={16} />} 
+                      disabled={verifyBusy || !(processReady?.canProcess)} 
+                      onClick={processPayPeriod} 
+                      title={processReady?.canProcess ? 'Process pay period and calculate taxes' : (processReady?.blockers?.join(', ') || 'Not ready to process')}
+                    >
+                      {verifyBusy ? 'Processing…' : 'Process'}
+                    </Button>
+                  )}
+                  
+                  {pp.status === 'processing' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-success)', padding: '0.5rem', backgroundColor: 'var(--color-background-secondary)', borderRadius: '4px' }}>
+                      <ShieldCheck size={16} />
+                      <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>Ready for verification</span>
+                    </div>
+                  )}
+                  
+                  {pp.status === 'paid' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-info)', padding: '0.5rem', backgroundColor: 'var(--color-background-secondary)', borderRadius: '4px' }}>
+                      <DollarSign size={16} />
+                      <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>Payment recorded</span>
+                    </div>
+                  )}
+                  
+                  {pp.verified && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-success)', padding: '0.5rem', backgroundColor: 'var(--color-background-secondary)', borderRadius: '4px' }}>
+                      <ShieldCheck size={16} />
+                      <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>✓ Verified</span>
+                    </div>
+                  )}
+
+                  {/* Utility Actions */}
+                  {pp.status === 'open' && (
+                    <Button size="sm" variant="ghost" onClick={runTaxOnly} disabled={verifyBusy}>
+                      Preview Tax
+                    </Button>
+                  )}
+
+                  {pp.status !== 'open' && (
+                    <Button size="sm" variant="outline" onClick={reopenAsOpen} disabled={openBusy}>
+                      {openBusy ? 'Opening…' : 'Reopen to Edit'}
+                    </Button>
+                  )}
+
+                  {/* Export Actions */}
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    <Button size="sm" variant="ghost" leftIcon={<FileDown size={16} />} onClick={exportCSV}>
+                      CSV
+                    </Button>
+                    <Button size="sm" variant="ghost" leftIcon={<FileDown size={16} />} onClick={exportJSON}>
+                      JSON
+                    </Button>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+
+            {/* Verification Section - Only show when processing/paid/verified */}
+            {(pp.status === 'processing' || pp.status === 'paid' || pp.verified) && (
+              <Card variant="outlined">
+                <CardHeader>
+                  <h3 style={{ margin: 0, fontSize: '0.875rem' }}>Verification</h3>
+                </CardHeader>
+                <CardBody style={{ padding: '0.75rem' }}>
+                  <div style={{ display: 'grid', gap: '0.75rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '0.25rem' }}>
+                        Actual Net Pay ($)
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={actualPay}
+                        onChange={(e) => setActualPay(e.target.value)}
+                        placeholder={`Expected: ${formatCurrency(pp.netPay)}`}
+                        style={{ fontSize: '0.875rem' }}
+                      />
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: variance === null ? 'var(--color-text-secondary)' : (variance === 0 ? 'var(--color-success)' : 'var(--color-warning)') }}>
+                      {variance === null ? 'Enter actual amount' : (
+                        variance === 0 ? '✓ Matches' : `Variance: ${variance > 0 ? '+' : ''}$${Math.abs(variance).toFixed(2)}`
+                      )}
+                    </div>
+                    {!pp.verified && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <Button size="sm" onClick={() => saveVerification(false)} disabled={verifyBusy}>
+                          Save Amount
+                        </Button>
+                        <Button size="sm" variant="success" onClick={() => saveVerification(true)} disabled={verifyBusy}>
+                          Mark Verified
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardBody>
+              </Card>
+            )}
+
+          </div>
+        </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }

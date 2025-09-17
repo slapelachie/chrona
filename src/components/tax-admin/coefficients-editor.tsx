@@ -140,7 +140,7 @@ export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurren
         description: r.description || undefined,
       }))
       const res = await fetch('/api/admin/tax-coefficients', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taxYear, coefficients }) })
-      let ok = res.ok
+      const ok = res.ok
       let msg = 'Saved successfully'
       if (!ok) {
         try { const json = await res.json(); msg = json?.message || json?.error || msg } catch { msg = await res.text() }
