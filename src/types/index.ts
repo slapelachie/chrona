@@ -108,6 +108,17 @@ export interface PayPeriod {
   updatedAt: Date
 }
 
+export interface PayPeriodExtra {
+  id: string
+  payPeriodId: string
+  type: string
+  description?: string | null
+  amount: Decimal
+  taxable: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
 // =============================================================================
 // BUSINESS LOGIC TYPES
 // =============================================================================
@@ -376,6 +387,13 @@ export interface PayPeriodResponse
   netPay?: string
   actualPay?: string
   shifts?: ShiftResponse[]
+  extras?: PayPeriodExtraResponse[]
+}
+
+export interface PayPeriodExtraResponse extends Omit<PayPeriodExtra, 'amount' | 'createdAt' | 'updatedAt'> {
+  amount: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface CreatePayPeriodRequest {

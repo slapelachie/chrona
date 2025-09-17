@@ -50,7 +50,7 @@ export class PayPeriodSyncService {
   private static async updatePayPeriodTotals(payPeriodId: string): Promise<PayPeriod> {
     const payPeriod = await prisma.payPeriod.findUnique({
       where: { id: payPeriodId },
-      include: { shifts: true }
+      include: { shifts: true, extras: true }
     })
 
     if (!payPeriod) {
@@ -63,10 +63,9 @@ export class PayPeriodSyncService {
       new Decimal(0)
     )
     
-    const totalPay = payPeriod.shifts.reduce(
-      (sum, shift) => sum.plus(shift.totalPay || new Decimal(0)), 
-      new Decimal(0)
-    )
+    const shiftsPay = payPeriod.shifts.reduce((sum, shift) => sum.plus(shift.totalPay || new Decimal(0)), new Decimal(0))
+    const extrasPay = (payPeriod.extras || []).reduce((sum, ex) => sum.plus(ex.amount || new Decimal(0)), new Decimal(0))
+    const totalPay = shiftsPay.plus(extrasPay)
 
     // Update pay period with calculated totals
     const updatedPayPeriod = await prisma.payPeriod.update({
@@ -180,6 +179,15 @@ export class PayPeriodSyncService {
 
     if (shift?.payPeriodId) {
       await this.syncPayPeriod(shift.payPeriodId)
+    }
+  }
+
+  /**
+   * Synchronizes pay period after extras are modified
+   */
+  static async onExtrasChanged(payPeriodId: string): Promise<void> {
+    if (payPeriodId) {
+      await this.syncPayPeriod(payPeriodId)
     }
   }
 

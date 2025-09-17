@@ -24,6 +24,7 @@ export async function GET(
     const { id: payPeriodId } = await params
     const { searchParams } = new URL(request.url)
     const includeShifts = searchParams.get('include')?.includes('shifts')
+    const includeExtras = searchParams.get('include')?.includes('extras')
 
     // Find the pay period
     const payPeriod = await prisma.payPeriod.findUnique({
@@ -33,7 +34,8 @@ export async function GET(
           shifts: {
             orderBy: { startTime: 'asc' }
           }
-        })
+        }),
+        ...(includeExtras && { extras: { orderBy: { createdAt: 'asc' } } })
       },
     })
 
@@ -83,6 +85,18 @@ export async function GET(
         payPeriodId: shift.payPeriodId || '',
         createdAt: shift.createdAt,
         updatedAt: shift.updatedAt,
+      }))
+    }
+
+    if (includeExtras && (payPeriod as any).extras) {
+      ;(response as any).extras = (payPeriod as any).extras.map((ex: any) => ({
+        id: ex.id,
+        type: ex.type,
+        description: ex.description || undefined,
+        amount: ex.amount?.toString() || '0',
+        taxable: !!ex.taxable,
+        createdAt: ex.createdAt,
+        updatedAt: ex.updatedAt,
       }))
     }
 

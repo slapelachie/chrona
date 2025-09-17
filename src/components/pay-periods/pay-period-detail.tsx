@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardBody, CardHeader, Button, Input } from '../ui'
-import { DollarSign, FileDown, Loader2, Play, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { DollarSign, FileDown, Loader2, Play, ShieldCheck, TriangleAlert, Plus, Trash2 } from 'lucide-react'
 import {
   PayPeriodResponse,
   TaxCalculationResponse,
@@ -29,16 +29,19 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
   const [processReady, setProcessReady] = useState<{ canProcess: boolean; message?: string; blockers?: string[] } | null>(null)
   const [processError, setProcessError] = useState<string | null>(null)
   const [openBusy, setOpenBusy] = useState(false)
+  const [extras, setExtras] = useState<Array<{ id: string; type: string; description?: string; amount: string; taxable: boolean }>>([])
+  const [newExtra, setNewExtra] = useState<{ type: string; description: string; amount: string }>({ type: '', description: '', amount: '' })
 
   const fetchPayPeriod = async () => {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch(`/api/pay-periods/${payPeriodId}`)
+      const res = await fetch(`/api/pay-periods/${payPeriodId}?include=shifts,extras`)
       if (!res.ok) throw new Error('Failed to fetch pay period')
       const json = await res.json()
       setPp(json.data as PayPeriodResponse)
       setActualPay((json.data as PayPeriodResponse).actualPay || '')
+      setExtras((json.data as any).extras || [])
     } catch (e: any) {
       setError(e.message || 'Error loading pay period')
     } finally {
@@ -162,7 +165,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
   }
 
   const exportCSV = async () => {
-    const res = await fetch(`/api/pay-periods/${payPeriodId}?include=shifts`)
+    const res = await fetch(`/api/pay-periods/${payPeriodId}?include=shifts,extras`)
     if (!res.ok) return alert('Export failed')
     const json = await res.json()
     const data = json.data as PayPeriodResponse
@@ -183,6 +186,28 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
     a.download = `pay-period-${payPeriodId}.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const addExtra = async () => {
+    if (!newExtra.type || !newExtra.amount) return
+    const res = await fetch(`/api/pay-periods/${payPeriodId}/extras`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: newExtra.type, description: newExtra.description || undefined, amount: newExtra.amount, taxable: true })
+    })
+    if (res.ok) {
+      setNewExtra({ type: '', description: '', amount: '' })
+      await fetchPayPeriod()
+      await fetchTax()
+    }
+  }
+
+  const deleteExtra = async (id: string) => {
+    const res = await fetch(`/api/pay-periods/${payPeriodId}/extras/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      await fetchPayPeriod()
+      await fetchTax()
+    }
   }
 
   useEffect(() => {
@@ -328,6 +353,45 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                   </div>
                 </div>
               )}
+            </CardBody>
+          </Card>
+
+          {/* Extras */}
+          <Card variant="outlined">
+            <CardHeader>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <DollarSign size={18} style={{ color: 'var(--color-primary)' }} />
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>Extras (Taxable)</h3>
+              </div>
+            </CardHeader>
+            <CardBody>
+              <div className="d-grid" style={{ gap: '0.5rem' }}>
+                {extras.length === 0 && (
+                  <div className="text-secondary">No extras yet.</div>
+                )}
+                {extras.map(e => (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{e.type}</div>
+                      {e.description && <div className="text-secondary" style={{ fontSize: 12 }}>{e.description}</div>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div>${formatCurrency(e.amount)}</div>
+                      <Button size="sm" variant="ghost" onClick={() => deleteExtra(e.id)} title="Delete">
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add extra form */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr auto', gap: '0.5rem', alignItems: 'center' }}>
+                  <Input placeholder="Type (e.g., Uniform)" value={newExtra.type} onChange={e => setNewExtra(prev => ({ ...prev, type: e.target.value }))} />
+                  <Input placeholder="Description (optional)" value={newExtra.description} onChange={e => setNewExtra(prev => ({ ...prev, description: e.target.value }))} />
+                  <Input type="number" step="0.01" placeholder="Amount" value={newExtra.amount} onChange={e => setNewExtra(prev => ({ ...prev, amount: e.target.value }))} />
+                  <Button size="sm" onClick={addExtra} leftIcon={<Plus size={16} />}>Add</Button>
+                </div>
+              </div>
             </CardBody>
           </Card>
 

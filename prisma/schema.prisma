@@ -259,9 +259,28 @@ model PayPeriod {
   // Relations
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   shifts      Shift[]
+  extras      PayPeriodExtra[]
 
   @@unique([userId, startDate]) // Prevent duplicate pay periods
   @@map("pay_periods")
+}
+
+// Additional taxable/non-taxable amounts applied to a pay period
+model PayPeriodExtra {
+  id           String   @id @default(cuid())
+  payPeriodId  String
+  type         String   // e.g., "uniform", "laundry", "allowance"
+  description  String?
+  amount       Decimal  // Positive numbers; use negative for deductions if needed
+  taxable      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  payPeriod    PayPeriod @relation(fields: [payPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([payPeriodId])
+  @@map("pay_period_extras")
 }
 
 // User tax settings for PAYG withholding calculations
