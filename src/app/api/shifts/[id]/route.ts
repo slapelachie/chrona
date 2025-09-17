@@ -218,6 +218,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         startTime: true,
         endTime: true,
         payGuideId: true,
+        payGuide: {
+          select: { timezone: true }
+        }
       },
     })
 
@@ -264,12 +267,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Check if pay guide exists (if being updated)
+    let newPayGuide = null
     if (body.payGuideId) {
-      const payGuide = await prisma.payGuide.findUnique({
+      newPayGuide = await prisma.payGuide.findUnique({
         where: { id: body.payGuideId },
+        select: { timezone: true }
       })
 
-      if (!payGuide) {
+      if (!newPayGuide) {
         return NextResponse.json(
           {
             errors: [{ field: 'payGuideId', message: 'Pay guide not found' }],
@@ -295,7 +300,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
       if (user) {
         const startTime = new Date(body.startTime)
-        const payPeriod = await findOrCreatePayPeriod(user.id, startTime)
+        // Use timezone from new pay guide if provided, otherwise use existing shift's pay guide timezone
+        const payGuideTimezone = newPayGuide ? newPayGuide.timezone : existingShift.payGuide.timezone
+        const payPeriod = await findOrCreatePayPeriod(user.id, startTime, payGuideTimezone)
         updateData.payPeriodId = payPeriod.id
       }
     }

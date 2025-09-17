@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/db'
 import { PayPeriod, PayPeriodStatus, PayPeriodType } from '@/types'
+import { TimeZoneHelper } from './calculations/timezone-helper'
+import { formatInTimeZone } from 'date-fns-tz'
 
 /**
  * Pay Period Utilities
@@ -116,17 +118,24 @@ export function calculatePayPeriod(date: Date, payPeriodType: PayPeriodType): {
  * Finds an existing pay period for a user and date, or creates one if it doesn't exist
  * Uses upsert pattern to handle concurrent requests safely
  * Automatically uses the user's configured pay period type
+ * Uses pay guide timezone to determine correct pay period boundaries
  */
 export async function findOrCreatePayPeriod(
   userId: string,
-  shiftDate: Date
+  shiftDate: Date,
+  payGuideTimezone: string
 ): Promise<PayPeriod> {
+  // Convert shift date to local timezone date for pay period calculation
+  const tzHelper = new TimeZoneHelper(payGuideTimezone)
+  const localDateStr = formatInTimeZone(shiftDate, payGuideTimezone, 'yyyy-MM-dd')
+  const localShiftDate = tzHelper.createLocalMidnight(new Date(`${localDateStr}T12:00:00Z`))
+
   // First try to find existing pay period
   const existingPayPeriod = await prisma.payPeriod.findFirst({
     where: {
       userId,
-      startDate: { lte: shiftDate },
-      endDate: { gte: shiftDate },
+      startDate: { lte: localShiftDate },
+      endDate: { gte: localShiftDate },
     },
   })
 
@@ -144,8 +153,8 @@ export async function findOrCreatePayPeriod(
     throw new Error(`User not found: ${userId}`)
   }
 
-  // Calculate the pay period for this date using user's preference
-  const { startDate, endDate } = calculatePayPeriod(shiftDate, user.payPeriodType)
+  // Calculate the pay period for this date using user's preference and pay guide timezone
+  const { startDate, endDate } = calculatePayPeriod(localShiftDate, user.payPeriodType)
 
   // Use upsert to handle concurrent creation attempts
   const payPeriod = await prisma.payPeriod.upsert({
@@ -203,8 +212,24 @@ export async function getPayPeriodsForUser(
 
 /**
  * Gets the current active pay period for a user (contains today's date)
+ * Uses user's timezone if no pay guide timezone is provided
  */
-export async function getCurrentPayPeriod(userId: string): Promise<PayPeriod> {
+export async function getCurrentPayPeriod(userId: string, payGuideTimezone?: string): Promise<PayPeriod> {
   const today = new Date()
-  return await findOrCreatePayPeriod(userId, today)
+  
+  // If no pay guide timezone provided, fall back to user's timezone
+  if (!payGuideTimezone) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    })
+    
+    if (!user) {
+      throw new Error(`User not found: ${userId}`)
+    }
+    
+    payGuideTimezone = user.timezone
+  }
+  
+  return await findOrCreatePayPeriod(userId, today, payGuideTimezone)
 }

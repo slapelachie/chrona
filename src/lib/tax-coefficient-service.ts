@@ -150,7 +150,7 @@ export class TaxCoefficientService {
           medicareRate: dbConfig.medicareRate,
           medicareLowIncomeThreshold: dbConfig.medicareLowIncomeThreshold,
           medicareHighIncomeThreshold: dbConfig.medicareHighIncomeThreshold,
-          hecsHelpThresholds,
+          hecsHelpThresholds: hecsThresholds,
           stslRates,
           coefficients,
         }

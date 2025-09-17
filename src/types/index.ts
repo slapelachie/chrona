@@ -751,3 +751,274 @@ export interface StslRate {
   coefficientB: Decimal
   description?: string
 }
+
+// =============================================================================
+// EXPORT/IMPORT TYPES
+// =============================================================================
+
+export interface ExportShiftsResponse {
+  shifts: Array<{
+    id: string
+    payGuideId: string
+    payGuideName: string
+    startTime: string
+    endTime: string
+    totalHours?: string
+    basePay?: string
+    overtimePay?: string
+    penaltyPay?: string
+    totalPay?: string
+    notes?: string
+    breakPeriods: Array<{
+      startTime: string
+      endTime: string
+    }>
+    penaltySegments: Array<{
+      name: string
+      multiplier: string
+      hours: string
+      pay: string
+      startTime: string
+      endTime: string
+    }>
+    overtimeSegments: Array<{
+      name: string
+      multiplier: string
+      hours: string
+      pay: string
+      startTime: string
+      endTime: string
+    }>
+  }>
+  metadata: {
+    exportedAt: string
+    totalShifts: number
+    dateRange: {
+      earliest: string
+      latest: string
+    }
+  }
+}
+
+export interface ExportPayGuidesResponse {
+  payGuides: Array<{
+    id: string
+    name: string
+    baseRate: string
+    minimumShiftHours?: number
+    maximumShiftHours?: number
+    description?: string
+    effectiveFrom: string
+    effectiveTo?: string
+    timezone: string
+    isActive: boolean
+    penaltyTimeFrames: Array<{
+      name: string
+      multiplier: string
+      dayOfWeek?: number
+      startTime?: string
+      endTime?: string
+      isPublicHoliday: boolean
+      description?: string
+      isActive: boolean
+    }>
+    overtimeTimeFrames: Array<{
+      name: string
+      firstThreeHoursMult: string
+      afterThreeHoursMult: string
+      dayOfWeek?: number
+      startTime?: string
+      endTime?: string
+      isPublicHoliday: boolean
+      description?: string
+      isActive: boolean
+    }>
+    publicHolidays: Array<{
+      name: string
+      date: string
+      isActive: boolean
+    }>
+  }>
+  metadata: {
+    exportedAt: string
+    totalPayGuides: number
+  }
+}
+
+export interface ExportTaxDataResponse {
+  taxSettings: {
+    claimedTaxFreeThreshold: boolean
+    isForeignResident: boolean
+    hasTaxFileNumber: boolean
+    medicareExemption: 'none' | 'half' | 'full'
+    hecsHelpRate?: string
+  }
+  taxCoefficients: Array<{
+    taxYear: string
+    scale: string
+    earningsFrom: string
+    earningsTo?: string
+    coefficientA: string
+    coefficientB: string
+    description?: string
+    isActive: boolean
+  }>
+  hecsThresholds: Array<{
+    taxYear: string
+    incomeFrom: string
+    incomeTo?: string
+    rate: string
+    description?: string
+    isActive: boolean
+  }>
+  stslRates: Array<{
+    taxYear: string
+    scale: string
+    earningsFrom: string
+    earningsTo?: string
+    coefficientA: string
+    coefficientB: string
+    description?: string
+    isActive: boolean
+  }>
+  taxRateConfigs: Array<{
+    taxYear: string
+    medicareRate: string
+    medicareLowIncomeThreshold: string
+    medicareHighIncomeThreshold: string
+    description?: string
+    isActive: boolean
+  }>
+  metadata: {
+    exportedAt: string
+    includedTaxYears: string[]
+  }
+}
+
+export type ConflictResolution = 'skip' | 'overwrite' | 'rename'
+
+export interface ImportShiftsRequest {
+  shifts: Array<{
+    payGuideName: string
+    startTime: string
+    endTime: string
+    notes?: string
+    breakPeriods?: Array<{
+      startTime: string
+      endTime: string
+    }>
+  }>
+  options: {
+    conflictResolution: ConflictResolution
+    validatePayGuides: boolean
+  }
+}
+
+export interface ImportPayGuidesRequest {
+  payGuides: Array<{
+    name: string
+    baseRate: string
+    minimumShiftHours?: number
+    maximumShiftHours?: number
+    description?: string
+    effectiveFrom: string
+    effectiveTo?: string
+    timezone?: string
+    penaltyTimeFrames?: Array<{
+      name: string
+      multiplier: string
+      dayOfWeek?: number
+      startTime?: string
+      endTime?: string
+      isPublicHoliday?: boolean
+      description?: string
+    }>
+    overtimeTimeFrames?: Array<{
+      name: string
+      firstThreeHoursMult: string
+      afterThreeHoursMult: string
+      dayOfWeek?: number
+      startTime?: string
+      endTime?: string
+      isPublicHoliday?: boolean
+      description?: string
+    }>
+    publicHolidays?: Array<{
+      name: string
+      date: string
+    }>
+  }>
+  options: {
+    conflictResolution: ConflictResolution
+    activateImported: boolean
+  }
+}
+
+export interface ImportTaxDataRequest {
+  taxSettings?: {
+    claimedTaxFreeThreshold?: boolean
+    isForeignResident?: boolean
+    hasTaxFileNumber?: boolean
+    medicareExemption?: 'none' | 'half' | 'full'
+    hecsHelpRate?: string
+  }
+  taxCoefficients?: Array<{
+    taxYear: string
+    scale: string
+    earningsFrom: string
+    earningsTo?: string
+    coefficientA: string
+    coefficientB: string
+    description?: string
+  }>
+  hecsThresholds?: Array<{
+    taxYear: string
+    incomeFrom: string
+    incomeTo?: string
+    rate: string
+    description?: string
+  }>
+  stslRates?: Array<{
+    taxYear: string
+    scale: string
+    earningsFrom: string
+    earningsTo?: string
+    coefficientA: string
+    coefficientB: string
+    description?: string
+  }>
+  taxRateConfigs?: Array<{
+    taxYear: string
+    medicareRate: string
+    medicareLowIncomeThreshold: string
+    medicareHighIncomeThreshold: string
+    description?: string
+  }>
+  options: {
+    conflictResolution: ConflictResolution
+    replaceExisting: boolean
+  }
+}
+
+export interface ImportValidationError {
+  type: 'validation' | 'conflict' | 'dependency'
+  field: string
+  message: string
+  index?: number
+  conflictWith?: string
+}
+
+export interface ImportResult {
+  success: boolean
+  summary: {
+    totalProcessed: number
+    successful: number
+    skipped: number
+    failed: number
+  }
+  errors: ImportValidationError[]
+  warnings: ImportValidationError[]
+  created: string[]
+  updated: string[]
+  skipped: string[]
+}

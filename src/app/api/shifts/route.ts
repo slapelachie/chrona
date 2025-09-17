@@ -207,9 +207,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find or create appropriate pay period for the shift
+    // Find or create appropriate pay period for the shift using pay guide timezone
     const startTime = new Date(body.startTime)
-    const payPeriod = await findOrCreatePayPeriod(user.id, startTime)
+    const payPeriod = await findOrCreatePayPeriod(user.id, startTime, payGuide.timezone)
 
     // Create the shift without calculations first
     const shift = await prisma.shift.create({
