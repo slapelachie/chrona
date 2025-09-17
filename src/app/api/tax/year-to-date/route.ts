@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get year-to-date tax summary
+    // Get year-to-date tax summary (stored)
     const yearToDateTax = await PayPeriodTaxService.getYearToDateTaxSummary(
       user.id,
       taxYear || undefined
@@ -67,6 +67,23 @@ export async function GET(request: NextRequest) {
       ? yearToDateTax.totalWithholdings.div(progressThroughYear)
       : new Decimal(0)
 
+    // Also compute a live YTD by summing pay periods within the tax year window
+    const ty = yearToDateTax.taxYear
+    const tyStart = getTaxYearStartDate(ty)
+    const tyEnd = getTaxYearEndDate(ty)
+    const periods = await prisma.payPeriod.findMany({
+      where: {
+        userId: user.id,
+        startDate: { gte: tyStart },
+        endDate: { lte: tyEnd },
+        status: { in: ['processing','paid','verified'] },
+      },
+      select: { totalPay: true, totalWithholdings: true }
+    })
+    const liveGross = periods.reduce((sum, p) => sum.plus(p.totalPay || new Decimal(0)), new Decimal(0))
+    const liveWithhold = periods.reduce((sum, p) => sum.plus(p.totalWithholdings || new Decimal(0)), new Decimal(0))
+    const liveNet = liveGross.minus(liveWithhold)
+
     const response = {
       taxYear: yearToDateTax.taxYear,
       asAt: yearToDateTax.lastUpdated,
@@ -81,6 +98,11 @@ export async function GET(request: NextRequest) {
         hecsHelpAmount: yearToDateTax.hecsHelpAmount.toString(),
         totalWithholdings: yearToDateTax.totalWithholdings.toString(),
         netIncome: yearToDateTax.grossIncome.minus(yearToDateTax.totalWithholdings).toString(),
+      },
+      liveYearToDate: {
+        grossIncome: liveGross.toString(),
+        totalWithholdings: liveWithhold.toString(),
+        netIncome: liveNet.toString(),
       },
       effectiveRates: {
         payGWithholdingRate: effectiveTaxRate.toFixed(2) + '%',

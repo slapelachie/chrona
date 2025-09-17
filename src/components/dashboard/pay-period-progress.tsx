@@ -31,9 +31,10 @@ export const PayPeriodProgress: React.FC = () => {
     const start = new Date(cp.startDate)
     const end = new Date(cp.endDate)
     const hoursWorked = Number(cp.hoursWorked ?? '0')
+    const hoursRostered = Number(cp.projections?.rosteredHours ?? '0')
     const earnedSoFar = Number(cp.grossPay ?? '0')
     const projectedTotal = Number(cp.projections?.grossPay ?? '0')
-    return { progress, daysRemaining, start, end, hoursWorked, earnedSoFar, projectedTotal }
+    return { progress, daysRemaining, start, end, hoursWorked, hoursRostered, earnedSoFar, projectedTotal }
   }, [summary])
 
   if (!vm) return null
@@ -88,9 +89,15 @@ export const PayPeriodProgress: React.FC = () => {
                 </div>
                 <div className="pay-period-stat__content">
                   <span className="pay-period-stat__value text-mono">
-                    {vm.hoursWorked.toFixed(1)}h
+                    {vm.hoursWorked.toFixed(1)}h/{vm.hoursRostered.toFixed(1)}h
                   </span>
-                  <span className="pay-period-stat__label">Hours worked</span>
+                  <span className="pay-period-stat__label">worked/rostered</span>
+                  <div className="mini-progress-bar" aria-hidden>
+                    <div 
+                      className="mini-progress-bar__fill"
+                      style={{ width: `${vm.hoursRostered > 0 ? (vm.hoursWorked / vm.hoursRostered) * 100 : 0}%` }}
+                    />
+                  </div>
                 </div>
               </div>
 

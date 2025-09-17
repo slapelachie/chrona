@@ -25,7 +25,7 @@ export async function GET(_request: NextRequest) {
     // Try to find an existing current pay period (do NOT create one if missing)
     const currentPayPeriod = await prisma.payPeriod.findUnique({
       where: { userId_startDate: { userId: user.id, startDate } },
-      include: { shifts: { select: { id: true } } }
+      include: { shifts: { select: { id: true } }, extras: true }
     })
 
     const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime() + 1) / (24 * 60 * 60 * 1000)))
@@ -43,16 +43,18 @@ export async function GET(_request: NextRequest) {
     const totalWithholdings = currentPayPeriod?.totalWithholdings ?? new Decimal(0)
     const netPay = currentPayPeriod?.netPay ?? grossPay.minus(totalWithholdings)
 
-    // Simple projection by elapsed days (guard against div by zero)
-    const progressRatio = daysElapsed > 0 ? new Decimal(daysElapsed).div(totalDays) : new Decimal(0)
-    const projectedGross = progressRatio.gt(0) ? grossPay.div(progressRatio) : new Decimal(0)
-    const projectedNet = progressRatio.gt(0) ? netPay.div(progressRatio) : new Decimal(0)
+    // (Removed time-based projection in favor of rostered projection below)
 
     // Shifts within current period window (for rostered projection)
     const periodShifts = await prisma.shift.findMany({
       where: { userId: user.id, startTime: { gte: startDate, lte: endDate } },
       orderBy: { startTime: 'asc' },
       select: { id: true, startTime: true, endTime: true, totalHours: true, totalPay: true, payGuideId: true }
+    })
+    // Extras already attached to current period (no roster concept, assume apply to full window)
+    const periodExtras = await prisma.payPeriodExtra.findMany({
+      where: { payPeriod: { userId: user.id, startDate } },
+      select: { amount: true, taxable: true }
     })
 
     // Completed vs upcoming in current period
@@ -61,7 +63,20 @@ export async function GET(_request: NextRequest) {
 
     const hoursSoFar = completed.reduce((sum, s) => sum.plus(s.totalHours || new Decimal(0)), new Decimal(0))
     const grossSoFar = completed.reduce((sum, s) => sum.plus(s.totalPay || new Decimal(0)), new Decimal(0))
+      .plus((currentPayPeriod?.extras || []).reduce((sum, e) => e.taxable ? sum.plus(e.amount) : sum, new Decimal(0)))
     const grossRosteredTotal = periodShifts.reduce((sum, s) => sum.plus(s.totalPay || new Decimal(0)), new Decimal(0))
+      .plus(periodExtras.reduce((sum, e) => e.taxable ? sum.plus(e.amount) : sum, new Decimal(0)))
+    const hoursRosteredTotal = periodShifts.reduce((sum, s) => sum.plus(s.totalHours || new Decimal(0)), new Decimal(0))
+
+    // Project net using preview calculator against rostered gross
+    let projectedNet = new Decimal(0)
+    try {
+      const { PayPeriodTaxService } = await import('@/lib/pay-period-tax-service')
+      const preview = await PayPeriodTaxService.previewTaxCalculation(user.id, grossRosteredTotal, user.payPeriodType)
+      projectedNet = preview.breakdown.netPay
+    } catch (e) {
+      projectedNet = grossRosteredTotal.minus(paygWithholding).minus(hecsHelpAmount).minus(medicareLevy)
+    }
 
     // Upcoming shifts (next 5 overall)
     const upcomingShifts = await prisma.shift.findMany({
@@ -99,7 +114,9 @@ export async function GET(_request: NextRequest) {
         totalWithholdings: totalWithholdings.toString(),
         netPay: netPay.toString(),
         projections: {
-          grossPay: grossRosteredTotal.toString()
+          grossPay: grossRosteredTotal.toString(),
+          netPay: projectedNet.toString(),
+          rosteredHours: hoursRosteredTotal.toString(),
         }
       },
       upcomingShifts: upcomingShifts.map((s) => ({

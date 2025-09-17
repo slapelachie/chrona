@@ -14,9 +14,10 @@ interface StatCardProps {
     value: string
     isPositive: boolean
   }
+  inlineNote?: string
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, trend }) => (
+const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, trend, inlineNote }) => (
   <Card variant="elevated" className="stat-card">
     <CardBody>
       <div className="stat-card__header">
@@ -32,9 +33,16 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, trend
       </div>
       
       <div className="stat-card__content">
-        <h3 className="stat-card__value text-mono">
-          {value}
-        </h3>
+        <div className="stat-card__value-row">
+          <h3 className="stat-card__value text-mono" style={{ display: 'inline', marginRight: 8 }}>
+            {value}
+          </h3>
+          {inlineNote && (
+            <span className="stat-card__inline-note" style={{ opacity: 0.8, fontSize: 14 }}>
+              {inlineNote}
+            </span>
+          )}
+        </div>
         <p className="stat-card__title">
           {title}
         </p>
@@ -85,8 +93,13 @@ export const StatsCards: React.FC = () => {
 
   const stats = useMemo(() => {
     const hoursWorked = Number(summary?.currentPeriod?.hoursWorked ?? '0')
+    const hoursRostered = Number(summary?.currentPeriod?.projections?.rosteredHours ?? '0')
     const projectedGross = Number(summary?.currentPeriod?.projections?.grossPay ?? '0')
-    const ytdGross = Number(ytd?.yearToDate?.grossIncome ?? '0')
+    const projectedNet = Number(summary?.currentPeriod?.projections?.netPay ?? '0')
+    const ytdGross = Number((ytd?.liveYearToDate?.grossIncome ?? ytd?.yearToDate?.grossIncome) ?? '0')
+    const ytdNet = Number((ytd?.liveYearToDate?.netIncome ?? ytd?.yearToDate?.netIncome) ?? '0')
+
+    const fmt = (n: number, min = 2, max = 2) => n.toLocaleString('en-AU', { minimumFractionDigits: min, maximumFractionDigits: max })
 
     // Next shift summary
     const next = summary?.upcomingShifts?.[0]
@@ -97,24 +110,31 @@ export const StatsCards: React.FC = () => {
       : '—'
 
     const items = [
+      // 1) Period Pay (Gross vs Net combined)
       {
-        title: 'This Period',
-        value: `${hoursWorked.toFixed(1)}h`,
-        subtitle: 'Hours worked',
-        icon: <Clock size={24} />,
-      },
-      {
-        title: 'Projected Pay',
-        value: `$${projectedGross.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        subtitle: 'This period (rostered)',
+        title: 'This Period Pay',
+        value: `$${fmt(projectedNet)}`,
+        inlineNote: `(Gross $${fmt(projectedGross)})`,
+        subtitle: 'Projected (rostered)',
         icon: <DollarSign size={24} />,
       },
+      // 2) YTD Earnings (Gross vs Net combined)
       {
         title: 'YTD Earnings',
-        value: `$${ytdGross.toLocaleString('en-AU')}`,
+        value: `$${fmt(ytdNet, 0, 0)}`,
+        inlineNote: `(Gross $${fmt(ytdGross, 0, 0)})`,
         subtitle: `Tax year ${ytd?.taxYear ?? ''}`,
         icon: <TrendingUp size={24} />,
       },
+      // 3) Hours worked this period
+      {
+        title: 'This Period',
+        value: `${hoursWorked.toFixed(1)}h`,
+        inlineNote: `(Rostered ${hoursRostered.toFixed(1)}h)`,
+        subtitle: 'Hours worked',
+        icon: <Clock size={24} />,
+      },
+      // 4) Next shift
       {
         title: 'Next Shift',
         value: start ? start.toLocaleDateString('en-AU', { weekday: 'short' }) : '—',
