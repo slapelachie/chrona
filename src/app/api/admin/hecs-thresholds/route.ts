@@ -7,7 +7,8 @@ import { ValidationResult, validateString, validateDecimal } from '@/lib/validat
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const taxYear = searchParams.get('taxYear') || '2024-25'
+    const { getCurrentAuTaxYearString } = await import('@/lib/tax-year')
+    const taxYear = searchParams.get('taxYear') || getCurrentAuTaxYearString()
 
     const thresholds = await prisma.hecsThreshold.findMany({
       where: {

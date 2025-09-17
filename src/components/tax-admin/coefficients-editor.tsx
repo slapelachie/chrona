@@ -45,7 +45,9 @@ function ScalePicker({ value, onChange }: { value: string; onChange: (s: string)
   )
 }
 
-export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = '2024-25' }) => {
+import { getCurrentAuTaxYearString } from '@/lib/tax-year'
+
+export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurrentAuTaxYearString() }) => {
   const [taxYear, setTaxYear] = useState(initialTaxYear)
   const [rows, setRows] = useState<Coeff[]>([])
   const [loading, setLoading] = useState(false)

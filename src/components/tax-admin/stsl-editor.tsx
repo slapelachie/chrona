@@ -19,7 +19,9 @@ const SCALES: Array<{ key: Rate['scale']; label: string; desc: string }> = [
   { key: 'NO_TFT', label: 'No Tax‑Free Threshold', desc: 'Applies if you did not claim the tax‑free threshold for this payer.' },
 ]
 
-export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYear = '2024-25' }) => {
+import { getCurrentAuTaxYearString } from '@/lib/tax-year'
+
+export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYear = getCurrentAuTaxYearString() }) => {
   const [taxYear, setTaxYear] = useState(initialTaxYear)
   const [rows, setRows] = useState<Rate[]>([])
   const [loading, setLoading] = useState(false)

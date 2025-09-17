@@ -57,18 +57,37 @@ export async function POST(
     }
 
     // Check that all shifts in the pay period have calculated pay
-    const shiftsWithoutPay = payPeriod.shifts.filter(shift => !shift.totalPay)
+    let shiftsWithoutPay = payPeriod.shifts.filter(shift => !shift.totalPay)
     if (shiftsWithoutPay.length > 0) {
-      return NextResponse.json(
-        {
-          errors: [{ 
-            field: 'shifts', 
-            message: `${shiftsWithoutPay.length} shift(s) do not have calculated pay. Please calculate shift pay before processing the pay period.` 
-          }],
-          message: 'Shifts missing pay calculations',
-        } as ApiValidationResponse,
-        { status: 400 }
-      )
+      // Best-effort: calculate pay for missing shifts before failing
+      try {
+        const { calculateAndUpdateShift, fetchShiftBreakPeriods, updateShiftWithCalculation } = await import('@/lib/shift-calculation')
+        for (const s of shiftsWithoutPay) {
+          const bps = await fetchShiftBreakPeriods(s.id)
+          const calc = await calculateAndUpdateShift({ payGuideId: s.payGuideId, startTime: s.startTime, endTime: s.endTime, breakPeriods: bps })
+          if (calc) {
+            await updateShiftWithCalculation(s.id, calc)
+          }
+        }
+      } catch (e) {
+        console.warn('Auto-calculation of missing shift pay failed:', e)
+      }
+
+      // Reload and recheck
+      const refreshed = await prisma.payPeriod.findUnique({ where: { id: payPeriodId }, include: { shifts: true } })
+      shiftsWithoutPay = (refreshed?.shifts || []).filter(shift => !shift.totalPay)
+      if (shiftsWithoutPay.length > 0) {
+        return NextResponse.json(
+          {
+            errors: [{ 
+              field: 'shifts', 
+              message: `${shiftsWithoutPay.length} shift(s) do not have calculated pay. Please calculate shift pay before processing the pay period.` 
+            }],
+            message: 'Shifts missing pay calculations',
+          } as ApiValidationResponse,
+          { status: 400 }
+        )
+      }
     }
 
     // Process the pay period (calculates totals and taxes)

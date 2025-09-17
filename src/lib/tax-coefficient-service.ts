@@ -135,44 +135,71 @@ export class TaxCoefficientService {
 
     try {
       const { prisma } = await import('@/lib/db')
-      const dbConfig = await prisma.taxRateConfig.findUnique({
-        where: { taxYear },
-      })
+      const dbConfig = await prisma.taxRateConfig.findUnique({ where: { taxYear } })
 
-      if (!dbConfig) {
-        throw new Error(`No tax configuration found for tax year ${taxYear}`)
+      // If config exists, use it as the source of truth
+      if (dbConfig) {
+        const [coefficients, hecsThresholds, stslRates] = await Promise.all([
+          this.getTaxCoefficients(taxYear),
+          this.getHecsThresholds(taxYear),
+          this.getStslRates(taxYear),
+        ])
+
+        const config: TaxRateConfig = {
+          taxYear: dbConfig.taxYear,
+          medicareRate: dbConfig.medicareRate,
+          medicareLowIncomeThreshold: dbConfig.medicareLowIncomeThreshold,
+          medicareHighIncomeThreshold: dbConfig.medicareHighIncomeThreshold,
+          hecsHelpThresholds,
+          stslRates,
+          coefficients,
+        }
+        this.taxConfigCache.set(cacheKey, config)
+        this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+        return config
       }
 
-      // Get coefficients and STSL rates for this tax year
-      const [coefficients, hecsThresholds, stslRates] = await Promise.all([
-        this.getTaxCoefficients(taxYear),
-        this.getHecsThresholds(taxYear), // legacy
-        this.getStslRates(taxYear),
+      // No config row — synthesize if year-specific tables exist to avoid hard fallback
+      const [coeffCount, stslCount, hecsCount] = await Promise.all([
+        prisma.taxCoefficient.count({ where: { taxYear, isActive: true } }),
+        prisma.stslRate.count({ where: { taxYear, isActive: true } }),
+        prisma.hecsThreshold.count({ where: { taxYear, isActive: true } }),
       ])
 
-      // Transform to domain type
-      const config: TaxRateConfig = {
-        taxYear: dbConfig.taxYear,
-        medicareRate: dbConfig.medicareRate,
-        medicareLowIncomeThreshold: dbConfig.medicareLowIncomeThreshold,
-        medicareHighIncomeThreshold: dbConfig.medicareHighIncomeThreshold,
-        hecsHelpThresholds: hecsThresholds,
-        stslRates,
-        coefficients,
+      if (coeffCount > 0 || stslCount > 0 || hecsCount > 0) {
+        // Try to borrow Medicare settings from any existing year; else default
+        const nearest = await prisma.taxRateConfig.findFirst({ orderBy: { taxYear: 'desc' } })
+        const medicareRate = nearest?.medicareRate ?? new Decimal(0.02)
+        const low = nearest?.medicareLowIncomeThreshold ?? new Decimal(26000)
+        const high = nearest?.medicareHighIncomeThreshold ?? new Decimal(32500)
+
+        const [coefficients, hecsThresholds, stslRates] = await Promise.all([
+          this.getTaxCoefficients(taxYear),
+          this.getHecsThresholds(taxYear),
+          this.getStslRates(taxYear),
+        ])
+
+        const config: TaxRateConfig = {
+          taxYear,
+          medicareRate,
+          medicareLowIncomeThreshold: low,
+          medicareHighIncomeThreshold: high,
+          hecsHelpThresholds: hecsThresholds,
+          stslRates,
+          coefficients,
+        }
+        this.taxConfigCache.set(cacheKey, config)
+        this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+        return config
       }
 
-      // Cache the result
-      this.taxConfigCache.set(cacheKey, config)
-      this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
-
-      return config
+      // Truly missing: nothing for this year
+      throw new Error(`No tax configuration found for tax year ${taxYear}`)
     } catch (error: any) {
       console.error('Error loading tax configuration from database:', error)
-      // If configuration truly not found, rethrow to allow caller/tests to handle
       if (error instanceof Error && error.message.includes('No tax configuration found')) {
         throw error
       }
-      // Fallback to hardcoded values only on database failures
       console.warn('Falling back to hardcoded tax configuration')
       return this.getFallbackTaxConfig()
     }

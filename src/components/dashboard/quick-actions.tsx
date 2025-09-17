@@ -31,15 +31,19 @@ export const QuickActions: React.FC = () => {
   const canView = !!currentId
 
   const [canProcess, setCanProcess] = useState<boolean>(false)
+  const [status, setStatus] = useState<string | null>(null)
   useEffect(() => {
     let cancel = false
     async function checkProcess() {
-      if (!currentId) { setCanProcess(false); return }
+      if (!currentId) { setCanProcess(false); setStatus(null); return }
       try {
         const r = await fetch(`/api/pay-periods/${currentId}/process`)
         const j = await r.json()
-        if (!cancel) setCanProcess(!!j?.data?.canProcess)
-      } catch { if (!cancel) setCanProcess(false) }
+        if (!cancel) {
+          setCanProcess(!!j?.data?.canProcess)
+          setStatus(j?.data?.currentStatus || null)
+        }
+      } catch { if (!cancel) { setCanProcess(false); setStatus(null) } }
     }
     checkProcess()
     return () => { cancel = true }
@@ -76,6 +80,28 @@ export const QuickActions: React.FC = () => {
       disabled: !canProcess,
       title: !canProcess ? 'Requires open period with all shifts calculated' : undefined,
     },
+    ...(status && status !== 'open' ? [{
+      label: 'Open Current Period',
+      icon: <Play size={20} />,
+      variant: 'outline' as const,
+      onClick: async () => {
+        if (!currentId) return
+        setBusy('open')
+        try {
+          await fetch(`/api/pay-periods/${currentId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'open' }) })
+          // refresh summary + status
+          const res = await fetch('/api/dashboard/summary', { cache: 'no-store' })
+          const json = await res.json()
+          setSummary(json.data)
+          const chk = await fetch(`/api/pay-periods/${currentId}/process`)
+          const cjson = await chk.json()
+          setCanProcess(!!cjson?.data?.canProcess)
+          setStatus(cjson?.data?.currentStatus || null)
+        } finally { setBusy(null) }
+      },
+      disabled: !!busy,
+      title: undefined,
+    }] : []),
     {
       label: 'Recalculate Taxes',
       icon: <RotateCw size={20} />,
@@ -90,7 +116,7 @@ export const QuickActions: React.FC = () => {
       disabled: !(currentId && shiftsCount > 0),
       title: !(currentId && shiftsCount > 0) ? 'No pay period or no shifts to calculate' : undefined,
     },
-  ], [router, currentId, canView, canProcess, shiftsCount])
+  ], [router, currentId, canView, canProcess, shiftsCount, status, busy])
 
   return (
     <div className="quick-actions">

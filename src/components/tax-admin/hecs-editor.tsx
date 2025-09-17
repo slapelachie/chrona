@@ -12,9 +12,11 @@ type Hecs = {
   description?: string | null
 }
 
+import { getCurrentAuTaxYearString } from '@/lib/tax-year'
+
 interface Props { initialTaxYear?: string }
 
-export const HecsEditor: React.FC<Props> = ({ initialTaxYear = '2024-25' }) => {
+export const HecsEditor: React.FC<Props> = ({ initialTaxYear = getCurrentAuTaxYearString() }) => {
   const [taxYear, setTaxYear] = useState(initialTaxYear)
   const [rows, setRows] = useState<Hecs[]>([])
   const [loading, setLoading] = useState(false)

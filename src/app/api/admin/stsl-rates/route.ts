@@ -8,7 +8,8 @@ import { TaxCoefficientService } from '@/lib/tax-coefficient-service'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const taxYear = searchParams.get('taxYear') || '2024-25'
+    const { getCurrentAuTaxYearString } = await import('@/lib/tax-year')
+    const taxYear = searchParams.get('taxYear') || getCurrentAuTaxYearString()
     const scale = searchParams.get('scale') // WITH_TFT_OR_FR | NO_TFT
     const where: any = { taxYear, isActive: true }
     if (scale) where.scale = scale

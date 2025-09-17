@@ -10,6 +10,7 @@ import {
   TaxRateConfig,
 } from '@/types'
 import { TimeCalculations } from './time-calculations'
+import { taxLog } from '@/lib/log'
 import { TaxCoefficientService } from '@/lib/tax-coefficient-service'
 
 /**
@@ -83,15 +84,24 @@ export class TaxCalculator {
     yearToDateTax: YearToDateTax,
     opts?: { taxYear?: string; onDate?: Date }
   ): TaxCalculationResult {
+    taxLog('start-calc', {
+      payPeriodId,
+      grossPay: grossPay.toString(),
+      payPeriodType,
+      taxYear: opts?.taxYear,
+    })
     // Convert gross pay to weekly equivalent for ATO calculations
     const weeklyGrossPay = this.convertToWeeklyPay(grossPay, payPeriodType)
+    taxLog('weekly-equivalent', { weeklyGrossPay: weeklyGrossPay.toString(), payPeriodType })
     
     // Determine appropriate tax scale
     const taxScale = this.determineTaxScale()
+    taxLog('tax-scale', { taxScale })
     
     // Calculate PAYG withholding using ATO coefficients
     const weeklyPaygWithholding = this.calculatePaygWithholding(weeklyGrossPay, taxScale)
     const paygWithholdingRaw = this.convertFromWeeklyPay(weeklyPaygWithholding, payPeriodType)
+    taxLog('payg-raw', { weeklyPaygWithholding: weeklyPaygWithholding.toString(), paygWithholdingRaw: paygWithholdingRaw.toString() })
     
     // Calculate Medicare levy
     // Medicare levy is included in PAYG for this product; set to zero
@@ -99,13 +109,20 @@ export class TaxCalculator {
     
     // Calculate STSL (HECS-HELP) component
     const hecsHelpAmountRaw = this.calculateHecsHelp(grossPay, payPeriodType, yearToDateTax)
+    taxLog('stsl-raw', { hecsHelpAmountRaw: hecsHelpAmountRaw.toString() })
     
-    const paygWithholding = TimeCalculations.roundDownToDollar(paygWithholdingRaw)
-    const medicareLevy = TimeCalculations.roundDownToDollar(medicareLevyRaw)
-    // STSL rounds to the nearest dollar (Schedule 8 guidance)
+    // Round PAYG and STSL to nearest dollar (half-up)
+    const paygWithholding = TimeCalculations.roundToNearestDollar(paygWithholdingRaw)
+    const medicareLevy = TimeCalculations.roundToNearestDollar(medicareLevyRaw)
     const hecsHelpAmount = TimeCalculations.roundToNearestDollar(hecsHelpAmountRaw)
     const totalWithholdings = paygWithholding.plus(hecsHelpAmount)
     const netPay = grossPay.minus(totalWithholdings)
+    taxLog('rounded-values', {
+      paygWithholding: paygWithholding.toString(),
+      hecsHelpAmount: hecsHelpAmount.toString(),
+      totalWithholdings: totalWithholdings.toString(),
+      netPay: netPay.toString(),
+    })
     
     // Update year-to-date tracking
     const updatedYtd = this.updateYearToDate(
@@ -158,8 +175,8 @@ export class TaxCalculator {
       yearToDateTax
     )
 
-    const paygWithholding = TimeCalculations.roundDownToDollar(paygWithholdingRaw)
-    const medicareLevy = TimeCalculations.roundDownToDollar(medicareLevyRaw)
+    const paygWithholding = TimeCalculations.roundToNearestDollar(paygWithholdingRaw)
+    const medicareLevy = TimeCalculations.roundToNearestDollar(medicareLevyRaw)
     const hecsHelpAmount = TimeCalculations.roundToNearestDollar(hecsHelpAmountRaw)
     const totalWithholdings = paygWithholding.plus(hecsHelpAmount)
     const netPay = grossPay.minus(totalWithholdings)
@@ -195,15 +212,29 @@ export class TaxCalculator {
    * Formula: Withholding = (a × weekly earnings) - b
    */
   private calculatePaygWithholding(weeklyGrossPay: Decimal, taxScale: TaxScale): Decimal {
-    // Find appropriate coefficient bracket
-    const coefficient = this.findTaxCoefficient(weeklyGrossPay, taxScale)
+    // ATO convention (legacy alignment): ignore cents and add 99 cents
+    const adjustedWeeklyEarnings = weeklyGrossPay.floor().plus(0.99)
+    // Find appropriate coefficient bracket using adjusted weekly earnings
+    const coefficient = this.findTaxCoefficient(adjustedWeeklyEarnings, taxScale)
     
     if (!coefficient) {
+      taxLog('payg-no-coefficient', { weeklyGrossPay: weeklyGrossPay.toString(), taxScale })
       return new Decimal(0)
     }
 
     // Apply ATO formula: (a × weekly earnings) - b
-    const withholding = weeklyGrossPay.times(coefficient.coefficientA).minus(coefficient.coefficientB)
+    const a = coefficient.coefficientA
+    const b = coefficient.coefficientB
+    const withholding = adjustedWeeklyEarnings.times(a).minus(b)
+    taxLog('payg-formula', {
+      adjustedWeeklyEarnings: adjustedWeeklyEarnings.toString(),
+      scale: taxScale,
+      a: a.toString(),
+      b: b.toString(),
+      earningsFrom: coefficient.earningsFrom.toString(),
+      earningsTo: coefficient.earningsTo?.toString() ?? null,
+      withholdingRawWeekly: withholding.toString(),
+    })
     
     // Ensure non-negative result
     return Decimal.max(0, withholding)
@@ -250,13 +281,22 @@ export class TaxCalculator {
         throw new Error(`Unsupported pay period type: ${payPeriodType}`)
     }
 
-    // x: ignore cents and add 99 cents
+    // x: ignore cents and add 99 cents (legacy Schedule 8 alignment)
     const x = weeklyEquivalent.floor().plus(0.99)
+    taxLog('stsl-x', { weeklyEquivalent: weeklyEquivalent.toString(), x: x.toString(), stslScale })
 
     // Find A/B bracket from in-memory STSL set (formula-only)
     const row = this.stslRates.find(r => r.scale === stslScale && r.coefficientA && r.coefficientB && x.gte(r.earningsFrom) && (r.earningsTo === null || x.lt(r.earningsTo)))
     if (!row) return new Decimal(0)
     const weekly = Decimal.max(new Decimal(0), x.times(row.coefficientA!).minus(row.coefficientB!))
+    taxLog('stsl-formula', {
+      a: row.coefficientA!.toString(),
+      b: row.coefficientB!.toString(),
+      earningsFrom: row.earningsFrom.toString(),
+      earningsTo: row.earningsTo?.toString() ?? null,
+      weeklyRaw: weekly.toString(),
+      stslScale,
+    })
 
     switch (payPeriodType) {
       case 'WEEKLY': return weekly

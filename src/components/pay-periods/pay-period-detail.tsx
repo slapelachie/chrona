@@ -26,6 +26,9 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
   const [tax, setTax] = useState<TaxState>({ status: 'idle' })
   const [actualPay, setActualPay] = useState('')
   const [verifyBusy, setVerifyBusy] = useState(false)
+  const [processReady, setProcessReady] = useState<{ canProcess: boolean; message?: string; blockers?: string[] } | null>(null)
+  const [processError, setProcessError] = useState<string | null>(null)
+  const [openBusy, setOpenBusy] = useState(false)
 
   const fetchPayPeriod = async () => {
     try {
@@ -59,15 +62,36 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
     }
   }
 
+  const fetchProcessReadiness = async () => {
+    try {
+      const res = await fetch(`/api/pay-periods/${payPeriodId}/process`)
+      const json = await res.json().catch(() => null)
+      if (res.ok) {
+        setProcessReady({ canProcess: !!json?.data?.canProcess, message: json?.message, blockers: json?.data?.blockers || [] })
+      } else {
+        setProcessReady({ canProcess: false, message: json?.message || 'Not ready to process', blockers: json?.errors?.map?.((e: any) => e.message) || [] })
+      }
+    } catch {
+      setProcessReady({ canProcess: false, message: 'Unable to determine processing readiness' })
+    }
+  }
+
   const processPayPeriod = async () => {
     try {
       setVerifyBusy(true)
+      setProcessError(null)
       const res = await fetch(`/api/pay-periods/${payPeriodId}/process`, { method: 'POST' })
-      if (!res.ok) throw new Error('Failed to process pay period')
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        const msg = json?.message || json?.error || 'Failed to process pay period'
+        throw new Error(msg)
+      }
       await fetchPayPeriod()
       await fetchTax()
+      await fetchProcessReadiness()
     } catch (e) {
-      alert('Processing failed. Please try again.')
+      const msg = e instanceof Error ? e.message : 'Processing failed. Please try again.'
+      setProcessError(msg)
     } finally {
       setVerifyBusy(false)
     }
@@ -83,6 +107,24 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
       alert('Tax calculation failed.')
     } finally {
       setVerifyBusy(false)
+    }
+  }
+
+  const reopenAsOpen = async () => {
+    try {
+      setOpenBusy(true)
+      const res = await fetch(`/api/pay-periods/${payPeriodId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'open' })
+      })
+      if (!res.ok) throw new Error('Failed to open pay period')
+      await fetchPayPeriod()
+      await fetchProcessReadiness()
+    } catch (e) {
+      alert('Could not open the period. Please try again.')
+    } finally {
+      setOpenBusy(false)
     }
   }
 
@@ -153,6 +195,11 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payPeriodId])
 
+  useEffect(() => {
+    fetchProcessReadiness()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payPeriodId])
+
   const formatCurrency = (amount?: string) => {
     if (!amount) return '-'
     const n = Number(amount)
@@ -220,12 +267,17 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
               </div>
 
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-                <Button size="sm" leftIcon={<Play size={16} />} disabled={verifyBusy} onClick={processPayPeriod}>
+                <Button size="sm" leftIcon={<Play size={16} />} disabled={verifyBusy || !(processReady?.canProcess)} onClick={processPayPeriod} title={processReady?.canProcess ? undefined : (processReady?.blockers?.join(', ') || 'Not ready to process')}>
                   Process
                 </Button>
                 <Button size="sm" variant="secondary" onClick={runTaxOnly} disabled={verifyBusy}>
                   Calculate Tax
                 </Button>
+                {pp.status !== 'open' && (
+                  <Button size="sm" variant="outline" onClick={reopenAsOpen} disabled={openBusy}>
+                    {openBusy ? 'Opening…' : 'Open Period'}
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" leftIcon={<FileDown size={16} />} onClick={exportCSV}>
                   Export CSV
                 </Button>
