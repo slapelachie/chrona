@@ -162,8 +162,34 @@ export class PayPeriodSyncService {
    * Synchronizes pay period after a shift is deleted
    */
   static async onShiftDeleted(payPeriodId: string): Promise<void> {
-    if (payPeriodId) {
+    if (!payPeriodId) return
+
+    try {
+      // Check whether the pay period still has any shifts or extras
+      const period = await prisma.payPeriod.findUnique({
+        where: { id: payPeriodId },
+        include: { _count: { select: { shifts: true, extras: true } } }
+      })
+
+      if (!period) {
+        return
+      }
+
+      const hasShifts = period._count.shifts > 0
+      const hasExtras = period._count.extras > 0
+
+      // If the final shift was removed and there are no extras, delete the pay period itself
+      // Relaxed: delete regardless of status
+      if (!hasShifts && !hasExtras) {
+        await prisma.payPeriod.delete({ where: { id: payPeriodId } })
+        console.log(`🧹 Deleted empty pay period ${payPeriodId} after final shift removal`)
+        return
+      }
+
+      // Otherwise, keep the period and resync totals/taxes
       await this.syncPayPeriod(payPeriodId)
+    } catch (err) {
+      console.error(`Failed handling onShiftDeleted for pay period ${payPeriodId}:`, err)
     }
   }
 
