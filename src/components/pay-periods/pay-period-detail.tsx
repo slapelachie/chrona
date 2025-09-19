@@ -13,11 +13,8 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import {
-  PayPeriodResponse,
-  TaxCalculationResponse,
-  ShiftResponse,
-} from '@/types'
+import { PayPeriodResponse, TaxCalculationResponse, ShiftResponse } from '@/types'
+import { StatusBadge, statusAccentColor } from './status-badge'
 
 interface Props {
   payPeriodId: string
@@ -405,7 +402,12 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
               style={{ display: 'grid', gap: '1rem' }}
             >
               {/* Overview Summary */}
-              <Card variant="outlined">
+              <Card
+                variant="outlined"
+                style={{
+                  boxShadow: pp ? `inset 0 4px 0 0 ${statusAccentColor(pp.status as any)}` : undefined,
+                }}
+              >
                 <CardHeader>
                   <div
                     style={{
@@ -429,37 +431,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                         Pay Period Summary
                       </h3>
                     </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: 600,
-                          color: isVerified
-                            ? 'var(--color-success)'
-                            : pp.status === 'processing'
-                              ? 'var(--color-warning)'
-                              : pp.status === 'paid'
-                                ? 'var(--color-info)'
-                                : 'var(--color-text-primary)',
-                        }}
-                      >
-                        {isVerified
-                          ? 'Verified'
-                          : pp.status[0].toUpperCase() + pp.status.slice(1)}
-                      </div>
-                    {pp.status === 'processing' && (
-                      <Loader2
-                          size={14}
-                          className="loading-pulse"
-                          style={{ color: 'var(--color-warning)' }}
-                        />
-                      )}
-                    </div>
+                    <StatusBadge status={pp.status as any} size="lg" emphasis />
                   </div>
                 </CardHeader>
                 <CardBody>

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Card, CardBody, CardHeader, Button, Input } from '../ui'
 import { Calendar, DollarSign, Loader2, RefreshCcw } from 'lucide-react'
 import { PayPeriodListItem, PayPeriodsListResponse } from '@/types'
+import { StatusBadge, statusAccentColor } from './status-badge'
 
 type StatusFilter = 'all' | 'open' | 'processing' | 'paid' | 'verified'
 
@@ -54,12 +55,7 @@ export const PayPeriodsList: React.FC = () => {
     return n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
-  const statusChip: Record<Exclude<StatusFilter, 'all'>, { bg: string; fg: string }> = {
-    open: { bg: 'rgba(0,188,212,0.15)', fg: 'var(--color-primary)' },
-    processing: { bg: 'rgba(255,193,7,0.15)', fg: 'var(--color-warning)' },
-    paid: { bg: 'rgba(0,229,255,0.15)', fg: 'var(--color-success)' },
-    verified: { bg: 'rgba(0,229,255,0.15)', fg: 'var(--color-success)' }
-  }
+  // Removed local chip map in favor of shared StatusBadge
 
   return (
     <div className="mobile-container" style={{ display: 'grid', gap: '1rem' }}>
@@ -112,15 +108,28 @@ export const PayPeriodsList: React.FC = () => {
               <Link key={pp.id} href={`/pay-periods/${pp.id}`} style={{ textDecoration: 'none' }}>
                 <div
                   style={{
+                    position: 'relative',
                     border: '1px solid var(--color-border-primary)',
                     background: 'var(--color-bg-secondary)',
                     borderRadius: 12,
-                    padding: '0.875rem',
+                    padding: '0.875rem 0.875rem 0.875rem 0.75rem',
                     display: 'grid',
                     gridTemplateColumns: '1fr auto',
-                    gap: '0.5rem'
+                    gap: '0.5rem',
+                    // left status accent
+                    boxShadow: `inset 4px 0 0 0 ${statusAccentColor(pp.status as Exclude<StatusFilter,'all'>)}`
                   }}
                 >
+                  {/* Ribbon */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                    }}
+                  >
+                    <StatusBadge status={pp.status as Exclude<StatusFilter,'all'>} size="sm" />
+                  </div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <Calendar size={16} style={{ color: 'var(--color-text-tertiary)' }} />
@@ -139,21 +148,7 @@ export const PayPeriodsList: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                    <span
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: 999,
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        ...(pp.status in statusChip
-                          ? { background: statusChip[pp.status as Exclude<StatusFilter,'all'>].bg, color: statusChip[pp.status as Exclude<StatusFilter,'all'>].fg }
-                          : { background: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' })
-                      }}
-                    >
-                      {pp.status === 'verified' ? 'Verified' : pp.status[0].toUpperCase()+pp.status.slice(1)}
-                    </span>
-                  </div>
+                  <div />
                 </div>
               </Link>
             ))}
