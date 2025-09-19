@@ -170,7 +170,6 @@ export async function findOrCreatePayPeriod(
       startDate,
       endDate,
       status: 'open' as PayPeriodStatus,
-      verified: false,
     },
   })
 

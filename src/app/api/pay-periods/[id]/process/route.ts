@@ -117,12 +117,10 @@ export async function POST(
       totalHours: updatedPayPeriod.totalHours?.toString(),
       totalPay: updatedPayPeriod.totalPay?.toString(),
       paygWithholding: updatedPayPeriod.paygWithholding?.toString(),
-      medicareLevy: updatedPayPeriod.medicareLevy?.toString(),
-      hecsHelpAmount: updatedPayPeriod.hecsHelpAmount?.toString(),
+      stslAmount: updatedPayPeriod.stslAmount?.toString(),
       totalWithholdings: updatedPayPeriod.totalWithholdings?.toString(),
       netPay: updatedPayPeriod.netPay?.toString(),
       actualPay: updatedPayPeriod.actualPay?.toString(),
-      verified: updatedPayPeriod.verified,
       createdAt: updatedPayPeriod.createdAt,
       updatedAt: updatedPayPeriod.updatedAt,
       shifts: updatedPayPeriod.shifts.map(shift => ({

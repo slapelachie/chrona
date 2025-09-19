@@ -63,9 +63,7 @@ export async function POST(request: NextRequest) {
         if (body.taxSettings.medicareExemption !== undefined) {
           updateData.medicareExemption = body.taxSettings.medicareExemption
         }
-        if (body.taxSettings.hecsHelpRate !== undefined) {
-          updateData.hecsHelpRate = body.taxSettings.hecsHelpRate ? new Decimal(body.taxSettings.hecsHelpRate) : null
-        }
+        // hecsHelpRate removed – STSL derived from Schedule 8 rates
 
         await prisma.taxSettings.upsert({
           where: { userId: user.id },
@@ -165,76 +163,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Import HECS thresholds
-    if (body.hecsThresholds && body.hecsThresholds.length > 0) {
-      for (let i = 0; i < body.hecsThresholds.length; i++) {
-        const threshold = body.hecsThresholds[i]
-        result.summary.totalProcessed++
-
-        try {
-          const thresholdData = {
-            taxYear: threshold.taxYear,
-            incomeFrom: new Decimal(threshold.incomeFrom),
-            incomeTo: threshold.incomeTo ? new Decimal(threshold.incomeTo) : null,
-            rate: new Decimal(threshold.rate),
-            description: threshold.description || null,
-            isActive: true
-          }
-
-          if (body.options.replaceExisting) {
-            await prisma.hecsThreshold.upsert({
-              where: {
-                taxYear_incomeFrom: {
-                  taxYear: threshold.taxYear,
-                  incomeFrom: new Decimal(threshold.incomeFrom)
-                }
-              },
-              update: thresholdData,
-              create: thresholdData
-            })
-            result.updated.push(`HECS threshold ${threshold.taxYear} ${threshold.incomeFrom}`)
-          } else {
-            const existing = await prisma.hecsThreshold.findUnique({
-              where: {
-                taxYear_incomeFrom: {
-                  taxYear: threshold.taxYear,
-                  incomeFrom: new Decimal(threshold.incomeFrom)
-                }
-              }
-            })
-
-            if (existing) {
-              if (body.options.conflictResolution === 'skip') {
-                result.skipped.push(`HECS threshold ${threshold.taxYear} ${threshold.incomeFrom}: already exists`)
-                result.summary.skipped++
-                continue
-              } else if (body.options.conflictResolution === 'overwrite') {
-                await prisma.hecsThreshold.update({
-                  where: { id: existing.id },
-                  data: thresholdData
-                })
-                result.updated.push(`HECS threshold ${threshold.taxYear} ${threshold.incomeFrom}`)
-              }
-            } else {
-              await prisma.hecsThreshold.create({ data: thresholdData })
-              result.created.push(`HECS threshold ${threshold.taxYear} ${threshold.incomeFrom}`)
-            }
-          }
-
-          result.summary.successful++
-        } catch (error) {
-          console.error(`Error importing HECS threshold ${i}:`, error)
-          result.errors.push({
-            type: 'validation',
-            field: 'hecsThresholds',
-            message: `Failed to import HECS threshold: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            index: i
-          })
-          result.summary.failed++
-          result.success = false
-        }
-      }
-    }
+    // HECS thresholds removed – no import supported
 
     // Import STSL rates
     if (body.stslRates && body.stslRates.length > 0) {
@@ -320,9 +249,6 @@ export async function POST(request: NextRequest) {
         try {
           const configData = {
             taxYear: config.taxYear,
-            medicareRate: new Decimal(config.medicareRate),
-            medicareLowIncomeThreshold: new Decimal(config.medicareLowIncomeThreshold),
-            medicareHighIncomeThreshold: new Decimal(config.medicareHighIncomeThreshold),
             description: config.description || null,
             isActive: true
           }

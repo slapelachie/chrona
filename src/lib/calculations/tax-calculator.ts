@@ -24,24 +24,15 @@ export class TaxCalculator {
   private coefficients: TaxCoefficient[]
   // STSL coefficients (Schedule 8) – using formula A/B only (no versioning/threshold tables)
   private stslRates: StslRate[]
-  private medicareRate: Decimal
-  private medicareLowIncomeThreshold: Decimal
-  private medicareHighIncomeThreshold: Decimal
 
   constructor(
     taxSettings: TaxSettings,
     coefficients: TaxCoefficient[],
-    stslRates: StslRate[] = [],
-    medicareRate: Decimal = new Decimal(0.02), // 2%
-    medicareLowIncomeThreshold: Decimal = new Decimal(26000),
-    medicareHighIncomeThreshold: Decimal = new Decimal(32500)
+    stslRates: StslRate[] = []
   ) {
     this.taxSettings = taxSettings
     this.coefficients = coefficients
     this.stslRates = stslRates
-    this.medicareRate = medicareRate
-    this.medicareLowIncomeThreshold = medicareLowIncomeThreshold
-    this.medicareHighIncomeThreshold = medicareHighIncomeThreshold
   }
 
   /**
@@ -57,10 +48,7 @@ export class TaxCalculator {
       return new TaxCalculator(
         taxSettings,
         taxConfig.coefficients,
-        (taxConfig.stslRates || []).filter(r => r.coefficientA && r.coefficientB),
-        taxConfig.medicareRate,
-        taxConfig.medicareLowIncomeThreshold,
-        taxConfig.medicareHighIncomeThreshold
+        (taxConfig.stslRates || []).filter(r => r.coefficientA && r.coefficientB)
       )
     } catch (error) {
       console.error('Failed to load tax configuration from database, using fallback:', error)
@@ -103,23 +91,18 @@ export class TaxCalculator {
     const paygWithholdingRaw = this.convertFromWeeklyPay(weeklyPaygWithholding, payPeriodType)
     taxLog('payg-raw', { weeklyPaygWithholding: weeklyPaygWithholding.toString(), paygWithholdingRaw: paygWithholdingRaw.toString() })
     
-    // Calculate Medicare levy
-    // Medicare levy is included in PAYG for this product; set to zero
-    const medicareLevyRaw = new Decimal(0)
-    
-    // Calculate STSL (HECS-HELP) component
-    const hecsHelpAmountRaw = this.calculateHecsHelp(grossPay, payPeriodType, yearToDateTax)
-    taxLog('stsl-raw', { hecsHelpAmountRaw: hecsHelpAmountRaw.toString() })
+    // Calculate STSL (HELP) component
+    const stslAmountRaw = this.calculateStsl(grossPay, payPeriodType, yearToDateTax)
+    taxLog('stsl-raw', { stslAmountRaw: stslAmountRaw.toString() })
     
     // Round PAYG and STSL to nearest dollar (half-up)
     const paygWithholding = TimeCalculations.roundToNearestDollar(paygWithholdingRaw)
-    const medicareLevy = TimeCalculations.roundToNearestDollar(medicareLevyRaw)
-    const hecsHelpAmount = TimeCalculations.roundToNearestDollar(hecsHelpAmountRaw)
-    const totalWithholdings = paygWithholding.plus(hecsHelpAmount)
+    const stslAmount = TimeCalculations.roundToNearestDollar(stslAmountRaw)
+    const totalWithholdings = paygWithholding.plus(stslAmount)
     const netPay = grossPay.minus(totalWithholdings)
     taxLog('rounded-values', {
       paygWithholding: paygWithholding.toString(),
-      hecsHelpAmount: hecsHelpAmount.toString(),
+      stslAmount: stslAmount.toString(),
       totalWithholdings: totalWithholdings.toString(),
       netPay: netPay.toString(),
     })
@@ -129,8 +112,7 @@ export class TaxCalculator {
       yearToDateTax,
       grossPay,
       paygWithholding,
-      medicareLevy,
-      hecsHelpAmount
+      stslAmount
     )
     
     return {
@@ -143,8 +125,7 @@ export class TaxCalculator {
         grossPay: TimeCalculations.roundToCents(grossPay),
         // Taxes are whole dollars (floored)
         paygWithholding,
-        medicareLevy,
-        hecsHelpAmount,
+        stslAmount,
         totalWithholdings,
         // Net pay keeps cents and is rounded to two decimals for display
         netPay: TimeCalculations.roundToCents(netPay),
@@ -168,25 +149,22 @@ export class TaxCalculator {
     const taxScale = this.determineTaxScale()
     const weeklyPaygWithholding = this.calculatePaygWithholding(weeklyGrossPay, taxScale)
     const paygWithholdingRaw = this.convertFromWeeklyPay(weeklyPaygWithholding, payPeriodType)
-    const medicareLevyRaw = new Decimal(0)
-    const hecsHelpAmountRaw = this.calculateHecsHelp(
+    const stslAmountRaw = this.calculateStsl(
       grossPay,
       payPeriodType,
       yearToDateTax
     )
 
     const paygWithholding = TimeCalculations.roundToNearestDollar(paygWithholdingRaw)
-    const medicareLevy = TimeCalculations.roundToNearestDollar(medicareLevyRaw)
-    const hecsHelpAmount = TimeCalculations.roundToNearestDollar(hecsHelpAmountRaw)
-    const totalWithholdings = paygWithholding.plus(hecsHelpAmount)
+    const stslAmount = TimeCalculations.roundToNearestDollar(stslAmountRaw)
+    const totalWithholdings = paygWithholding.plus(stslAmount)
     const netPay = grossPay.minus(totalWithholdings)
 
     const updatedYtd = this.updateYearToDate(
       yearToDateTax,
       grossPay,
       paygWithholding,
-      medicareLevy,
-      hecsHelpAmount
+      stslAmount
     )
 
     return {
@@ -194,8 +172,7 @@ export class TaxCalculator {
       breakdown: {
         grossPay: TimeCalculations.roundToCents(grossPay),
         paygWithholding,
-        medicareLevy,
-        hecsHelpAmount,
+        stslAmount,
         totalWithholdings,
         netPay: TimeCalculations.roundToCents(netPay),
       },
@@ -243,19 +220,10 @@ export class TaxCalculator {
   /**
    * Calculate Medicare levy based on annual income thresholds
    */
-  private calculateMedicareLevy(
-    _grossPay: Decimal,
-    _payPeriodType: PayPeriodType,
-    _yearToDateTax: YearToDateTax
-  ): Decimal {
-    // Medicare levy not calculated separately; included in PAYG withholding
-    return new Decimal(0)
-  }
-
   /**
-   * Calculate HECS-HELP repayment amount
+   * Calculate STSL repayment amount (Schedule 8 A/B formula)
    */
-  private calculateHecsHelp(
+  private calculateStsl(
     grossPay: Decimal,
     payPeriodType: PayPeriodType,
     _yearToDateTax: YearToDateTax
@@ -399,19 +367,16 @@ export class TaxCalculator {
     yearToDateTax: YearToDateTax,
     grossPay: Decimal,
     paygWithholding: Decimal,
-    medicareLevy: Decimal,
-    hecsHelpAmount: Decimal
+    stslAmount: Decimal
   ): YearToDateTax {
     return {
       ...yearToDateTax,
       grossIncome: yearToDateTax.grossIncome.plus(grossPay),
       payGWithholding: yearToDateTax.payGWithholding.plus(paygWithholding),
-      medicareLevy: yearToDateTax.medicareLevy.plus(medicareLevy),
-      hecsHelpAmount: yearToDateTax.hecsHelpAmount.plus(hecsHelpAmount),
+      stslAmount: yearToDateTax.stslAmount.plus(stslAmount),
       totalWithholdings: yearToDateTax.totalWithholdings
         .plus(paygWithholding)
-        .plus(medicareLevy)
-        .plus(hecsHelpAmount),
+        .plus(stslAmount),
       lastUpdated: new Date(),
     }
   }
@@ -442,23 +407,4 @@ export const DEFAULT_TAX_COEFFICIENTS: TaxCoefficient[] = [
 /**
  * Default HECS-HELP thresholds for 2024-25 tax year
  */
-export const DEFAULT_HECS_THRESHOLDS: HecsThreshold[] = [
-  { incomeFrom: new Decimal(51550), incomeTo: new Decimal(59518), rate: new Decimal(0.01) }, // 1%
-  { incomeFrom: new Decimal(59518), incomeTo: new Decimal(63090), rate: new Decimal(0.02) }, // 2%
-  { incomeFrom: new Decimal(63090), incomeTo: new Decimal(66662), rate: new Decimal(0.025) }, // 2.5%
-  { incomeFrom: new Decimal(66662), incomeTo: new Decimal(70235), rate: new Decimal(0.03) }, // 3%
-  { incomeFrom: new Decimal(70235), incomeTo: new Decimal(74808), rate: new Decimal(0.035) }, // 3.5%
-  { incomeFrom: new Decimal(74808), incomeTo: new Decimal(79381), rate: new Decimal(0.04) }, // 4%
-  { incomeFrom: new Decimal(79381), incomeTo: new Decimal(84981), rate: new Decimal(0.045) }, // 4.5%
-  { incomeFrom: new Decimal(84981), incomeTo: new Decimal(90554), rate: new Decimal(0.05) }, // 5%
-  { incomeFrom: new Decimal(90554), incomeTo: new Decimal(96127), rate: new Decimal(0.055) }, // 5.5%
-  { incomeFrom: new Decimal(96127), incomeTo: new Decimal(101700), rate: new Decimal(0.06) }, // 6%
-  { incomeFrom: new Decimal(101700), incomeTo: new Decimal(109177), rate: new Decimal(0.065) }, // 6.5%
-  { incomeFrom: new Decimal(109177), incomeTo: new Decimal(116653), rate: new Decimal(0.07) }, // 7%
-  { incomeFrom: new Decimal(116653), incomeTo: new Decimal(124130), rate: new Decimal(0.075) }, // 7.5%
-  { incomeFrom: new Decimal(124130), incomeTo: new Decimal(131607), rate: new Decimal(0.08) }, // 8%
-  { incomeFrom: new Decimal(131607), incomeTo: new Decimal(139083), rate: new Decimal(0.085) }, // 8.5%
-  { incomeFrom: new Decimal(139083), incomeTo: new Decimal(147560), rate: new Decimal(0.09) }, // 9%
-  { incomeFrom: new Decimal(147560), incomeTo: new Decimal(156037), rate: new Decimal(0.095) }, // 9.5%
-  { incomeFrom: new Decimal(156037), incomeTo: null, rate: new Decimal(0.10) }, // 10%
-]
+// No HECS threshold table used in this design; STSL is computed via Schedule 8 coefficients.

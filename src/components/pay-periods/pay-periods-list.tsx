@@ -151,7 +151,7 @@ export const PayPeriodsList: React.FC = () => {
                           : { background: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' })
                       }}
                     >
-                      {pp.verified ? 'Verified' : pp.status[0].toUpperCase()+pp.status.slice(1)}
+                      {pp.status === 'verified' ? 'Verified' : pp.status[0].toUpperCase()+pp.status.slice(1)}
                     </span>
                   </div>
                 </div>
@@ -163,4 +163,3 @@ export const PayPeriodsList: React.FC = () => {
     </div>
   )
 }
-

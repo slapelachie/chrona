@@ -1,9 +1,9 @@
 import { PrismaClient } from '@prisma/client'
 import { Decimal } from 'decimal.js'
-import { 
-  calculateAndUpdateShift, 
-  updateShiftWithCalculation, 
-  fetchShiftBreakPeriods 
+import {
+  calculateAndUpdateShift,
+  updateShiftWithCalculation,
+  fetchShiftBreakPeriods,
 } from '../src/lib/shift-calculation'
 import { PayPeriodSyncService } from '../src/lib/pay-period-sync-service'
 
@@ -37,7 +37,6 @@ async function main() {
       isForeignResident: false,
       hasTaxFileNumber: true,
       medicareExemption: 'none',
-      hecsHelpRate: null,
     },
   })
   console.log(`✅ Created tax settings for user`)
@@ -270,8 +269,12 @@ async function main() {
   const today = new Date()
   const anchor = new Date(Date.UTC(1970, 0, 5, 0, 0, 0, 0)) // Monday UTC
   const dayMs = 24 * 60 * 60 * 1000
-  const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
-  const daysSinceAnchor = Math.floor((todayUTC.getTime() - anchor.getTime()) / dayMs)
+  const todayUTC = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  )
+  const daysSinceAnchor = Math.floor(
+    (todayUTC.getTime() - anchor.getTime()) / dayMs
+  )
   const startDays = daysSinceAnchor - (daysSinceAnchor % 7)
   const payPeriodStart = new Date(anchor.getTime() + startDays * dayMs)
   const payPeriodEnd = new Date(payPeriodStart.getTime() + 6 * dayMs)
@@ -280,9 +283,16 @@ async function main() {
   const currentPayPeriod = await prisma.payPeriod.upsert({
     where: { userId_startDate: { userId: user.id, startDate: payPeriodStart } },
     update: { endDate: payPeriodEnd, status: 'open' },
-    create: { userId: user.id, startDate: payPeriodStart, endDate: payPeriodEnd, status: 'open' },
+    create: {
+      userId: user.id,
+      startDate: payPeriodStart,
+      endDate: payPeriodEnd,
+      status: 'open',
+    },
   })
-  console.log(`✅ Current pay period: ${currentPayPeriod.startDate.toDateString()} - ${currentPayPeriod.endDate.toDateString()}`)
+  console.log(
+    `✅ Current pay period: ${currentPayPeriod.startDate.toDateString()} - ${currentPayPeriod.endDate.toDateString()}`
+  )
 
   // Create sample shifts with various scenarios
   console.log('🕒 Creating sample shifts...')
@@ -342,7 +352,9 @@ async function main() {
   for (const shiftData of shifts) {
     // Determine pay period for each shift based on its own date
     const s = shiftData.startTime
-    const sUTC = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()))
+    const sUTC = new Date(
+      Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate())
+    )
     const sDays = Math.floor((sUTC.getTime() - anchor.getTime()) / dayMs)
     const sStartDays = sDays - (sDays % 7)
     const sPPStart = new Date(anchor.getTime() + sStartDays * dayMs)
@@ -352,17 +364,24 @@ async function main() {
     const shiftPayPeriod = await prisma.payPeriod.upsert({
       where: { userId_startDate: { userId: user.id, startDate: sPPStart } },
       update: { endDate: sPPEnd, status: 'open' },
-      create: { userId: user.id, startDate: sPPStart, endDate: sPPEnd, status: 'open' },
+      create: {
+        userId: user.id,
+        startDate: sPPStart,
+        endDate: sPPEnd,
+        status: 'open',
+      },
     })
 
-    const shift = await prisma.shift.create({ data: { ...shiftData, payPeriodId: shiftPayPeriod.id } })
-    
+    const shift = await prisma.shift.create({
+      data: { ...shiftData, payPeriodId: shiftPayPeriod.id },
+    })
+
     // Calculate pay for the shift (no break periods exist yet)
     const calculation = await calculateAndUpdateShift({
       payGuideId: shift.payGuideId,
       startTime: shift.startTime,
       endTime: shift.endTime,
-      breakPeriods: []
+      breakPeriods: [],
     })
 
     if (calculation) {
@@ -376,7 +395,7 @@ async function main() {
         `⚠️ Created shift without pay calculation: ${shift.startTime.toLocaleString()} - ${shift.endTime.toLocaleString()}`
       )
     }
-    
+
     createdShifts.push(shift)
   }
 
@@ -433,20 +452,20 @@ async function main() {
 
   // Recalculate pay for shifts that now have break periods
   console.log('♻️  Recalculating shift pay with break periods...')
-  const affectedShiftIds = [...new Set(breakPeriods.map(bp => bp.shiftId))]
-  
+  const affectedShiftIds = [...new Set(breakPeriods.map((bp) => bp.shiftId))]
+
   for (const shiftId of affectedShiftIds) {
-    const shift = createdShifts.find(s => s.id === shiftId)
+    const shift = createdShifts.find((s) => s.id === shiftId)
     if (shift) {
       // Fetch break periods for this shift
       const shiftBreakPeriods = await fetchShiftBreakPeriods(shiftId)
-      
+
       // Recalculate pay with break periods
       const calculation = await calculateAndUpdateShift({
         payGuideId: shift.payGuideId,
         startTime: shift.startTime,
         endTime: shift.endTime,
-        breakPeriods: shiftBreakPeriods
+        breakPeriods: shiftBreakPeriods,
       })
 
       if (calculation) {
@@ -462,19 +481,27 @@ async function main() {
   // Demonstrate automatic pay period sync by triggering calculations
   console.log('🔄 Triggering automatic pay period sync and tax calculations...')
   await PayPeriodSyncService.syncPayPeriod(currentPayPeriod.id)
-  
+
   // Fetch the updated pay period to show the results
   const updatedCurrentPayPeriod = await prisma.payPeriod.findUnique({
     where: { id: currentPayPeriod.id },
-    include: { shifts: true }
+    include: { shifts: true },
   })
-  
+
   if (updatedCurrentPayPeriod) {
     console.log(`📊 Current pay period totals after sync:`)
-    console.log(`   Hours: ${updatedCurrentPayPeriod.totalHours?.toFixed(2) || '0'} hours`)
-    console.log(`   Gross Pay: $${updatedCurrentPayPeriod.totalPay?.toFixed(2) || '0'}`)
-    console.log(`   Tax Withholding: $${updatedCurrentPayPeriod.paygWithholding?.toFixed(2) || '0'}`)
-    console.log(`   Net Pay: $${updatedCurrentPayPeriod.netPay?.toFixed(2) || '0'}`)
+    console.log(
+      `   Hours: ${updatedCurrentPayPeriod.totalHours?.toFixed(2) || '0'} hours`
+    )
+    console.log(
+      `   Gross Pay: $${updatedCurrentPayPeriod.totalPay?.toFixed(2) || '0'}`
+    )
+    console.log(
+      `   Tax Withholding: $${updatedCurrentPayPeriod.paygWithholding?.toFixed(2) || '0'}`
+    )
+    console.log(
+      `   Net Pay: $${updatedCurrentPayPeriod.netPay?.toFixed(2) || '0'}`
+    )
   }
 
   // Create previous pay period with completed status
@@ -487,7 +514,9 @@ async function main() {
   previousPayPeriodEnd.setHours(23, 59, 59, 999)
 
   const previousPayPeriod = await prisma.payPeriod.upsert({
-    where: { userId_startDate: { userId: user.id, startDate: previousPayPeriodStart } },
+    where: {
+      userId_startDate: { userId: user.id, startDate: previousPayPeriodStart },
+    },
     update: {
       endDate: previousPayPeriodEnd,
       status: 'paid',
@@ -497,7 +526,6 @@ async function main() {
       totalWithholdings: new Decimal('429.15'),
       netPay: new Decimal('1716.60'),
       actualPay: new Decimal('1716.60'),
-      verified: true,
     },
     create: {
       userId: user.id,
@@ -510,7 +538,6 @@ async function main() {
       totalWithholdings: new Decimal('429.15'),
       netPay: new Decimal('1716.60'),
       actualPay: new Decimal('1716.60'),
-      verified: true,
     },
   })
   console.log(
@@ -520,16 +547,13 @@ async function main() {
   // Seed tax coefficients for 2024-25 tax year
   console.log('💰 Seeding ATO tax coefficients for 2024-25...')
   const taxYear = '2024-25'
-  
+
   // Tax Rate Configuration for 2024-25
   const taxRateConfig = await prisma.taxRateConfig.upsert({
     where: { taxYear },
     update: {},
     create: {
       taxYear,
-      medicareRate: new Decimal('0.02'), // 2%
-      medicareLowIncomeThreshold: new Decimal('26000'),
-      medicareHighIncomeThreshold: new Decimal('32500'),
       description: 'Medicare levy rates and thresholds for 2024-25 tax year',
       isActive: true,
     },
@@ -538,22 +562,94 @@ async function main() {
 
   // Tax Coefficients - Scale 2 (Claimed tax-free threshold - most common)
   const scale2Coefficients = [
-    { earningsFrom: new Decimal(0), earningsTo: new Decimal(371), coefficientA: new Decimal(0), coefficientB: new Decimal(0), description: 'Tax-free threshold bracket' },
-    { earningsFrom: new Decimal(371), earningsTo: new Decimal(515), coefficientA: new Decimal(0.19), coefficientB: new Decimal(70.5385), description: '19% tax bracket' },
-    { earningsFrom: new Decimal(515), earningsTo: new Decimal(721), coefficientA: new Decimal(0.2348), coefficientB: new Decimal(93.4615), description: '23.48% effective rate bracket' },
-    { earningsFrom: new Decimal(721), earningsTo: new Decimal(1282), coefficientA: new Decimal(0.219), coefficientB: new Decimal(82.1154), description: '21.9% effective rate bracket' },
-    { earningsFrom: new Decimal(1282), earningsTo: new Decimal(2307), coefficientA: new Decimal(0.3477), coefficientB: new Decimal(247.1154), description: '34.77% effective rate bracket' },
-    { earningsFrom: new Decimal(2307), earningsTo: null, coefficientA: new Decimal(0.45), coefficientB: new Decimal(482.6731), description: '45% top tax bracket' },
+    {
+      earningsFrom: new Decimal(0),
+      earningsTo: new Decimal(371),
+      coefficientA: new Decimal(0),
+      coefficientB: new Decimal(0),
+      description: 'Tax-free threshold bracket',
+    },
+    {
+      earningsFrom: new Decimal(371),
+      earningsTo: new Decimal(515),
+      coefficientA: new Decimal(0.19),
+      coefficientB: new Decimal(70.5385),
+      description: '19% tax bracket',
+    },
+    {
+      earningsFrom: new Decimal(515),
+      earningsTo: new Decimal(721),
+      coefficientA: new Decimal(0.2348),
+      coefficientB: new Decimal(93.4615),
+      description: '23.48% effective rate bracket',
+    },
+    {
+      earningsFrom: new Decimal(721),
+      earningsTo: new Decimal(1282),
+      coefficientA: new Decimal(0.219),
+      coefficientB: new Decimal(82.1154),
+      description: '21.9% effective rate bracket',
+    },
+    {
+      earningsFrom: new Decimal(1282),
+      earningsTo: new Decimal(2307),
+      coefficientA: new Decimal(0.3477),
+      coefficientB: new Decimal(247.1154),
+      description: '34.77% effective rate bracket',
+    },
+    {
+      earningsFrom: new Decimal(2307),
+      earningsTo: null,
+      coefficientA: new Decimal(0.45),
+      coefficientB: new Decimal(482.6731),
+      description: '45% top tax bracket',
+    },
   ]
 
   // Tax Coefficients - Scale 1 (Did not claim tax-free threshold)
   const scale1Coefficients = [
-    { earningsFrom: new Decimal(0), earningsTo: new Decimal(88), coefficientA: new Decimal(0.19), coefficientB: new Decimal(0), description: '19% from first dollar' },
-    { earningsFrom: new Decimal(88), earningsTo: new Decimal(371), coefficientA: new Decimal(0.2348), coefficientB: new Decimal(12.7692), description: '23.48% effective rate bracket' },
-    { earningsFrom: new Decimal(371), earningsTo: new Decimal(515), coefficientA: new Decimal(0.219), coefficientB: new Decimal(6.5385), description: '21.9% effective rate bracket' },
-    { earningsFrom: new Decimal(515), earningsTo: new Decimal(721), coefficientA: new Decimal(0.3477), coefficientB: new Decimal(72.5385), description: '34.77% effective rate bracket' },
-    { earningsFrom: new Decimal(721), earningsTo: new Decimal(1282), coefficientA: new Decimal(0.45), coefficientB: new Decimal(146.0769), description: '45% tax bracket' },
-    { earningsFrom: new Decimal(1282), earningsTo: null, coefficientA: new Decimal(0.45), coefficientB: new Decimal(146.0769), description: '45% top tax bracket' },
+    {
+      earningsFrom: new Decimal(0),
+      earningsTo: new Decimal(88),
+      coefficientA: new Decimal(0.19),
+      coefficientB: new Decimal(0),
+      description: '19% from first dollar',
+    },
+    {
+      earningsFrom: new Decimal(88),
+      earningsTo: new Decimal(371),
+      coefficientA: new Decimal(0.2348),
+      coefficientB: new Decimal(12.7692),
+      description: '23.48% effective rate bracket',
+    },
+    {
+      earningsFrom: new Decimal(371),
+      earningsTo: new Decimal(515),
+      coefficientA: new Decimal(0.219),
+      coefficientB: new Decimal(6.5385),
+      description: '21.9% effective rate bracket',
+    },
+    {
+      earningsFrom: new Decimal(515),
+      earningsTo: new Decimal(721),
+      coefficientA: new Decimal(0.3477),
+      coefficientB: new Decimal(72.5385),
+      description: '34.77% effective rate bracket',
+    },
+    {
+      earningsFrom: new Decimal(721),
+      earningsTo: new Decimal(1282),
+      coefficientA: new Decimal(0.45),
+      coefficientB: new Decimal(146.0769),
+      description: '45% tax bracket',
+    },
+    {
+      earningsFrom: new Decimal(1282),
+      earningsTo: null,
+      coefficientA: new Decimal(0.45),
+      coefficientB: new Decimal(146.0769),
+      description: '45% top tax bracket',
+    },
   ]
 
   // Insert Scale 2 coefficients
@@ -604,67 +700,87 @@ async function main() {
     })
   }
 
-  console.log(`✅ Created ${scale1Coefficients.length + scale2Coefficients.length} tax coefficients`)
-
-  // HECS-HELP thresholds for 2024-25
-  console.log('🎓 Seeding HECS-HELP thresholds for 2024-25...')
-  const hecsThresholds = [
-    { incomeFrom: new Decimal(51550), incomeTo: new Decimal(59518), rate: new Decimal(0.01), description: '1% repayment rate' },
-    { incomeFrom: new Decimal(59518), incomeTo: new Decimal(63090), rate: new Decimal(0.02), description: '2% repayment rate' },
-    { incomeFrom: new Decimal(63090), incomeTo: new Decimal(66662), rate: new Decimal(0.025), description: '2.5% repayment rate' },
-    { incomeFrom: new Decimal(66662), incomeTo: new Decimal(70235), rate: new Decimal(0.03), description: '3% repayment rate' },
-    { incomeFrom: new Decimal(70235), incomeTo: new Decimal(74808), rate: new Decimal(0.035), description: '3.5% repayment rate' },
-    { incomeFrom: new Decimal(74808), incomeTo: new Decimal(79381), rate: new Decimal(0.04), description: '4% repayment rate' },
-    { incomeFrom: new Decimal(79381), incomeTo: new Decimal(84981), rate: new Decimal(0.045), description: '4.5% repayment rate' },
-    { incomeFrom: new Decimal(84981), incomeTo: new Decimal(90554), rate: new Decimal(0.05), description: '5% repayment rate' },
-    { incomeFrom: new Decimal(90554), incomeTo: new Decimal(96127), rate: new Decimal(0.055), description: '5.5% repayment rate' },
-    { incomeFrom: new Decimal(96127), incomeTo: new Decimal(101700), rate: new Decimal(0.06), description: '6% repayment rate' },
-    { incomeFrom: new Decimal(101700), incomeTo: new Decimal(109177), rate: new Decimal(0.065), description: '6.5% repayment rate' },
-    { incomeFrom: new Decimal(109177), incomeTo: new Decimal(116653), rate: new Decimal(0.07), description: '7% repayment rate' },
-    { incomeFrom: new Decimal(116653), incomeTo: new Decimal(124130), rate: new Decimal(0.075), description: '7.5% repayment rate' },
-    { incomeFrom: new Decimal(124130), incomeTo: new Decimal(131607), rate: new Decimal(0.08), description: '8% repayment rate' },
-    { incomeFrom: new Decimal(131607), incomeTo: new Decimal(139083), rate: new Decimal(0.085), description: '8.5% repayment rate' },
-    { incomeFrom: new Decimal(139083), incomeTo: new Decimal(147560), rate: new Decimal(0.09), description: '9% repayment rate' },
-    { incomeFrom: new Decimal(147560), incomeTo: new Decimal(156037), rate: new Decimal(0.095), description: '9.5% repayment rate' },
-    { incomeFrom: new Decimal(156037), incomeTo: null, rate: new Decimal(0.10), description: '10% maximum repayment rate' },
-  ]
-
-  for (const threshold of hecsThresholds) {
-    await prisma.hecsThreshold.upsert({
-      where: {
-        taxYear_incomeFrom: {
-          taxYear,
-          incomeFrom: threshold.incomeFrom,
-        },
-      },
-      update: {},
-      create: {
-        taxYear,
-        incomeFrom: threshold.incomeFrom,
-        incomeTo: threshold.incomeTo,
-        rate: threshold.rate,
-        description: threshold.description,
-        isActive: true,
-      },
-    })
-  }
-
-  console.log(`✅ Created ${hecsThresholds.length} HECS-HELP thresholds`)
+  console.log(
+    `✅ Created ${scale1Coefficients.length + scale2Coefficients.length} tax coefficients`
+  )
 
   // STSL (Schedule 8) A/B formula rates for 2024-25 (both groups)
   console.log('🎓 Seeding STSL Schedule 8 A/B component rates for 2024-25...')
-  type SeedStsl = { scale: 'WITH_TFT_OR_FR' | 'NO_TFT'; from: Decimal; to: Decimal | null; a: Decimal; b: Decimal; description?: string }
+  type SeedStsl = {
+    scale: 'WITH_TFT_OR_FR' | 'NO_TFT'
+    from: Decimal
+    to: Decimal | null
+    a: Decimal
+    b: Decimal
+    description?: string
+  }
   const stslRates: SeedStsl[] = [
     // WITH_TFT_OR_FR group
-    { scale: 'WITH_TFT_OR_FR', from: new Decimal(0),     to: new Decimal(1288), a: new Decimal(0),    b: new Decimal(0),        description: 'Below 1288 – no component' },
-    { scale: 'WITH_TFT_OR_FR', from: new Decimal(1288),  to: new Decimal(2403), a: new Decimal(0.15), b: new Decimal(193.2692), description: 'Mid bracket' },
-    { scale: 'WITH_TFT_OR_FR', from: new Decimal(2403),  to: new Decimal(3447), a: new Decimal(0.17), b: new Decimal(241.3462), description: 'Upper mid bracket' },
-    { scale: 'WITH_TFT_OR_FR', from: new Decimal(3447),  to: null,               a: new Decimal(0.10), b: new Decimal(0),        description: 'Top bracket' },
+    {
+      scale: 'WITH_TFT_OR_FR',
+      from: new Decimal(0),
+      to: new Decimal(1288),
+      a: new Decimal(0),
+      b: new Decimal(0),
+      description: 'Below 1288 – no component',
+    },
+    {
+      scale: 'WITH_TFT_OR_FR',
+      from: new Decimal(1288),
+      to: new Decimal(2403),
+      a: new Decimal(0.15),
+      b: new Decimal(193.2692),
+      description: 'Mid bracket',
+    },
+    {
+      scale: 'WITH_TFT_OR_FR',
+      from: new Decimal(2403),
+      to: new Decimal(3447),
+      a: new Decimal(0.17),
+      b: new Decimal(241.3462),
+      description: 'Upper mid bracket',
+    },
+    {
+      scale: 'WITH_TFT_OR_FR',
+      from: new Decimal(3447),
+      to: null,
+      a: new Decimal(0.1),
+      b: new Decimal(0),
+      description: 'Top bracket',
+    },
     // NO_TFT group – seed non-zero brackets to enable testing
-    { scale: 'NO_TFT',         from: new Decimal(0),     to: new Decimal(1000), a: new Decimal(0),    b: new Decimal(0),        description: 'Below 1000 – no component' },
-    { scale: 'NO_TFT',         from: new Decimal(1000),  to: new Decimal(2000), a: new Decimal(0.12), b: new Decimal(120),      description: 'Mid bracket' },
-    { scale: 'NO_TFT',         from: new Decimal(2000),  to: new Decimal(3200), a: new Decimal(0.16), b: new Decimal(220),      description: 'Upper mid bracket' },
-    { scale: 'NO_TFT',         from: new Decimal(3200),  to: null,               a: new Decimal(0.10), b: new Decimal(0),        description: 'Top bracket' },
+    {
+      scale: 'NO_TFT',
+      from: new Decimal(0),
+      to: new Decimal(1000),
+      a: new Decimal(0),
+      b: new Decimal(0),
+      description: 'Below 1000 – no component',
+    },
+    {
+      scale: 'NO_TFT',
+      from: new Decimal(1000),
+      to: new Decimal(2000),
+      a: new Decimal(0.12),
+      b: new Decimal(120),
+      description: 'Mid bracket',
+    },
+    {
+      scale: 'NO_TFT',
+      from: new Decimal(2000),
+      to: new Decimal(3200),
+      a: new Decimal(0.16),
+      b: new Decimal(220),
+      description: 'Upper mid bracket',
+    },
+    {
+      scale: 'NO_TFT',
+      from: new Decimal(3200),
+      to: null,
+      a: new Decimal(0.1),
+      b: new Decimal(0),
+      description: 'Top bracket',
+    },
   ]
 
   let stslUpserts = 0
@@ -675,7 +791,7 @@ async function main() {
           taxYear,
           scale: r.scale,
           earningsFrom: r.from,
-        }
+        },
       },
       update: {
         earningsTo: r.to,
@@ -693,7 +809,7 @@ async function main() {
         coefficientB: r.b,
         description: r.description,
         isActive: true,
-      }
+      },
     })
     stslUpserts++
   }
@@ -709,8 +825,9 @@ async function main() {
   console.log(`   🕒 Shifts: ${6}`)
   console.log(`   ☕ Break Periods: ${7}`)
   console.log(`   📅 Pay Periods: ${2}`)
-  console.log(`   🧮 Tax Coefficients: ${scale1Coefficients.length + scale2Coefficients.length}`)
-  console.log(`   🎓 HECS-HELP Thresholds: ${hecsThresholds.length}`)
+  console.log(
+    `   🧮 Tax Coefficients: ${scale1Coefficients.length + scale2Coefficients.length}`
+  )
   console.log(`   🎓 STSL A/B Rows: ${stslUpserts}`)
   console.log(`   ⚙️  Tax Rate Configs: ${1}`)
 }

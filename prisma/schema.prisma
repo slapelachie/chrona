@@ -236,7 +236,7 @@ model PayPeriod {
   endDate     DateTime // End of pay period (23:59:59 UTC)
   
   // Status tracking
-  status      String   @default("open") // "open", "processing", "paid", "verified"
+  status      String   @default("open") // "open", "processing", "verified"
   
   // Calculated totals (cached)
   totalHours  Decimal? // 76.5 hours
@@ -244,14 +244,12 @@ model PayPeriod {
   
   // Tax calculations (added for tax engine)
   paygWithholding  Decimal? // PAYG tax withheld
-  medicareLevy     Decimal? // Medicare levy amount
-  hecsHelpAmount   Decimal? // HECS-HELP repayment amount
+  stslAmount   Decimal? // HECS-HELP repayment amount
   totalWithholdings Decimal? // Total tax withholdings
   netPay           Decimal? // Net pay after tax
   
   // Verification against actual pay
   actualPay   Decimal? // What was actually paid
-  verified    Boolean  @default(false)
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -291,7 +289,6 @@ model TaxSettings {
   isForeignResident       Boolean  @default(false)
   hasTaxFileNumber        Boolean  @default(true)
   medicareExemption       String   @default("none") // "none", "half", "full"
-  hecsHelpRate            Decimal? // e.g., 0.01 for 1% HECS rate
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -308,8 +305,7 @@ model YearToDateTax {
   taxYear           String   // "2024-25" format
   grossIncome       Decimal  @default(0)
   payGWithholding   Decimal  @default(0)
-  medicareLevy      Decimal  @default(0)
-  hecsHelpAmount    Decimal  @default(0)
+  stslAmount        Decimal  @default(0)
   totalWithholdings Decimal  @default(0)
   lastUpdated       DateTime @default(now())
   createdAt         DateTime @default(now())
@@ -341,23 +337,6 @@ model TaxCoefficient {
   @@map("tax_coefficients")
 }
 
-// HECS-HELP repayment thresholds and rates
-model HecsThreshold {
-  id          String   @id @default(cuid())
-  taxYear     String   // "2024-25" format
-  incomeFrom  Decimal  // Annual income threshold (lower bound)
-  incomeTo    Decimal? // Annual income threshold (upper bound, null for highest bracket)
-  rate        Decimal  // Repayment rate as decimal (e.g., 0.01 for 1%)
-  description String?  // Optional description
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([taxYear, incomeFrom]) // Prevent duplicate thresholds
-  @@index([taxYear, isActive])
-  @@map("hecs_thresholds")
-}
-
 // Study and training support loans (STSL) component rates (Schedule 8)
 model StslRate {
   id          String   @id @default(cuid())
@@ -383,9 +362,6 @@ model StslRate {
 model TaxRateConfig {
   id                           String   @id @default(cuid())
   taxYear                      String   @unique // "2024-25" format
-  medicareRate                 Decimal  @default(0.02) // 2%
-  medicareLowIncomeThreshold   Decimal  @default(26000)
-  medicareHighIncomeThreshold  Decimal  @default(32500)
   description                  String?
   isActive                     Boolean  @default(true)
   createdAt                    DateTime @default(now())

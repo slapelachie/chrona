@@ -54,7 +54,6 @@ export async function POST(request: NextRequest) {
           startDate,
           endDate: calculatePayPeriod(s.startTime, newPayPeriodType).endDate,
           status: 'open',
-          verified: false,
         }
       })
       if (s.payPeriodId !== target.id) {

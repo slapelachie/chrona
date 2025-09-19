@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
       isForeignResident: taxSettings.isForeignResident,
       hasTaxFileNumber: taxSettings.hasTaxFileNumber,
       medicareExemption: taxSettings.medicareExemption,
-      hecsHelpRate: taxSettings.hecsHelpRate?.toString() || undefined,
       createdAt: taxSettings.createdAt,
       updatedAt: taxSettings.updatedAt,
     }
@@ -74,16 +73,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (body.hecsHelpRate !== undefined && body.hecsHelpRate !== null) {
-      try {
-        const hecsRate = new Decimal(body.hecsHelpRate)
-        if (hecsRate.lt(0) || hecsRate.gt(0.10)) {
-          validator.addError('hecsHelpRate', 'HECS-HELP rate must be between 0% and 10%')
-        }
-      } catch {
-        validator.addError('hecsHelpRate', 'HECS-HELP rate must be a valid decimal number')
-      }
-    }
+    // hecsHelpRate removed – no validation
 
     if (!validator.isValid()) {
       return NextResponse.json(
@@ -123,9 +113,7 @@ export async function POST(request: NextRequest) {
       updateData.medicareExemption = body.medicareExemption
     }
     
-    if (body.hecsHelpRate !== undefined) {
-      updateData.hecsHelpRate = body.hecsHelpRate ? new Decimal(body.hecsHelpRate) : null
-    }
+    // hecsHelpRate removed
 
     // Update tax settings
     const taxSettings = await PayPeriodTaxService.updateUserTaxSettings(user.id, updateData)
@@ -138,7 +126,6 @@ export async function POST(request: NextRequest) {
       isForeignResident: taxSettings.isForeignResident,
       hasTaxFileNumber: taxSettings.hasTaxFileNumber,
       medicareExemption: taxSettings.medicareExemption,
-      hecsHelpRate: taxSettings.hecsHelpRate?.toString() || undefined,
       createdAt: taxSettings.createdAt,
       updatedAt: taxSettings.updatedAt,
     }
@@ -183,16 +170,7 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    if (body.hecsHelpRate !== undefined && body.hecsHelpRate !== null) {
-      try {
-        const hecsRate = new Decimal(body.hecsHelpRate)
-        if (hecsRate.lt(0) || hecsRate.gt(0.10)) {
-          validator.addError('hecsHelpRate', 'HECS-HELP rate must be between 0% and 10%')
-        }
-      } catch {
-        validator.addError('hecsHelpRate', 'HECS-HELP rate must be a valid decimal number')
-      }
-    }
+    // hecsHelpRate removed – no validation
 
     if (!validator.isValid()) {
       return NextResponse.json(
@@ -232,9 +210,7 @@ export async function PUT(request: NextRequest) {
       updateData.medicareExemption = body.medicareExemption
     }
     
-    if (body.hecsHelpRate !== undefined) {
-      updateData.hecsHelpRate = body.hecsHelpRate ? new Decimal(body.hecsHelpRate) : null
-    }
+    // hecsHelpRate removed
 
     // Update tax settings
     const taxSettings = await PayPeriodTaxService.updateUserTaxSettings(user.id, updateData)
@@ -247,7 +223,6 @@ export async function PUT(request: NextRequest) {
       isForeignResident: taxSettings.isForeignResident,
       hasTaxFileNumber: taxSettings.hasTaxFileNumber,
       medicareExemption: taxSettings.medicareExemption,
-      hecsHelpRate: taxSettings.hecsHelpRate?.toString() || undefined,
       createdAt: taxSettings.createdAt,
       updatedAt: taxSettings.updatedAt,
     }

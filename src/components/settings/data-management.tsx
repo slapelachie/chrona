@@ -214,7 +214,6 @@ export const DataManagement: React.FC = () => {
           requestData = {
             taxSettings: json.taxSettings,
             taxCoefficients: json.taxCoefficients,
-            hecsThresholds: json.hecsThresholds,
             stslRates: json.stslRates,
             taxRateConfigs: json.taxRateConfigs,
             options: {

@@ -117,12 +117,10 @@ export async function GET(request: NextRequest) {
         totalHours: payPeriod.totalHours?.toString(),
         totalPay: payPeriod.totalPay?.toString(),
         paygWithholding: payPeriod.paygWithholding?.toString(),
-        medicareLevy: payPeriod.medicareLevy?.toString(),
-        hecsHelpAmount: payPeriod.hecsHelpAmount?.toString(),
+        stslAmount: payPeriod.stslAmount?.toString(),
         totalWithholdings: payPeriod.totalWithholdings?.toString(),
         netPay: payPeriod.netPay?.toString(),
         actualPay: payPeriod.actualPay?.toString(),
-        verified: payPeriod.verified,
         createdAt: payPeriod.createdAt,
         updatedAt: payPeriod.updatedAt,
         shifts: (payPeriod as any).shifts?.map((shift: any) => ({
@@ -154,7 +152,6 @@ export async function GET(request: NextRequest) {
         totalHours: payPeriod.totalHours?.toString(),
         totalPay: payPeriod.totalPay?.toString(),
         netPay: payPeriod.netPay?.toString(),
-        verified: payPeriod.verified,
         shiftsCount: (payPeriod as any)._count.shifts,
       }))
 
@@ -268,7 +265,6 @@ export async function POST(request: NextRequest) {
         startDate,
         endDate,
         status: body.status || 'open',
-        verified: false,
       },
     })
 
@@ -282,12 +278,10 @@ export async function POST(request: NextRequest) {
       totalHours: payPeriod.totalHours?.toString(),
       totalPay: payPeriod.totalPay?.toString(),
       paygWithholding: payPeriod.paygWithholding?.toString(),
-      medicareLevy: payPeriod.medicareLevy?.toString(),
-      hecsHelpAmount: payPeriod.hecsHelpAmount?.toString(),
+      stslAmount: payPeriod.stslAmount?.toString(),
       totalWithholdings: payPeriod.totalWithholdings?.toString(),
       netPay: payPeriod.netPay?.toString(),
       actualPay: payPeriod.actualPay?.toString(),
-      verified: payPeriod.verified,
       createdAt: payPeriod.createdAt,
       updatedAt: payPeriod.updatedAt,
     }

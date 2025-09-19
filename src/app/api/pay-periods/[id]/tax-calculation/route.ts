@@ -154,8 +154,7 @@ export async function GET(
       breakdown: {
         grossPay: payPeriod.totalPay,
         paygWithholding: payPeriod.paygWithholding || new Decimal(0),
-        medicareLevy: payPeriod.medicareLevy || new Decimal(0),
-        hecsHelpAmount: payPeriod.hecsHelpAmount || new Decimal(0),
+        stslAmount: payPeriod.stslAmount || new Decimal(0),
         totalWithholdings: payPeriod.totalWithholdings || new Decimal(0),
         netPay: payPeriod.netPay || payPeriod.totalPay,
       },

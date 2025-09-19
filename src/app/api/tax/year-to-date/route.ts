@@ -39,12 +39,8 @@ export async function GET(request: NextRequest) {
       ? yearToDateTax.payGWithholding.div(yearToDateTax.grossIncome).times(100)
       : new Decimal(0)
 
-    const effectiveMedicareRate = yearToDateTax.grossIncome.gt(0) 
-      ? yearToDateTax.medicareLevy.div(yearToDateTax.grossIncome).times(100)
-      : new Decimal(0)
-
-    const effectiveHecsRate = yearToDateTax.grossIncome.gt(0) 
-      ? yearToDateTax.hecsHelpAmount.div(yearToDateTax.grossIncome).times(100)
+    const effectiveStslRate = yearToDateTax.grossIncome.gt(0) 
+      ? yearToDateTax.stslAmount.div(yearToDateTax.grossIncome).times(100)
       : new Decimal(0)
 
     const effectiveTotalWithholdingRate = yearToDateTax.grossIncome.gt(0) 
@@ -94,8 +90,7 @@ export async function GET(request: NextRequest) {
       yearToDate: {
         grossIncome: yearToDateTax.grossIncome.toString(),
         payGWithholding: yearToDateTax.payGWithholding.toString(),
-        medicareLevy: yearToDateTax.medicareLevy.toString(),
-        hecsHelpAmount: yearToDateTax.hecsHelpAmount.toString(),
+        stslAmount: yearToDateTax.stslAmount.toString(),
         totalWithholdings: yearToDateTax.totalWithholdings.toString(),
         netIncome: yearToDateTax.grossIncome.minus(yearToDateTax.totalWithholdings).toString(),
       },
@@ -106,8 +101,7 @@ export async function GET(request: NextRequest) {
       },
       effectiveRates: {
         payGWithholdingRate: effectiveTaxRate.toFixed(2) + '%',
-        medicareRate: effectiveMedicareRate.toFixed(2) + '%',
-        hecsHelpRate: effectiveHecsRate.toFixed(2) + '%',
+        stslRate: effectiveStslRate.toFixed(2) + '%',
         totalWithholdingRate: effectiveTotalWithholdingRate.toFixed(2) + '%',
       },
       projections: {
@@ -120,8 +114,6 @@ export async function GET(request: NextRequest) {
         claimedTaxFreeThreshold: taxSettings.claimedTaxFreeThreshold,
         isForeignResident: taxSettings.isForeignResident,
         medicareExemption: taxSettings.medicareExemption,
-        hasHecsHelp: !!taxSettings.hecsHelpRate,
-        hecsHelpRate: taxSettings.hecsHelpRate ? (taxSettings.hecsHelpRate.times(100).toFixed(1) + '%') : null,
       },
     }
 

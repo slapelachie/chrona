@@ -98,12 +98,10 @@ export interface PayPeriod {
   totalHours?: Decimal
   totalPay?: Decimal
   paygWithholding?: Decimal
-  medicareLevy?: Decimal
-  hecsHelpAmount?: Decimal
+  stslAmount?: Decimal
   totalWithholdings?: Decimal
   netPay?: Decimal
   actualPay?: Decimal
-  verified: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -377,12 +375,20 @@ export interface PublicHolidayResponse
 
 // Pay Period API Types
 export interface PayPeriodResponse
-  extends Omit<PayPeriod, 'totalHours' | 'totalPay' | 'paygWithholding' | 'medicareLevy' | 'hecsHelpAmount' | 'totalWithholdings' | 'netPay' | 'actualPay'> {
+  extends Omit<
+    PayPeriod,
+    | 'totalHours'
+    | 'totalPay'
+    | 'paygWithholding'
+    | 'stslAmount'
+    | 'totalWithholdings'
+    | 'netPay'
+    | 'actualPay'
+  > {
   totalHours?: string
   totalPay?: string
   paygWithholding?: string
-  medicareLevy?: string
-  hecsHelpAmount?: string
+  stslAmount?: string
   totalWithholdings?: string
   netPay?: string
   actualPay?: string
@@ -390,7 +396,8 @@ export interface PayPeriodResponse
   extras?: PayPeriodExtraResponse[]
 }
 
-export interface PayPeriodExtraResponse extends Omit<PayPeriodExtra, 'amount' | 'createdAt' | 'updatedAt'> {
+export interface PayPeriodExtraResponse
+  extends Omit<PayPeriodExtra, 'amount' | 'createdAt' | 'updatedAt'> {
   amount: string
   createdAt: string
   updatedAt: string
@@ -407,7 +414,6 @@ export interface UpdatePayPeriodRequest {
   endDate?: string // ISO string - Allow date corrections
   status?: PayPeriodStatus // Allow status transitions
   actualPay?: string // For pay verification (Decimal as string)
-  verified?: boolean // For marking as verified
 }
 
 export interface PayPeriodListItem {
@@ -418,7 +424,6 @@ export interface PayPeriodListItem {
   totalHours?: string
   totalPay?: string
   netPay?: string
-  verified: boolean
   shiftsCount?: number // Count of shifts in period
 }
 
@@ -438,7 +443,6 @@ export interface CreateTaxSettingsRequest {
   isForeignResident?: boolean
   hasTaxFileNumber?: boolean
   medicareExemption?: 'none' | 'half' | 'full'
-  hecsHelpRate?: string // Decimal as string
 }
 
 export interface UpdateTaxSettingsRequest {
@@ -446,12 +450,9 @@ export interface UpdateTaxSettingsRequest {
   isForeignResident?: boolean
   hasTaxFileNumber?: boolean
   medicareExemption?: 'none' | 'half' | 'full'
-  hecsHelpRate?: string // Decimal as string
 }
 
-export interface TaxSettingsResponse extends Omit<TaxSettings, 'hecsHelpRate'> {
-  hecsHelpRate?: string // Decimal as string
-}
+export interface TaxSettingsResponse extends TaxSettings {}
 
 // Tax Calculation API Types
 export interface TaxCalculationRequest {
@@ -665,7 +666,13 @@ export interface AppliedOvertime {
 // TAX CALCULATION TYPES
 // =============================================================================
 
-export type TaxScale = 'scale1' | 'scale2' | 'scale3' | 'scale4' | 'scale5' | 'scale6'
+export type TaxScale =
+  | 'scale1'
+  | 'scale2'
+  | 'scale3'
+  | 'scale4'
+  | 'scale5'
+  | 'scale6'
 
 export interface TaxSettings {
   id: string
@@ -674,7 +681,6 @@ export interface TaxSettings {
   isForeignResident: boolean
   hasTaxFileNumber: boolean
   medicareExemption: 'none' | 'half' | 'full'
-  hecsHelpRate?: Decimal | null // e.g., 0.01 for 1%
   createdAt: Date
   updatedAt: Date
 }
@@ -696,8 +702,7 @@ export interface TaxCalculationResult {
   breakdown: {
     grossPay: Decimal
     paygWithholding: Decimal
-    medicareLevy: Decimal
-    hecsHelpAmount: Decimal
+    stslAmount: Decimal
     totalWithholdings: Decimal
     netPay: Decimal
   }
@@ -714,8 +719,7 @@ export interface YearToDateTax {
   taxYear: string // e.g., "2024-25"
   grossIncome: Decimal
   payGWithholding: Decimal
-  medicareLevy: Decimal
-  hecsHelpAmount: Decimal
+  stslAmount: Decimal
   totalWithholdings: Decimal
   lastUpdated: Date
   createdAt: Date
@@ -725,18 +729,8 @@ export interface YearToDateTax {
 // Tax rate configuration for ATO compliance
 export interface TaxRateConfig {
   taxYear: string
-  medicareRate: Decimal // 0.02 for 2%
-  medicareLowIncomeThreshold: Decimal
-  medicareHighIncomeThreshold: Decimal
-  hecsHelpThresholds: HecsThreshold[]
   stslRates?: StslRate[]
   coefficients: TaxCoefficient[]
-}
-
-export interface HecsThreshold {
-  incomeFrom: Decimal
-  incomeTo: Decimal | null
-  rate: Decimal // e.g., 0.01 for 1%
 }
 
 // STSL component rates (Schedule 8), two scales:
@@ -851,7 +845,6 @@ export interface ExportTaxDataResponse {
     isForeignResident: boolean
     hasTaxFileNumber: boolean
     medicareExemption: 'none' | 'half' | 'full'
-    hecsHelpRate?: string
   }
   taxCoefficients: Array<{
     taxYear: string
@@ -860,14 +853,6 @@ export interface ExportTaxDataResponse {
     earningsTo?: string
     coefficientA: string
     coefficientB: string
-    description?: string
-    isActive: boolean
-  }>
-  hecsThresholds: Array<{
-    taxYear: string
-    incomeFrom: string
-    incomeTo?: string
-    rate: string
     description?: string
     isActive: boolean
   }>
@@ -883,9 +868,6 @@ export interface ExportTaxDataResponse {
   }>
   taxRateConfigs: Array<{
     taxYear: string
-    medicareRate: string
-    medicareLowIncomeThreshold: string
-    medicareHighIncomeThreshold: string
     description?: string
     isActive: boolean
   }>
@@ -960,7 +942,6 @@ export interface ImportTaxDataRequest {
     isForeignResident?: boolean
     hasTaxFileNumber?: boolean
     medicareExemption?: 'none' | 'half' | 'full'
-    hecsHelpRate?: string
   }
   taxCoefficients?: Array<{
     taxYear: string
@@ -969,13 +950,6 @@ export interface ImportTaxDataRequest {
     earningsTo?: string
     coefficientA: string
     coefficientB: string
-    description?: string
-  }>
-  hecsThresholds?: Array<{
-    taxYear: string
-    incomeFrom: string
-    incomeTo?: string
-    rate: string
     description?: string
   }>
   stslRates?: Array<{
@@ -989,9 +963,6 @@ export interface ImportTaxDataRequest {
   }>
   taxRateConfigs?: Array<{
     taxYear: string
-    medicareRate: string
-    medicareLowIncomeThreshold: string
-    medicareHighIncomeThreshold: string
     description?: string
   }>
   options: {

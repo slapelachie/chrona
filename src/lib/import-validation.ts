@@ -242,16 +242,7 @@ export async function validateTaxDataImport(request: ImportTaxDataRequest): Prom
       validator.addError('validation', 'taxSettings.medicareExemption', 'Medicare exemption must be none, half, or full')
     }
 
-    if (settings.hecsHelpRate !== undefined && settings.hecsHelpRate !== null) {
-      try {
-        const rate = new Decimal(settings.hecsHelpRate)
-        if (rate.lt(0) || rate.gt(0.10)) {
-          validator.addError('validation', 'taxSettings.hecsHelpRate', 'HECS-HELP rate must be between 0% and 10%')
-        }
-      } catch {
-        validator.addError('validation', 'taxSettings.hecsHelpRate', 'HECS-HELP rate must be a valid decimal number')
-      }
-    }
+    // hecsHelpRate removed – no validation
   }
 
   // Validate tax coefficients
@@ -276,25 +267,7 @@ export async function validateTaxDataImport(request: ImportTaxDataRequest): Prom
     })
   }
 
-  // Validate HECS thresholds
-  if (request.hecsThresholds) {
-    request.hecsThresholds.forEach((threshold, index) => {
-      const thresholdValidator = ValidationResult.create()
-      validateString(threshold.taxYear, 'taxYear', thresholdValidator)
-      validateDecimal(threshold.incomeFrom, 'incomeFrom', thresholdValidator, { min: 0 })
-      validateDecimal(threshold.rate, 'rate', thresholdValidator, { min: 0, max: 1 })
-
-      if (threshold.incomeTo) {
-        validateDecimal(threshold.incomeTo, 'incomeTo', thresholdValidator, { min: 0 })
-      }
-
-      if (!thresholdValidator.isValid()) {
-        thresholdValidator.getErrors().forEach(error => {
-          validator.addError('validation', `hecsThresholds[${index}].${error.field}`, error.message)
-        })
-      }
-    })
-  }
+  // HECS thresholds removed – no validation
 
   // Validate STSL rates
   if (request.stslRates) {
@@ -323,10 +296,6 @@ export async function validateTaxDataImport(request: ImportTaxDataRequest): Prom
     request.taxRateConfigs.forEach((config, index) => {
       const configValidator = ValidationResult.create()
       validateString(config.taxYear, 'taxYear', configValidator)
-      validateDecimal(config.medicareRate, 'medicareRate', configValidator, { min: 0, max: 1 })
-      validateDecimal(config.medicareLowIncomeThreshold, 'medicareLowIncomeThreshold', configValidator, { min: 0 })
-      validateDecimal(config.medicareHighIncomeThreshold, 'medicareHighIncomeThreshold', configValidator, { min: 0 })
-
       if (!configValidator.isValid()) {
         configValidator.getErrors().forEach(error => {
           validator.addError('validation', `taxRateConfigs[${index}].${error.field}`, error.message)

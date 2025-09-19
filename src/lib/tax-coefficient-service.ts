@@ -1,5 +1,5 @@
 import { Decimal } from 'decimal.js'
-import { TaxCoefficient, HecsThreshold, TaxRateConfig, StslRate } from '@/types'
+import { TaxCoefficient, TaxRateConfig, StslRate } from '@/types'
 
 /**
  * Service for loading tax coefficients, HECS thresholds, and tax configuration
@@ -7,7 +7,6 @@ import { TaxCoefficient, HecsThreshold, TaxRateConfig, StslRate } from '@/types'
  */
 export class TaxCoefficientService {
   private static coefficientsCache = new Map<string, TaxCoefficient[]>()
-  private static hecsThresholdsCache = new Map<string, HecsThreshold[]>()
   private static taxConfigCache = new Map<string, TaxRateConfig>()
   private static stslRatesCache = new Map<string, StslRate[]>()
   private static cacheExpiry = new Map<string, number>()
@@ -73,53 +72,6 @@ export class TaxCoefficientService {
   }
 
   /**
-   * Get HECS-HELP thresholds for a specific tax year
-   */
-  static async getHecsThresholds(taxYear: string): Promise<HecsThreshold[]> {
-    const cacheKey = `hecs:${taxYear}`
-    
-    // Check cache first
-    if (this.isCacheValid(cacheKey)) {
-      const cached = this.hecsThresholdsCache.get(cacheKey)
-      if (cached) {
-        return cached
-      }
-    }
-
-    try {
-      const { prisma } = await import('@/lib/db')
-      const dbThresholds = await prisma.hecsThreshold.findMany({
-        where: {
-          taxYear,
-          isActive: true,
-        },
-        orderBy: {
-          incomeFrom: 'asc',
-        },
-      })
-
-      // Transform to domain types
-      const thresholds: HecsThreshold[] = dbThresholds.map(threshold => ({
-        incomeFrom: threshold.incomeFrom,
-        incomeTo: threshold.incomeTo,
-        rate: threshold.rate,
-      }))
-
-      // Cache the result
-      this.hecsThresholdsCache.set(cacheKey, thresholds)
-      this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
-
-      return thresholds
-    } catch (error) {
-      console.error('Error loading HECS thresholds from database:', error)
-      
-      // Fallback to hardcoded values if database fails
-      console.warn('Falling back to hardcoded HECS thresholds')
-      return this.getFallbackHecsThresholds()
-    }
-  }
-
-  /**
    * Get tax rate configuration for a specific tax year
    */
   static async getTaxRateConfig(taxYear: string): Promise<TaxRateConfig> {
@@ -139,18 +91,13 @@ export class TaxCoefficientService {
 
       // If config exists, use it as the source of truth
       if (dbConfig) {
-        const [coefficients, hecsThresholds, stslRates] = await Promise.all([
+        const [coefficients, stslRates] = await Promise.all([
           this.getTaxCoefficients(taxYear),
-          this.getHecsThresholds(taxYear),
           this.getStslRates(taxYear),
         ])
 
         const config: TaxRateConfig = {
           taxYear: dbConfig.taxYear,
-          medicareRate: dbConfig.medicareRate,
-          medicareLowIncomeThreshold: dbConfig.medicareLowIncomeThreshold,
-          medicareHighIncomeThreshold: dbConfig.medicareHighIncomeThreshold,
-          hecsHelpThresholds: hecsThresholds,
           stslRates,
           coefficients,
         }
@@ -160,31 +107,19 @@ export class TaxCoefficientService {
       }
 
       // No config row — synthesize if year-specific tables exist to avoid hard fallback
-      const [coeffCount, stslCount, hecsCount] = await Promise.all([
+      const [coeffCount, stslCount] = await Promise.all([
         prisma.taxCoefficient.count({ where: { taxYear, isActive: true } }),
         prisma.stslRate.count({ where: { taxYear, isActive: true } }),
-        prisma.hecsThreshold.count({ where: { taxYear, isActive: true } }),
       ])
 
-      if (coeffCount > 0 || stslCount > 0 || hecsCount > 0) {
-        // Try to borrow Medicare settings from any existing year; else default
-        const nearest = await prisma.taxRateConfig.findFirst({ orderBy: { taxYear: 'desc' } })
-        const medicareRate = nearest?.medicareRate ?? new Decimal(0.02)
-        const low = nearest?.medicareLowIncomeThreshold ?? new Decimal(26000)
-        const high = nearest?.medicareHighIncomeThreshold ?? new Decimal(32500)
-
-        const [coefficients, hecsThresholds, stslRates] = await Promise.all([
+      if (coeffCount > 0 || stslCount > 0) {
+        const [coefficients, stslRates] = await Promise.all([
           this.getTaxCoefficients(taxYear),
-          this.getHecsThresholds(taxYear),
           this.getStslRates(taxYear),
         ])
 
         const config: TaxRateConfig = {
           taxYear,
-          medicareRate,
-          medicareLowIncomeThreshold: low,
-          medicareHighIncomeThreshold: high,
-          hecsHelpThresholds: hecsThresholds,
           stslRates,
           coefficients,
         }
@@ -210,7 +145,6 @@ export class TaxCoefficientService {
    */
   static clearCache(): void {
     this.coefficientsCache.clear()
-    this.hecsThresholdsCache.clear()
     this.taxConfigCache.clear()
     this.stslRatesCache.clear()
     this.cacheExpiry.clear()
@@ -230,7 +164,6 @@ export class TaxCoefficientService {
 
     keysToDelete.forEach(key => {
       this.coefficientsCache.delete(key)
-      this.hecsThresholdsCache.delete(key)
       this.taxConfigCache.delete(key)
       this.stslRatesCache.delete(key)
       this.cacheExpiry.delete(key)
@@ -269,36 +202,9 @@ export class TaxCoefficientService {
     return [...scale1Coefficients, ...scale2Coefficients]
   }
 
-  private static getFallbackHecsThresholds(): HecsThreshold[] {
-    return [
-      { incomeFrom: new Decimal(51550), incomeTo: new Decimal(59518), rate: new Decimal(0.01) },
-      { incomeFrom: new Decimal(59518), incomeTo: new Decimal(63090), rate: new Decimal(0.02) },
-      { incomeFrom: new Decimal(63090), incomeTo: new Decimal(66662), rate: new Decimal(0.025) },
-      { incomeFrom: new Decimal(66662), incomeTo: new Decimal(70235), rate: new Decimal(0.03) },
-      { incomeFrom: new Decimal(70235), incomeTo: new Decimal(74808), rate: new Decimal(0.035) },
-      { incomeFrom: new Decimal(74808), incomeTo: new Decimal(79381), rate: new Decimal(0.04) },
-      { incomeFrom: new Decimal(79381), incomeTo: new Decimal(84981), rate: new Decimal(0.045) },
-      { incomeFrom: new Decimal(84981), incomeTo: new Decimal(90554), rate: new Decimal(0.05) },
-      { incomeFrom: new Decimal(90554), incomeTo: new Decimal(96127), rate: new Decimal(0.055) },
-      { incomeFrom: new Decimal(96127), incomeTo: new Decimal(101700), rate: new Decimal(0.06) },
-      { incomeFrom: new Decimal(101700), incomeTo: new Decimal(109177), rate: new Decimal(0.065) },
-      { incomeFrom: new Decimal(109177), incomeTo: new Decimal(116653), rate: new Decimal(0.07) },
-      { incomeFrom: new Decimal(116653), incomeTo: new Decimal(124130), rate: new Decimal(0.075) },
-      { incomeFrom: new Decimal(124130), incomeTo: new Decimal(131607), rate: new Decimal(0.08) },
-      { incomeFrom: new Decimal(131607), incomeTo: new Decimal(139083), rate: new Decimal(0.085) },
-      { incomeFrom: new Decimal(139083), incomeTo: new Decimal(147560), rate: new Decimal(0.09) },
-      { incomeFrom: new Decimal(147560), incomeTo: new Decimal(156037), rate: new Decimal(0.095) },
-      { incomeFrom: new Decimal(156037), incomeTo: null, rate: new Decimal(0.10) },
-    ]
-  }
-
   private static getFallbackTaxConfig(): TaxRateConfig {
     return {
       taxYear: '2024-25',
-      medicareRate: new Decimal(0.02),
-      medicareLowIncomeThreshold: new Decimal(26000),
-      medicareHighIncomeThreshold: new Decimal(32500),
-      hecsHelpThresholds: this.getFallbackHecsThresholds(),
       stslRates: [],
       coefficients: this.getFallbackCoefficients(),
     }

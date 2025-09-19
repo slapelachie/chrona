@@ -38,8 +38,7 @@ export async function GET(_request: NextRequest) {
     const hoursWorked = currentPayPeriod?.totalHours ?? new Decimal(0)
     const grossPay = currentPayPeriod?.totalPay ?? new Decimal(0)
     const paygWithholding = currentPayPeriod?.paygWithholding ?? new Decimal(0)
-    const medicareLevy = currentPayPeriod?.medicareLevy ?? new Decimal(0)
-    const hecsHelpAmount = currentPayPeriod?.hecsHelpAmount ?? new Decimal(0)
+    const stslAmount = currentPayPeriod?.stslAmount ?? new Decimal(0)
     const totalWithholdings = currentPayPeriod?.totalWithholdings ?? new Decimal(0)
     const netPay = currentPayPeriod?.netPay ?? grossPay.minus(totalWithholdings)
 
@@ -75,7 +74,7 @@ export async function GET(_request: NextRequest) {
       const preview = await PayPeriodTaxService.previewTaxCalculation(user.id, grossRosteredTotal, user.payPeriodType)
       projectedNet = preview.breakdown.netPay
     } catch (e) {
-      projectedNet = grossRosteredTotal.minus(paygWithholding).minus(hecsHelpAmount).minus(medicareLevy)
+      projectedNet = grossRosteredTotal.minus(paygWithholding).minus(stslAmount)
     }
 
     // Upcoming shifts (next 5 overall)
@@ -109,8 +108,7 @@ export async function GET(_request: NextRequest) {
         hoursWorked: hoursSoFar.toString(),
         grossPay: grossSoFar.toString(),
         paygWithholding: paygWithholding.toString(),
-        medicareLevy: medicareLevy.toString(),
-        hecsHelpAmount: hecsHelpAmount.toString(),
+        stslAmount: stslAmount.toString(),
         totalWithholdings: totalWithholdings.toString(),
         netPay: netPay.toString(),
         projections: {

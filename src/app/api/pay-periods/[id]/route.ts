@@ -7,13 +7,7 @@ import {
   ApiValidationResponse,
   PayPeriodStatus,
 } from '@/types'
-import {
-  ValidationResult,
-  validateString,
-  validateDateRange,
-  validateBoolean,
-  validateDecimal,
-} from '@/lib/validation'
+import { ValidationResult, validateString, validateDateRange, validateDecimal } from '@/lib/validation'
 
 // GET /api/pay-periods/[id] - Get specific pay period
 export async function GET(
@@ -59,12 +53,10 @@ export async function GET(
       totalHours: payPeriod.totalHours?.toString(),
       totalPay: payPeriod.totalPay?.toString(),
       paygWithholding: payPeriod.paygWithholding?.toString(),
-      medicareLevy: payPeriod.medicareLevy?.toString(),
-      hecsHelpAmount: payPeriod.hecsHelpAmount?.toString(),
+      stslAmount: payPeriod.stslAmount?.toString(),
       totalWithholdings: payPeriod.totalWithholdings?.toString(),
       netPay: payPeriod.netPay?.toString(),
       actualPay: payPeriod.actualPay?.toString(),
-      verified: payPeriod.verified,
       createdAt: payPeriod.createdAt,
       updatedAt: payPeriod.updatedAt,
     }
@@ -132,10 +124,6 @@ export async function PUT(
 
     if (body.status && !['open', 'processing', 'paid', 'verified'].includes(body.status)) {
       validator.addError('status', 'Invalid status value')
-    }
-
-    if (body.verified !== undefined) {
-      validateBoolean(body.verified, 'verified', validator)
     }
 
     if (body.actualPay !== undefined && body.actualPay !== null) {
@@ -270,10 +258,6 @@ export async function PUT(
       updateData.status = body.status
     }
 
-    if (body.verified !== undefined) {
-      updateData.verified = body.verified
-    }
-
     if (body.actualPay !== undefined) {
       updateData.actualPay = body.actualPay ? new Decimal(body.actualPay) : null
     }
@@ -294,12 +278,10 @@ export async function PUT(
       totalHours: updatedPayPeriod.totalHours?.toString(),
       totalPay: updatedPayPeriod.totalPay?.toString(),
       paygWithholding: updatedPayPeriod.paygWithholding?.toString(),
-      medicareLevy: updatedPayPeriod.medicareLevy?.toString(),
-      hecsHelpAmount: updatedPayPeriod.hecsHelpAmount?.toString(),
+      stslAmount: updatedPayPeriod.stslAmount?.toString(),
       totalWithholdings: updatedPayPeriod.totalWithholdings?.toString(),
       netPay: updatedPayPeriod.netPay?.toString(),
       actualPay: updatedPayPeriod.actualPay?.toString(),
-      verified: updatedPayPeriod.verified,
       createdAt: updatedPayPeriod.createdAt,
       updatedAt: updatedPayPeriod.updatedAt,
     }

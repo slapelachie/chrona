@@ -67,8 +67,7 @@ export class PayPeriodTaxService {
       where: { id: payPeriodId },
       data: {
         paygWithholding: taxCalculation.breakdown.paygWithholding,
-        medicareLevy: taxCalculation.breakdown.medicareLevy,
-        hecsHelpAmount: taxCalculation.breakdown.hecsHelpAmount,
+        stslAmount: taxCalculation.breakdown.stslAmount,
         totalWithholdings: taxCalculation.breakdown.totalWithholdings,
         netPay: taxCalculation.breakdown.netPay,
       }
@@ -85,8 +84,7 @@ export class PayPeriodTaxService {
       data: {
         grossIncome: taxCalculation.yearToDate.grossIncome,
         payGWithholding: yearToDateTax.payGWithholding.plus(taxCalculation.breakdown.paygWithholding),
-        medicareLevy: yearToDateTax.medicareLevy.plus(taxCalculation.breakdown.medicareLevy),
-        hecsHelpAmount: yearToDateTax.hecsHelpAmount.plus(taxCalculation.breakdown.hecsHelpAmount),
+        stslAmount: yearToDateTax.stslAmount.plus(taxCalculation.breakdown.stslAmount),
         totalWithholdings: taxCalculation.yearToDate.totalWithholdings,
         lastUpdated: new Date(),
       }
@@ -121,8 +119,7 @@ export class PayPeriodTaxService {
         taxYear: currentTaxYear,
         grossIncome: new Decimal(0),
         payGWithholding: new Decimal(0),
-        medicareLevy: new Decimal(0),
-        hecsHelpAmount: new Decimal(0),
+        stslAmount: new Decimal(0),
         totalWithholdings: new Decimal(0),
         lastUpdated: new Date(),
         createdAt: new Date(),
@@ -191,7 +188,6 @@ export class PayPeriodTaxService {
         isForeignResident: false,
         hasTaxFileNumber: true,
         medicareExemption: 'none',
-        hecsHelpRate: null, // No HECS-HELP by default
       }
     }) as TaxSettings
   }
@@ -210,7 +206,7 @@ export class PayPeriodTaxService {
     })
 
     if (existingYtd) {
-      return existingYtd
+      return existingYtd as YearToDateTax
     }
 
     // Create new year-to-date tracking
@@ -220,8 +216,7 @@ export class PayPeriodTaxService {
         taxYear,
         grossIncome: new Decimal(0),
         payGWithholding: new Decimal(0),
-        medicareLevy: new Decimal(0),
-        hecsHelpAmount: new Decimal(0),
+        stslAmount: new Decimal(0),
         totalWithholdings: new Decimal(0),
         lastUpdated: new Date(),
       }
@@ -275,7 +270,6 @@ export class PayPeriodTaxService {
         isForeignResident: updates.isForeignResident ?? false,
         hasTaxFileNumber: updates.hasTaxFileNumber ?? true,
         medicareExemption: updates.medicareExemption ?? 'none',
-        hecsHelpRate: updates.hecsHelpRate ?? null,
       }
     }) as TaxSettings
   }

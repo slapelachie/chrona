@@ -40,20 +40,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all tax-related data
-    const [taxCoefficients, hecsThresholds, stslRates, taxRateConfigs] = await Promise.all([
+    const [taxCoefficients, stslRates, taxRateConfigs] = await Promise.all([
       prisma.taxCoefficient.findMany({
         where: taxDataWhere,
         orderBy: [
           { taxYear: 'desc' },
           { scale: 'asc' },
           { earningsFrom: 'asc' }
-        ]
-      }),
-      prisma.hecsThreshold.findMany({
-        where: taxDataWhere,
-        orderBy: [
-          { taxYear: 'desc' },
-          { incomeFrom: 'asc' }
         ]
       }),
       prisma.stslRate.findMany({
@@ -72,7 +65,6 @@ export async function GET(request: NextRequest) {
 
     const includedTaxYears = Array.from(new Set([
       ...taxCoefficients.map(tc => tc.taxYear),
-      ...hecsThresholds.map(ht => ht.taxYear),
       ...stslRates.map(sr => sr.taxYear),
       ...taxRateConfigs.map(trc => trc.taxYear)
     ])).sort().reverse()
@@ -83,7 +75,7 @@ export async function GET(request: NextRequest) {
         isForeignResident: taxSettings.isForeignResident,
         hasTaxFileNumber: taxSettings.hasTaxFileNumber,
         medicareExemption: taxSettings.medicareExemption,
-        hecsHelpRate: taxSettings.hecsHelpRate?.toString()
+        // No hecsHelpRate; STSL is derived from Schedule 8 rates
       },
       taxCoefficients: taxCoefficients.map(tc => ({
         taxYear: tc.taxYear,
@@ -94,14 +86,6 @@ export async function GET(request: NextRequest) {
         coefficientB: tc.coefficientB.toString(),
         description: tc.description || undefined,
         isActive: tc.isActive
-      })),
-      hecsThresholds: hecsThresholds.map(ht => ({
-        taxYear: ht.taxYear,
-        incomeFrom: ht.incomeFrom.toString(),
-        incomeTo: ht.incomeTo?.toString(),
-        rate: ht.rate.toString(),
-        description: ht.description || undefined,
-        isActive: ht.isActive
       })),
       stslRates: stslRates.map(sr => ({
         taxYear: sr.taxYear,
@@ -115,9 +99,6 @@ export async function GET(request: NextRequest) {
       })),
       taxRateConfigs: taxRateConfigs.map(trc => ({
         taxYear: trc.taxYear,
-        medicareRate: trc.medicareRate.toString(),
-        medicareLowIncomeThreshold: trc.medicareLowIncomeThreshold.toString(),
-        medicareHighIncomeThreshold: trc.medicareHighIncomeThreshold.toString(),
         description: trc.description || undefined,
         isActive: trc.isActive
       })),

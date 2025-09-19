@@ -41,10 +41,8 @@ export async function performInitialSetup(payload: InitPayload) {
       isForeignResident: false,
       hasTaxFileNumber: true,
       medicareExemption: 'none',
-      hecsHelpRate: null,
     }
   })
 
   return { user, created: true }
 }
-
