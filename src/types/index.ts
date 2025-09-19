@@ -424,6 +424,7 @@ export interface PayPeriodListItem {
   totalHours?: string
   totalPay?: string
   netPay?: string
+  actualPay?: string
   shiftsCount?: number // Count of shifts in period
 }
 

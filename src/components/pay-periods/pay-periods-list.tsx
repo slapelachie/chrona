@@ -130,7 +130,7 @@ export const PayPeriodsList: React.FC = () => {
                     </div>
                     <div style={{ marginTop: 4, display: 'flex', gap: '0.75rem', alignItems: 'baseline' }}>
                       <div style={{ color: 'var(--color-text-primary)', fontWeight: 700, fontSize: '1.125rem' }}>
-                        ${formatCurrency(pp.netPay || pp.totalPay)}
+                        ${formatCurrency(pp.actualPay || pp.netPay || pp.totalPay)}
                       </div>
                       {typeof pp.shiftsCount === 'number' && (
                         <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8rem' }}>

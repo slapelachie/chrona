@@ -152,6 +152,7 @@ export async function GET(request: NextRequest) {
         totalHours: payPeriod.totalHours?.toString(),
         totalPay: payPeriod.totalPay?.toString(),
         netPay: payPeriod.netPay?.toString(),
+        actualPay: payPeriod.actualPay?.toString(),
         shiftsCount: (payPeriod as any)._count.shifts,
       }))
 

@@ -50,6 +50,7 @@ export const DataManagement: React.FC = () => {
   const [conflictResolution, setConflictResolution] = useState<ConflictResolution>('skip')
   const [showSelectiveExport, setShowSelectiveExport] = useState(false)
   const [showSelectiveImport, setShowSelectiveImport] = useState(false)
+  const [reprocessBusy, setReprocessBusy] = useState(false)
   
   // Export/Import type selections
   const [exportSelections, setExportSelections] = useState({
@@ -635,6 +636,34 @@ export const DataManagement: React.FC = () => {
         </div>
 
         <hr style={{ borderColor: '#333' }} />
+
+        {/* Maintenance */}
+        <div>
+          <div className="fw-semibold mb-2">Maintenance</div>
+          <div className="text-secondary mb-2" style={{ fontSize: 13 }}>
+            Reprocesses all pay periods (recalculates totals and taxes) and rebuilds Year-To-Date figures for each tax year.
+          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={busy || reprocessBusy}
+            onClick={async () => {
+              if (!confirm('Reprocess everything? This may take a few minutes. Continue?')) return
+              setReprocessBusy(true); setErr(null); setMsg(null); setImportResult(null)
+              try {
+                const res = await fetch('/api/admin/maintenance/reprocess', { method: 'POST' })
+                const json = await res.json()
+                if (!res.ok) throw new Error(json?.error || json?.message || 'Reprocess failed')
+                const taxYears = (json?.data?.details || []).map((d: { taxYear: string }) => d.taxYear).join(', ')
+                setMsg(`Reprocessed ${json?.data?.totalPayPeriods ?? 0} pay periods across ${json?.data?.processedTaxYears ?? 0} tax years${taxYears ? ` (${taxYears})` : ''}.`)
+              } catch (e: any) {
+                setErr(e.message)
+              } finally { setReprocessBusy(false) }
+            }}
+          >
+            {reprocessBusy ? 'Reprocessing…' : 'Reprocess All (Pay + YTD)'}
+          </Button>
+        </div>
 
         {/* Pay Period Transformation */}
         <div>

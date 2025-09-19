@@ -41,6 +41,7 @@ export async function GET(_request: NextRequest) {
     const stslAmount = currentPayPeriod?.stslAmount ?? new Decimal(0)
     const totalWithholdings = currentPayPeriod?.totalWithholdings ?? new Decimal(0)
     const netPay = currentPayPeriod?.netPay ?? grossPay.minus(totalWithholdings)
+    const actualPay = currentPayPeriod?.actualPay ?? null
 
     // (Removed time-based projection in favor of rostered projection below)
 
@@ -111,6 +112,8 @@ export async function GET(_request: NextRequest) {
         stslAmount: stslAmount.toString(),
         totalWithholdings: totalWithholdings.toString(),
         netPay: netPay.toString(),
+        actualPay: actualPay ? actualPay.toString() : null,
+        displayNetPay: (actualPay ?? netPay).toString(),
         projections: {
           grossPay: grossRosteredTotal.toString(),
           netPay: projectedNet.toString(),

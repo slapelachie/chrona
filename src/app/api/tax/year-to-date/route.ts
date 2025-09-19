@@ -74,11 +74,15 @@ export async function GET(request: NextRequest) {
         endDate: { lte: tyEnd },
         status: { in: ['processing','paid','verified'] },
       },
-      select: { totalPay: true, totalWithholdings: true }
+      select: { totalPay: true, totalWithholdings: true, actualPay: true }
     })
     const liveGross = periods.reduce((sum, p) => sum.plus(p.totalPay || new Decimal(0)), new Decimal(0))
     const liveWithhold = periods.reduce((sum, p) => sum.plus(p.totalWithholdings || new Decimal(0)), new Decimal(0))
-    const liveNet = liveGross.minus(liveWithhold)
+    const liveNet = periods.reduce((sum, p) => {
+      const calcNet = (p.totalPay || new Decimal(0)).minus(p.totalWithholdings || new Decimal(0))
+      const use = p.actualPay ?? calcNet
+      return sum.plus(use)
+    }, new Decimal(0))
 
     const response = {
       taxYear: yearToDateTax.taxYear,

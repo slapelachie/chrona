@@ -96,6 +96,12 @@ export const StatsCards: React.FC = () => {
     const hoursRostered = Number(summary?.currentPeriod?.projections?.rosteredHours ?? '0')
     const projectedGross = Number(summary?.currentPeriod?.projections?.grossPay ?? '0')
     const projectedNet = Number(summary?.currentPeriod?.projections?.netPay ?? '0')
+    const rawActual = summary?.currentPeriod?.actualPay
+    const hasActual = rawActual !== null && rawActual !== undefined
+    const actualNet = hasActual ? Number(rawActual) : 0
+    const rawCalc = summary?.currentPeriod?.netPay
+    const hasCalc = rawCalc !== null && rawCalc !== undefined
+    const calcNet = hasCalc ? Number(rawCalc) : 0
     const ytdGross = Number((ytd?.liveYearToDate?.grossIncome ?? ytd?.yearToDate?.grossIncome) ?? '0')
     const ytdNet = Number((ytd?.liveYearToDate?.netIncome ?? ytd?.yearToDate?.netIncome) ?? '0')
 
@@ -113,9 +119,13 @@ export const StatsCards: React.FC = () => {
       // 1) Period Pay (Gross vs Net combined)
       {
         title: 'This Period Pay',
-        value: `$${fmt(projectedNet)}`,
-        inlineNote: `(Gross $${fmt(projectedGross)})`,
-        subtitle: 'Projected (rostered)',
+        value: `$${fmt(hasActual ? actualNet : (hasCalc ? calcNet : projectedNet))}`,
+        inlineNote: hasActual
+          ? '(Actual)'
+          : (hasCalc ? '(Calculated)' : `(Gross $${fmt(projectedGross)})`),
+        subtitle: hasActual
+          ? 'Received'
+          : (hasCalc ? 'Calculated' : 'Projected (rostered)'),
         icon: <DollarSign size={24} />,
       },
       // 2) YTD Earnings (Gross vs Net combined)

@@ -526,16 +526,28 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                           fontSize: '0.875rem',
                         }}
                       >
-                        Net Pay
+                        {pp.actualPay ? (isVerified ? 'Actual Paid' : 'Actual (pending)') : 'Net Pay'}
                       </div>
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          fontSize: '1.125rem',
-                          color: 'var(--color-success)',
-                        }}
-                      >
-                        ${formatCurrency(pp.netPay)}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            fontSize: '1.125rem',
+                            color: 'var(--color-success)',
+                          }}
+                        >
+                          ${formatCurrency(pp.actualPay || pp.netPay)}
+                        </div>
+                        {pp.actualPay && (
+                          <div
+                            style={{
+                              color: 'var(--color-text-secondary)',
+                              fontSize: '0.8rem',
+                            }}
+                          >
+                            Calculated net: ${formatCurrency(pp.netPay)}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -963,8 +975,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                         color:
                           pp.status === 'processing'
                             ? 'var(--color-warning)'
-                            : ['paid', 'verified'].includes(pp.status) ||
-                                pp.verified
+                            : ['paid', 'verified'].includes(pp.status)
                               ? 'var(--color-success)'
                               : 'var(--color-text-secondary)',
                         fontWeight: pp.status === 'processing' ? 600 : 400,
@@ -972,9 +983,9 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                     >
                       {pp.status === 'processing'
                         ? '◉'
-                          : ['paid', 'verified'].includes(pp.status)
-                            ? '●'
-                            : '○'}{' '}
+                        : ['paid', 'verified'].includes(pp.status)
+                          ? '●'
+                          : '○'}{' '}
                       Processing
                     </div>
                     <div
@@ -985,7 +996,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                         color:
                           pp.status === 'paid'
                             ? 'var(--color-info)'
-                            : pp.verified
+                            : isVerified
                               ? 'var(--color-success)'
                               : 'var(--color-text-secondary)',
                         fontWeight: pp.status === 'paid' ? 600 : 400,
