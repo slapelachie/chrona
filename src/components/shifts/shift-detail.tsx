@@ -104,7 +104,7 @@ export const ShiftDetail: React.FC<ShiftDetailProps> = ({ shiftId }) => {
       })
       
       if (response.ok) {
-        router.push('/shifts')
+        router.push('/timeline')
       } else {
         setError('Failed to delete shift')
       }
@@ -191,7 +191,7 @@ export const ShiftDetail: React.FC<ShiftDetailProps> = ({ shiftId }) => {
             <h3 style={{ color: 'var(--color-text-primary)', margin: 0 }}>
               {error}
             </h3>
-            <Button variant="primary" onClick={() => router.push('/shifts')}>
+            <Button variant="primary" onClick={() => router.push('/timeline')}>
               Back to Shifts
             </Button>
           </div>

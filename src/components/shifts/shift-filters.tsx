@@ -32,7 +32,7 @@ export const ShiftFilters: React.FC<ShiftFiltersProps> = ({
     startDate: filters.startDate || '',
     endDate: filters.endDate || '',
     payGuideId: filters.payGuideId || '',
-    sortBy: filters.sortBy || 'startTime',
+    sortBy: filters.sortBy || 'startDate',
     sortOrder: filters.sortOrder || 'desc'
   })
 
@@ -68,7 +68,7 @@ export const ShiftFilters: React.FC<ShiftFiltersProps> = ({
       startDate: filters.startDate || '',
       endDate: filters.endDate || '',
       payGuideId: filters.payGuideId || '',
-      sortBy: filters.sortBy || 'startTime',
+      sortBy: filters.sortBy || 'startDate',
       sortOrder: filters.sortOrder || 'desc'
     })
   }, [filters])
@@ -90,7 +90,7 @@ export const ShiftFilters: React.FC<ShiftFiltersProps> = ({
       startDate: '',
       endDate: '',
       payGuideId: '',
-      sortBy: 'startTime',
+      sortBy: 'startDate',
       sortOrder: 'desc' as const
     }
     
@@ -99,7 +99,7 @@ export const ShiftFilters: React.FC<ShiftFiltersProps> = ({
       startDate: undefined,
       endDate: undefined,
       payGuideId: undefined,
-      sortBy: 'startTime',
+      sortBy: 'startDate',
       sortOrder: 'desc',
       page: 1
     })
@@ -188,8 +188,8 @@ export const ShiftFilters: React.FC<ShiftFiltersProps> = ({
                     onChange={(e) => setLocalFilters(prev => ({ ...prev, sortBy: e.target.value }))}
                     className="shift-filters__select"
                   >
-                    <option value="startTime">Start Time</option>
-                    <option value="endTime">End Time</option>
+                    <option value="startDate">Period Start</option>
+                    <option value="endDate">Period End</option>
                     <option value="totalPay">Total Pay</option>
                     <option value="createdAt">Date Added</option>
                   </select>
@@ -202,7 +202,9 @@ export const ShiftFilters: React.FC<ShiftFiltersProps> = ({
                   <select
                     id="sortOrder"
                     value={localFilters.sortOrder}
-                    onChange={(e) => setLocalFilters(prev => ({ ...prev, sortOrder: e.target.value }))}
+                    onChange={(e) =>
+                      setLocalFilters(prev => ({ ...prev, sortOrder: e.target.value as 'asc' | 'desc' }))
+                    }
                     className="shift-filters__select"
                   >
                     <option value="desc">Newest First</option>

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { PayPeriodResponse, TaxCalculationResponse, ShiftResponse } from '@/types'
 import { StatusBadge, statusAccentColor } from './status-badge'
+import { formatPayPeriodDate } from '@/lib/date-utils'
 
 interface Props {
   payPeriodId: string
@@ -454,12 +455,12 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                         Period
                       </div>
                       <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                        {new Date(pp.startDate).toLocaleDateString('en-AU', {
+                        {formatPayPeriodDate(pp.startDate, {
                           month: 'short',
                           day: 'numeric',
                         })}{' '}
                         -{' '}
-                        {new Date(pp.endDate).toLocaleDateString('en-AU', {
+                        {formatPayPeriodDate(pp.endDate, {
                           month: 'short',
                           day: 'numeric',
                         })}

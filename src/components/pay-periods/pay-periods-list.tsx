@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader, Button, Input } from '../ui'
 import { Calendar, DollarSign, Loader2, RefreshCcw } from 'lucide-react'
 import { PayPeriodListItem, PayPeriodsListResponse } from '@/types'
 import { StatusBadge, statusAccentColor } from './status-badge'
+import { formatPayPeriodDate } from '@/lib/date-utils'
 
 type StatusFilter = 'all' | 'open' | 'processing' | 'paid' | 'verified'
 
@@ -44,7 +45,7 @@ export const PayPeriodsList: React.FC = () => {
     if (!query) return items
     const q = query.toLowerCase()
     return items.filter(pp => {
-      const range = `${new Date(pp.startDate).toLocaleDateString('en-AU')} - ${new Date(pp.endDate).toLocaleDateString('en-AU')}`
+      const range = `${formatPayPeriodDate(pp.startDate)} - ${formatPayPeriodDate(pp.endDate)}`
       return range.toLowerCase().includes(q) || (pp.totalPay || '').toString().includes(q)
     })
   }, [items, query])
@@ -134,7 +135,7 @@ export const PayPeriodsList: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <Calendar size={16} style={{ color: 'var(--color-text-tertiary)' }} />
                       <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-                        {new Date(pp.startDate).toLocaleDateString('en-AU')} - {new Date(pp.endDate).toLocaleDateString('en-AU')}
+                        {formatPayPeriodDate(pp.startDate)} - {formatPayPeriodDate(pp.endDate)}
                       </span>
                     </div>
                     <div style={{ marginTop: 4, display: 'flex', gap: '0.75rem', alignItems: 'baseline' }}>

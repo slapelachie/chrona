@@ -3,12 +3,10 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { 
-  Home, 
-  Calendar, 
-  DollarSign, 
-  Settings, 
-  User 
+import {
+  Home,
+  Calendar,
+  Settings
 } from 'lucide-react'
 import './bottom-navigation.scss'
 
@@ -26,24 +24,14 @@ const navigationItems: NavigationItem[] = [
     label: 'Dashboard'
   },
   {
-    href: '/shifts',
+    href: '/timeline',
     icon: <Calendar size={24} />,
-    label: 'Shifts'
-  },
-  {
-    href: '/pay-periods',
-    icon: <DollarSign size={24} />,
-    label: 'Pay Periods'
+    label: 'Timeline'
   },
   {
     href: '/settings',
     icon: <Settings size={24} />,
     label: 'Settings'
-  },
-  {
-    href: '/profile',
-    icon: <User size={24} />,
-    label: 'Profile'
   }
 ]
 

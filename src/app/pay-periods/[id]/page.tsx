@@ -15,10 +15,9 @@ export default function PayPeriodDetailPage() {
       title="Pay Period"
       subtitle="Totals, taxes and verification"
       showBackButton={true}
-      backButtonHref="/pay-periods"
+      backButtonHref="/timeline"
     >
       <PayPeriodDetail payPeriodId={id} />
     </AppShell>
   )
 }
-

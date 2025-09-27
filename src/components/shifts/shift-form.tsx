@@ -395,7 +395,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     if (mode === 'edit' && shiftId) {
       router.push(`/shifts/${shiftId}`)
     } else {
-      router.push('/shifts')
+      router.push('/timeline')
     }
   }
 

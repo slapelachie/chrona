@@ -11,11 +11,11 @@ export default function ShiftDetailPage() {
   const params = useParams<RouteParams>()
   const id = (params?.id ?? '') as string
   return (
-    <AppShell 
-      title="Shift Details" 
+    <AppShell
+      title="Shift Details"
       subtitle="View shift information"
       showBackButton={true}
-      backButtonHref="/shifts"
+      backButtonHref="/timeline"
     >
       <ShiftDetail shiftId={id} />
     </AppShell>
