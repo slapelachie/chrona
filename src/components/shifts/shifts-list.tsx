@@ -17,6 +17,7 @@ import { ShiftListItem, ShiftFilters as ShiftFiltersType, ApiResponse, ShiftsLis
 import './shifts-list.scss'
 
 type ViewMode = 'list' | 'calendar'
+type GroupBy = 'day' | 'week'
 
 export const ShiftsList: React.FC = () => {
   const router = useRouter()
@@ -30,6 +31,7 @@ export const ShiftsList: React.FC = () => {
     sortBy: 'startTime',
     sortOrder: 'desc'
   })
+  const [groupBy, setGroupBy] = useState<GroupBy>('day')
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -104,6 +106,73 @@ export const ShiftsList: React.FC = () => {
   const handlePageChange = (newPage: number) => {
     setFilters(prev => ({ ...prev, page: newPage }))
   }
+
+  // Grouping helpers
+  const formatCurrency = (amount?: string) => {
+    if (!amount) return 0
+    const n = Number(amount)
+    return isNaN(n) ? 0 : n
+  }
+
+  const toDateKey = (d: Date) => d.toISOString().slice(0, 10)
+
+  const startOfWeek = (d: Date) => {
+    const date = new Date(d)
+    const day = date.getDay() // 0 Sun
+    const diff = date.getDate() - day // go back to Sunday
+    const start = new Date(date)
+    start.setDate(diff)
+    start.setHours(0,0,0,0)
+    return start
+  }
+
+  const endOfWeek = (d: Date) => {
+    const s = startOfWeek(d)
+    const e = new Date(s)
+    e.setDate(s.getDate() + 6)
+    e.setHours(23,59,59,999)
+    return e
+  }
+
+  const groups = React.useMemo(() => {
+    const map = new Map<string, { label: string; sublabel?: string; items: ShiftListItem[]; totalHours: number; totalPay: number }>()
+    for (const sh of shifts) {
+      const start = new Date(sh.startTime)
+      let key: string
+      let label: string
+      let sublabel: string | undefined
+      if (groupBy === 'week') {
+        const s = startOfWeek(start)
+        const e = endOfWeek(start)
+        key = `${toDateKey(s)}_${toDateKey(e)}`
+        label = `${s.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })} – ${e.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })}`
+        sublabel = `${s.getFullYear()}`
+      } else {
+        key = toDateKey(start)
+        // Today/Yesterday nicety
+        const todayKey = toDateKey(new Date())
+        const y = new Date()
+        y.setDate(y.getDate()-1)
+        const yesterdayKey = toDateKey(y)
+        if (key === todayKey) {
+          label = 'Today'
+          sublabel = start.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })
+        } else if (key === yesterdayKey) {
+          label = 'Yesterday'
+          sublabel = start.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })
+        } else {
+          label = start.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })
+        }
+      }
+      if (!map.has(key)) map.set(key, { label, sublabel, items: [], totalHours: 0, totalPay: 0 })
+      const grp = map.get(key)!
+      grp.items.push(sh)
+      grp.totalHours += Number(sh.totalHours ?? 0)
+      grp.totalPay += formatCurrency(sh.totalPay)
+    }
+    // Preserve original order (sorted by filters), but group key order stable by first occurrence
+    return Array.from(map.values())
+  }, [shifts, groupBy])
 
   if (loading && shifts.length === 0) {
     return (
@@ -229,6 +298,14 @@ export const ShiftsList: React.FC = () => {
         onFiltersChange={handleFiltersChange}
         loading={loading}
       />
+      {/* Group controls */}
+      <div className="shifts-list__group-controls">
+        <span className="shifts-list__group-label">Group by:</span>
+        <div className="shifts-list__group-buttons">
+          <Button size="sm" variant={groupBy === 'day' ? 'primary' : 'outline'} onClick={() => setGroupBy('day')}>Day</Button>
+          <Button size="sm" variant={groupBy === 'week' ? 'primary' : 'outline'} onClick={() => setGroupBy('week')}>Week</Button>
+        </div>
+      </div>
 
       {viewMode === 'list' ? (
         <div className="shifts-list__content">
@@ -251,13 +328,29 @@ export const ShiftsList: React.FC = () => {
             </Card>
           ) : (
             <>
-              <div className="shifts-list__items">
-                {shifts.map((shift) => (
-                  <ShiftCard
-                    key={shift.id}
-                    shift={shift}
-                    onClick={() => handleShiftClick(shift.id)}
-                  />
+              <div className="shifts-list__groups">
+                {groups.map((g, idx) => (
+                  <div key={idx} className="shifts-group">
+                    <div className="shifts-group__header">
+                      <div className="shifts-group__title">
+                        <span className="shifts-group__label">{g.label}</span>
+                        {g.sublabel && <span className="shifts-group__sublabel">{g.sublabel}</span>}
+                      </div>
+                      <div className="shifts-group__totals">
+                        <span className="shifts-group__total">
+                          {g.totalHours.toFixed(2)}h
+                        </span>
+                        <span className="shifts-group__total">
+                          ${g.totalPay.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="shifts-group__items">
+                      {g.items.map(item => (
+                        <ShiftCard key={item.id} shift={item} onClick={() => handleShiftClick(item.id)} showDate={groupBy !== 'day'} />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
 

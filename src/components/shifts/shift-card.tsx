@@ -16,12 +16,14 @@ interface ShiftCardProps {
   shift: ShiftListItem
   onClick?: () => void
   showActions?: boolean
+  showDate?: boolean
 }
 
 export const ShiftCard: React.FC<ShiftCardProps> = ({
   shift,
   onClick,
-  showActions = false
+  showActions = false,
+  showDate = true
 }) => {
   const formatDate = (date: Date | string) => {
     const d = new Date(date)
@@ -89,24 +91,26 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
     >
       <CardBody>
         <div className="shift-card__content">
-          <div className="shift-card__header">
-            <div className="shift-card__date">
-              <Calendar size={16} />
-              <span>{formatDate(shift.startTime)}</span>
+          {showDate && (
+            <div className="shift-card__header">
+              <div className="shift-card__date">
+                <Calendar size={16} />
+                <span>{formatDate(shift.startTime)}</span>
+              </div>
+              
+              <div className="shift-card__status">
+                <span className={`shift-card__status-badge shift-card__status-badge--${status}`}>
+                  {status === 'upcoming' && 'Upcoming'}
+                  {status === 'in-progress' && 'In Progress'}
+                  {status === 'completed' && 'Completed'}
+                </span>
+              </div>
+              
+              {onClick && (
+                <ChevronRight size={16} className="shift-card__arrow" />
+              )}
             </div>
-            
-            <div className="shift-card__status">
-              <span className={`shift-card__status-badge shift-card__status-badge--${status}`}>
-                {status === 'upcoming' && 'Upcoming'}
-                {status === 'in-progress' && 'In Progress'}
-                {status === 'completed' && 'Completed'}
-              </span>
-            </div>
-            
-            {onClick && (
-              <ChevronRight size={16} className="shift-card__arrow" />
-            )}
-          </div>
+          )}
 
           <div className="shift-card__details">
             <div className="shift-card__time">
