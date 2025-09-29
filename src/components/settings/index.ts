@@ -3,4 +3,4 @@ export { PayGuideSelector } from './pay-guide-selector'
 export { TaxSettingsForm } from './tax-settings-form'
 export { NotificationPreferences } from './notification-preferences'
 export { DataManagement } from './data-management'
-
+export { SettingsCard } from './settings-card'

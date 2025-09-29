@@ -1,9 +1,16 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Card, CardBody, Button, Input } from '../ui'
-import { Calendar, Clock, DollarSign, FileText, Loader } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import {
+  Calendar,
+  Clock,
+  DollarSign,
+  Loader,
+  CheckCircle2,
+  AlertTriangle,
+} from 'lucide-react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Form } from 'react-bootstrap'
 import { PayCalculationResult } from '@/types'
 import { BreakPeriodsInput, BreakPeriodInput } from './break-periods-input'
@@ -53,12 +60,32 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   const [payCalculation, setPayCalculation] =
     useState<PayCalculationResult | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(mode === 'edit')
+  const bannerRef = useRef<HTMLDivElement | null>(null)
 
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const statusParam = searchParams.get('status')
+  const [bannerStatus, setBannerStatus] = useState<'success' | 'error' | null>(
+    statusParam === 'success' || statusParam === 'error' ? statusParam : null,
+  )
+
+  useEffect(() => {
+    if (statusParam === 'success' || statusParam === 'error') {
+      setBannerStatus(statusParam)
+    } else {
+      setBannerStatus(null)
+    }
+  }, [statusParam])
+
+  useEffect(() => {
+    if (mode === 'create' && bannerStatus) {
+      bannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [bannerStatus, mode])
 
   // Fetch pay guides on component mount
   useEffect(() => {
@@ -88,6 +115,16 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     formData.endTime,
     formData.breakPeriods,
   ])
+
+  const dismissBanner = () => {
+    setBannerStatus(null)
+    const entries = Array.from(searchParams.entries())
+    if (entries.length === 0) return
+    const params = new URLSearchParams(entries)
+    params.delete('status')
+    const query = params.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname)
+  }
 
   const fetchPayGuides = async () => {
     try {
@@ -327,8 +364,11 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     }
   }
 
-  const createBreakPeriods = async (shiftId: string) => {
-    for (const breakPeriod of formData.breakPeriods) {
+  const createBreakPeriods = async (
+    shiftId: string,
+    breakPeriods: BreakPeriodInput[],
+  ) => {
+    for (const breakPeriod of breakPeriods) {
       if (breakPeriod.startTime && breakPeriod.endTime) {
         try {
           await fetch(`/api/shifts/${shiftId}/break-periods`, {
@@ -347,6 +387,32 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     }
   }
 
+  const resetForm = () => {
+    setFormData({
+      payGuideId: '',
+      startTime: '',
+      endTime: '',
+      notes: '',
+      breakPeriods: [],
+    })
+    setErrors({})
+    setPayPreview(null)
+    setPayCalculation(null)
+    setPreviewLoading(false)
+  }
+
+  const bannerCopy = bannerStatus === 'success'
+    ? {
+        title: 'Shift saved',
+        subtitle: 'Start logging a new shift below.',
+      }
+    : {
+        title: 'Shift not saved',
+        subtitle: 'There was an issue saving your shift. Please try again.',
+      }
+
+  const BannerIcon = bannerStatus === 'success' ? CheckCircle2 : AlertTriangle
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -354,6 +420,17 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
 
     try {
       setSubmitting(true)
+      if (mode === 'create') {
+        if (bannerStatus) {
+          dismissBanner()
+        } else if (statusParam) {
+          const cleared = new URLSearchParams(Array.from(searchParams.entries()))
+          cleared.delete('status')
+          const clearedQuery = cleared.toString()
+          router.replace(clearedQuery ? `${pathname}?${clearedQuery}` : pathname)
+        }
+        setBannerStatus(null)
+      }
 
       const payload = {
         payGuideId: formData.payGuideId,
@@ -377,10 +454,19 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
 
         // Create break periods after successful shift creation
         if (mode === 'create' && formData.breakPeriods.length > 0) {
-          await createBreakPeriods(newShiftId)
+          await createBreakPeriods(newShiftId, formData.breakPeriods)
         }
 
-        router.push(`/shifts/${newShiftId}`)
+        if (mode === 'create') {
+          resetForm()
+          const params = new URLSearchParams(Array.from(searchParams.entries()))
+          params.set('status', 'success')
+          const query = params.toString()
+          router.replace(query ? `${pathname}?${query}` : pathname)
+          router.refresh()
+        } else {
+          router.push(`/shifts/${newShiftId}`)
+        }
       } else {
         const errorData = await response.json()
         if (errorData.errors) {
@@ -390,10 +476,12 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
           })
           setErrors(formErrors)
         }
+        setBannerStatus('error')
       }
     } catch (error) {
       console.error('Failed to save shift:', error)
       setErrors({ submit: 'Failed to save shift. Please try again.' })
+      setBannerStatus('error')
     } finally {
       setSubmitting(false)
     }
@@ -437,6 +525,25 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   return (
     <Card>
       <CardBody>
+        {mode === 'create' && bannerStatus && (
+          <div
+            ref={bannerRef}
+            className={`shift-form-banner shift-form-banner--${bannerStatus}`}
+            role="status"
+            aria-live="polite"
+          >
+            <div className="shift-form-banner__body">
+              <BannerIcon size={18} aria-hidden />
+              <div className="shift-form-banner__text">
+                <div className="shift-form-banner__title">{bannerCopy.title}</div>
+                <div className="shift-form-banner__subtitle">{bannerCopy.subtitle}</div>
+              </div>
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={dismissBanner}>
+              Dismiss
+            </Button>
+          </div>
+        )}
         <form onSubmit={handleSubmit}>
           <div
             style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}

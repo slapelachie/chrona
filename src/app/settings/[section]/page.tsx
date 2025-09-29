@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation'
 import { AppShell } from '@/components/layout'
 import { SETTINGS_SECTIONS } from '@/lib/settings-sections'
 
+type SectionKey = keyof typeof SETTINGS_SECTIONS
+
 type SettingsSectionPageProps = {
   params: {
     section: string
@@ -10,11 +12,16 @@ type SettingsSectionPageProps = {
 }
 
 export function generateStaticParams() {
-  return Object.keys(SETTINGS_SECTIONS).map(section => ({ section }))
+  return (Object.keys(SETTINGS_SECTIONS) as SectionKey[]).map(section => ({ section }))
 }
 
 export default function SettingsSectionPage({ params }: SettingsSectionPageProps) {
-  const section = SETTINGS_SECTIONS[params.section]
+  const { section: rawSection } = params
+  if (!isSectionKey(rawSection)) {
+    notFound()
+  }
+
+  const section = SETTINGS_SECTIONS[rawSection]
   if (!section) {
     notFound()
   }
@@ -33,3 +40,6 @@ export default function SettingsSectionPage({ params }: SettingsSectionPageProps
   )
 }
 
+function isSectionKey(value: string): value is SectionKey {
+  return Object.prototype.hasOwnProperty.call(SETTINGS_SECTIONS, value)
+}
