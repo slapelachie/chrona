@@ -54,8 +54,8 @@ export function buildWithholdingShare(totals: { withholdings: string; payg: stri
   const totalWithholdings = toNumber(totals.withholdings)
   const other = Math.max(totalWithholdings - (payg + stsl), 0)
   return [
-    { name: 'PAYG', value: payg, color: '#dc2626' },
-    { name: 'STSL', value: stsl, color: '#0ea5e9' },
-    { name: 'Other', value: other, color: '#7e22ce' },
+    { name: 'PAYG', value: payg, color: '#F44336' },
+    { name: 'STSL', value: stsl, color: '#6E59F7' },
+    { name: 'Other', value: other, color: '#0097A7' },
   ].filter((entry) => entry.value > 0)
 }

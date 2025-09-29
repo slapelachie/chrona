@@ -71,8 +71,8 @@ describe('statistics utils', () => {
   it('builds withholding share segments while dropping zeroes', () => {
     const share = buildWithholdingShare({ withholdings: '100.00', payg: '60.00', stsl: '0.00' })
     expect(share).toEqual([
-      { name: 'PAYG', value: 60, color: '#dc2626' },
-      { name: 'Other', value: 40, color: '#7e22ce' },
+      { name: 'PAYG', value: 60, color: '#F44336' },
+      { name: 'Other', value: 40, color: '#0097A7' },
     ])
   })
 })

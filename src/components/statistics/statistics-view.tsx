@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
+import type { PieLabelRenderProps } from 'recharts'
 import {
   Area,
   AreaChart,
@@ -19,9 +20,10 @@ import {
   YAxis,
 } from 'recharts'
 import { RefreshCw, Sparkle, Zap } from 'lucide-react'
-import { Card, CardBody } from '../ui'
+import { Button, Card, CardBody } from '../ui'
 import { useFinancialYearStats } from '@/hooks/use-financial-year-stats'
-import { FinancialYearPayPeriodStat } from '@/types'
+import { FinancialYearPayPeriodStat, PayPeriodStatus } from '@/types'
+import { StatusBadge } from '@/components/pay-periods/status-badge'
 import { buildChartData, buildMonthlyBuckets, buildWithholdingShare, toNumber } from './statistics-utils'
 import './statistics.scss'
 
@@ -33,6 +35,49 @@ interface MetricConfig {
   color: string
   axis?: 'left' | 'right'
   formatter: (value: number) => string
+}
+
+const palette = {
+  primary: '#00BCD4',
+  primaryDark: '#0097A7',
+  primaryLight: '#00E5FF',
+  warning: '#FFC107',
+  danger: '#F44336',
+  accent: '#6E59F7',
+  contrast: '#00ACC1',
+}
+
+const tooltipStyle: React.CSSProperties = {
+  backgroundColor: 'var(--color-bg-tertiary)',
+  border: '1px solid var(--color-border-secondary)',
+  borderRadius: '12px',
+  color: 'var(--color-text-primary)',
+  fontSize: '0.875rem',
+  boxShadow: 'var(--shadow-md)',
+}
+
+const tooltipLabelStyle: React.CSSProperties = {
+  color: 'var(--color-text-secondary)',
+  fontSize: '0.75rem',
+  marginBottom: 4,
+}
+
+const tooltipItemStyle: React.CSSProperties = {
+  color: 'var(--color-text-primary)',
+}
+
+const legendStyle: React.CSSProperties = {
+  color: 'var(--color-text-secondary)',
+  fontSize: '0.75rem',
+}
+
+const axisTickStyle = { fill: 'var(--color-text-secondary)', fontSize: 12 }
+const axisLineColor = 'rgba(255, 255, 255, 0.12)'
+const gridStroke = 'rgba(255, 255, 255, 0.08)'
+
+const renderPieLabel = ({ name, percent }: PieLabelRenderProps) => {
+  const pct = percent ? Math.round(percent * 100) : 0
+  return `${name} ${pct}%`
 }
 
 const currency = new Intl.NumberFormat('en-AU', {
@@ -47,12 +92,12 @@ const hoursFmt = new Intl.NumberFormat('en-AU', {
 })
 
 const metricConfigs: MetricConfig[] = [
-  { key: 'gross', label: 'Gross Pay', color: '#2563eb', formatter: (v) => currency.format(v) },
-  { key: 'rosteredGross', label: 'Rostered Gross', color: '#1d4ed8', formatter: (v) => currency.format(v) },
-  { key: 'net', label: 'Net Pay', color: '#16a34a', formatter: (v) => currency.format(v) },
-  { key: 'actual', label: 'Actual Pay', color: '#f97316', formatter: (v) => currency.format(v) },
-  { key: 'payg', label: 'PAYG', color: '#dc2626', formatter: (v) => currency.format(v) },
-  { key: 'stsl', label: 'STSL', color: '#0ea5e9', formatter: (v) => currency.format(v) },
+  { key: 'gross', label: 'Gross Pay', color: palette.primary, formatter: (v) => currency.format(v) },
+  { key: 'rosteredGross', label: 'Rostered Gross', color: palette.primaryDark, formatter: (v) => currency.format(v) },
+  { key: 'net', label: 'Net Pay', color: palette.primaryLight, formatter: (v) => currency.format(v) },
+  { key: 'actual', label: 'Actual Pay', color: palette.warning, formatter: (v) => currency.format(v) },
+  { key: 'payg', label: 'PAYG', color: palette.danger, formatter: (v) => currency.format(v) },
+  { key: 'stsl', label: 'STSL', color: palette.accent, formatter: (v) => currency.format(v) },
 ]
 
 function Heatmap({ periods }: { periods: FinancialYearPayPeriodStat[] }) {
@@ -69,9 +114,10 @@ function Heatmap({ periods }: { periods: FinancialYearPayPeriodStat[] }) {
       {periods.map((period) => {
         const gross = toNumber(period.totals.gross)
         const ratio = max === min ? 0.5 : (gross - min) / (max - min)
-        const intensity = Math.max(0.08, ratio)
+        const intensity = Math.max(0.2, Math.min(0.85, ratio * 0.75 + 0.2))
         const style = {
-          backgroundColor: `rgba(37, 99, 235, ${intensity})`,
+          backgroundColor: `rgba(0, 188, 212, ${intensity})`,
+          border: '1px solid var(--color-border-secondary)',
         }
         const label = new Date(period.startDate).toLocaleDateString('en-AU', {
           month: 'short',
@@ -138,10 +184,18 @@ export const StatisticsView: React.FC = () => {
             ))}
           </select>
         </div>
-        <button className="statistics__refresh" type="button" onClick={() => refresh(selectedTaxYear)} disabled={loading}>
-          <RefreshCw size={16} />
-          <span>Refresh</span>
-        </button>
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          className="statistics__refresh"
+          leftIcon={<RefreshCw size={16} />}
+          onClick={() => refresh(selectedTaxYear)}
+          isLoading={loading}
+          loadingText="Refreshing"
+        >
+          Refresh
+        </Button>
       </div>
 
       {error && (
@@ -184,9 +238,9 @@ export const StatisticsView: React.FC = () => {
             </div>
             <div className="statistics__status-bar">
               {data && Object.entries(data.statusCounts).map(([status, count]) => (
-                <div key={status}>
-                  <span>{status}</span>
-                  <strong>{count}</strong>
+                <div key={status} className="statistics__status-chip">
+                  <StatusBadge status={status as PayPeriodStatus} size="sm" />
+                  <span className="statistics__status-count">{count}</span>
                 </div>
               ))}
             </div>
@@ -213,16 +267,30 @@ export const StatisticsView: React.FC = () => {
             <div className="statistics__chart">
               <ResponsiveContainer width="100%" height={360}>
                 <LineChart data={chartData} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={(value) => currency.format(value).replace('$', '$')} tick={{ fontSize: 12 }} width={90} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                  <XAxis
+                    dataKey="label"
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={{ stroke: axisLineColor }}
+                  />
+                  <YAxis
+                    tickFormatter={(value) => currency.format(value)}
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={{ stroke: axisLineColor }}
+                    width={100}
+                  />
                   <Tooltip
+                    contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
                     formatter={(value: number, name: string) => {
                       const metric = metricConfigs.find((m) => m.label === name)
                       return [metric ? metric.formatter(value) : value, name]
                     }}
                   />
-                  <Legend />
+                  <Legend wrapperStyle={legendStyle} iconType="circle" />
                   {activeMetrics.map((metric) => (
                     <Line
                       key={metric.key}
@@ -231,6 +299,8 @@ export const StatisticsView: React.FC = () => {
                       name={metric.label}
                       stroke={metric.color}
                       strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                       dot={false}
                     />
                   ))}
@@ -253,26 +323,42 @@ export const StatisticsView: React.FC = () => {
                 <AreaChart data={chartData} margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
                   <defs>
                     <linearGradient id="colorPayg" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#dc2626" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
+                      <stop offset="5%" stopColor={palette.danger} stopOpacity={0.8} />
+                      <stop offset="95%" stopColor={palette.danger} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorStsl" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                      <stop offset="5%" stopColor={palette.accent} stopOpacity={0.8} />
+                      <stop offset="95%" stopColor={palette.accent} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorOther" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#7e22ce" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#7e22ce" stopOpacity={0} />
+                      <stop offset="5%" stopColor={palette.contrast} stopOpacity={0.8} />
+                      <stop offset="95%" stopColor={palette.contrast} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={(value) => currency.format(value)} tick={{ fontSize: 12 }} width={90} />
-                  <Tooltip formatter={(value: number) => currency.format(value)} />
-                  <Legend />
-                  <Area type="monotone" dataKey="payg" stackId="1" stroke="#dc2626" fill="url(#colorPayg)" name="PAYG" />
-                  <Area type="monotone" dataKey="stsl" stackId="1" stroke="#0ea5e9" fill="url(#colorStsl)" name="STSL" />
-                  <Area type="monotone" dataKey="otherWithholdings" stackId="1" stroke="#7e22ce" fill="url(#colorOther)" name="Other" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                  <XAxis
+                    dataKey="label"
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={{ stroke: axisLineColor }}
+                  />
+                  <YAxis
+                    tickFormatter={(value) => currency.format(value)}
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={{ stroke: axisLineColor }}
+                    width={100}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => currency.format(value)}
+                    contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
+                  />
+                  <Legend wrapperStyle={legendStyle} iconType="circle" />
+                  <Area type="monotone" dataKey="payg" stackId="1" stroke={palette.danger} fill="url(#colorPayg)" name="PAYG" />
+                  <Area type="monotone" dataKey="stsl" stackId="1" stroke={palette.accent} fill="url(#colorStsl)" name="STSL" />
+                  <Area type="monotone" dataKey="otherWithholdings" stackId="1" stroke={palette.contrast} fill="url(#colorOther)" name="Other" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -288,13 +374,29 @@ export const StatisticsView: React.FC = () => {
             <div className="statistics__chart">
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={monthlyBuckets} margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={(value) => currency.format(value)} tick={{ fontSize: 12 }} width={90} />
-                  <Tooltip formatter={(value: number) => currency.format(value)} />
-                  <Legend />
-                  <Bar dataKey="gross" fill="#2563eb" name="Gross" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="net" fill="#16a34a" name="Net" radius={[4, 4, 0, 0]} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                  <XAxis
+                    dataKey="month"
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={{ stroke: axisLineColor }}
+                  />
+                  <YAxis
+                    tickFormatter={(value) => currency.format(value)}
+                    tick={axisTickStyle}
+                    tickLine={false}
+                    axisLine={{ stroke: axisLineColor }}
+                    width={100}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => currency.format(value)}
+                    contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
+                  />
+                  <Legend wrapperStyle={legendStyle} iconType="circle" />
+                  <Bar dataKey="gross" fill={palette.primary} name="Gross" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="net" fill={palette.primaryLight} name="Net" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -310,12 +412,24 @@ export const StatisticsView: React.FC = () => {
             <div className="statistics__chart statistics__chart--center">
               <ResponsiveContainer width="100%" height={260}>
                 <PieChart>
-                  <Pie data={withholdingShare} dataKey="value" nameKey="name" outerRadius={100} label> 
+                  <Pie
+                    data={withholdingShare}
+                    dataKey="value"
+                    nameKey="name"
+                    outerRadius={100}
+                    labelLine={false}
+                    label={renderPieLabel}
+                  >
                     {withholdingShare.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: number) => currency.format(value)} />
+                  <Tooltip
+                    formatter={(value: number) => currency.format(value)}
+                    contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
+                  />
                 </PieChart>
               </ResponsiveContainer>
               {withholdingShare.length === 0 && <p className="statistics__empty-note">No withholdings recorded yet.</p>}
@@ -364,7 +478,9 @@ export const StatisticsView: React.FC = () => {
                   return (
                     <tr key={period.id}>
                       <td>{range}</td>
-                      <td className={`statistics__status statistics__status--${period.status}`}>{period.status}</td>
+                      <td>
+                        <StatusBadge status={period.status} size="sm" />
+                      </td>
                       <td>{currency.format(toNumber(period.totals.gross))}</td>
                       <td>{currency.format(toNumber(period.totals.net))}</td>
                       <td>{currency.format(toNumber(period.totals.actual))}</td>
