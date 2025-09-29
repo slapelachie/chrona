@@ -1,12 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server'
+import JSZip from 'jszip'
 import { Decimal } from 'decimal.js'
 import { prisma } from '@/lib/db'
 import { ImportTaxDataRequest, ImportResult } from '@/types'
 import { validateTaxDataImport } from '@/lib/import-validation'
+import { parseTaxDataFiles } from '@/lib/import-csv'
 
 export async function POST(request: NextRequest) {
   try {
-    const body: ImportTaxDataRequest = await request.json()
+    const contentType = request.headers.get('content-type') ?? ''
+    const url = new URL(request.url)
+    let body: ImportTaxDataRequest
+
+    if (contentType.includes('application/json')) {
+      body = await request.json()
+    } else if (contentType.includes('application/zip')) {
+      const buffer = await request.arrayBuffer()
+      const zip = await JSZip.loadAsync(buffer)
+      const paygMatch = zip.file(/tax-data-payg\.csv$/i)
+      const stslMatch = zip.file(/tax-data-stsl\.csv$/i)
+      const paygCsv = paygMatch.length > 0 ? await paygMatch[0].async('string') : undefined
+      const stslCsv = stslMatch.length > 0 ? await stslMatch[0].async('string') : undefined
+      body = parseTaxDataFiles({
+        paygCsv,
+        stslCsv,
+        options: {
+          conflictResolution: url.searchParams.get('conflictResolution'),
+          replaceExisting: url.searchParams.get('replaceExisting')
+        }
+      })
+    } else {
+      body = parseTaxDataFiles({
+        paygCsv: await request.text(),
+        options: {
+          conflictResolution: url.searchParams.get('conflictResolution'),
+          replaceExisting: url.searchParams.get('replaceExisting')
+        }
+      })
+    }
 
     // Validate the import request
     const validator = await validateTaxDataImport(body)

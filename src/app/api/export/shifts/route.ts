@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { ExportShiftsResponse } from '@/types'
+import { buildShiftsCsv } from '@/lib/export-csv'
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,58 +51,13 @@ export async function GET(request: NextRequest) {
       orderBy: { startTime: 'desc' }
     })
 
-    const exportData: ExportShiftsResponse = {
-      shifts: shifts.map(shift => ({
-        id: shift.id,
-        payGuideId: shift.payGuideId,
-        payGuideName: shift.payGuide.name,
-        startTime: shift.startTime.toISOString(),
-        endTime: shift.endTime.toISOString(),
-        totalHours: shift.totalHours?.toString(),
-        basePay: shift.basePay?.toString(),
-        overtimePay: shift.overtimePay?.toString(),
-        penaltyPay: shift.penaltyPay?.toString(),
-        totalPay: shift.totalPay?.toString(),
-        notes: shift.notes || undefined,
-        breakPeriods: shift.breakPeriods.map(bp => ({
-          startTime: bp.startTime.toISOString(),
-          endTime: bp.endTime.toISOString()
-        })),
-        penaltySegments: shift.penaltySegments.map(ps => ({
-          name: ps.name,
-          multiplier: ps.multiplier.toString(),
-          hours: ps.hours.toString(),
-          pay: ps.pay.toString(),
-          startTime: ps.startTime.toISOString(),
-          endTime: ps.endTime.toISOString()
-        })),
-        overtimeSegments: shift.overtimeSegments.map(os => ({
-          name: os.name,
-          multiplier: os.multiplier.toString(),
-          hours: os.hours.toString(),
-          pay: os.pay.toString(),
-          startTime: os.startTime.toISOString(),
-          endTime: os.endTime.toISOString()
-        }))
-      })),
-      metadata: {
-        exportedAt: new Date().toISOString(),
-        totalShifts: shifts.length,
-        dateRange: shifts.length > 0 ? {
-          earliest: shifts[shifts.length - 1].startTime.toISOString(),
-          latest: shifts[0].startTime.toISOString()
-        } : {
-          earliest: new Date().toISOString(),
-          latest: new Date().toISOString()
-        }
-      }
-    }
+    const csv = buildShiftsCsv(shifts)
 
-    const filename = `chrona-shifts-export-${new Date().toISOString().slice(0, 10)}.json`
+    const filename = `chrona-shifts-export-${new Date().toISOString().slice(0, 10)}.csv`
     
-    return new Response(JSON.stringify(exportData, null, 2), {
+    return new Response(csv, {
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`
       }
     })

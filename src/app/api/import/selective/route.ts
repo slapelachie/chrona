@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { ImportResult, ConflictResolution } from '@/types'
+import { ImportResult, ConflictResolution, ImportTaxDataRequest } from '@/types'
 import { validateShiftsImport, validatePayGuidesImport, validateTaxDataImport } from '@/lib/import-validation'
 import { calculateAndUpdateShift, fetchShiftBreakPeriods, updateShiftWithCalculation } from '@/lib/shift-calculation'
 import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
 
     // Import shifts if selected and present
     if (selectedTypes.includes('shifts') && data.shifts?.shifts) {
+      const successBefore = result.summary.successful
       try {
         const shiftsRequest = {
           shifts: data.shifts.shifts.map((shift: any) => ({
@@ -160,6 +161,14 @@ export async function POST(request: NextRequest) {
           message: `Failed to import shifts: ${error instanceof Error ? error.message : 'Unknown error'}`
         })
         result.success = false
+      } finally {
+        if (result.summary.successful > successBefore) {
+          result.warnings.push({
+            type: 'dependency',
+            field: 'payPeriods',
+            message: 'Pay periods were created automatically. Review default extras in Settings if they should apply.'
+          })
+        }
       }
     }
 
@@ -319,7 +328,6 @@ export async function POST(request: NextRequest) {
         const taxDataRequest = {
           taxSettings: data.taxData.taxSettings,
           taxCoefficients: data.taxData.taxCoefficients,
-          hecsThresholds: data.taxData.hecsThresholds,
           stslRates: data.taxData.stslRates,
           taxRateConfigs: data.taxData.taxRateConfigs,
           options: {
@@ -332,33 +340,7 @@ export async function POST(request: NextRequest) {
         if (validator.hasErrors()) {
           result.errors.push(...validator.getErrors())
         } else {
-          // Import tax settings
-          if (taxDataRequest.taxSettings) {
-            result.summary.totalProcessed++
-            
-            const updateData: any = {}
-            Object.keys(taxDataRequest.taxSettings).forEach(key => {
-              if (taxDataRequest.taxSettings[key] !== undefined) {
-                if (key === 'hecsHelpRate') {
-                  updateData[key] = taxDataRequest.taxSettings[key] ? new Decimal(taxDataRequest.taxSettings[key]) : null
-                } else {
-                  updateData[key] = taxDataRequest.taxSettings[key]
-                }
-              }
-            })
-
-            await prisma.taxSettings.upsert({
-              where: { userId: user.id },
-              update: updateData,
-              create: { userId: user.id, ...updateData }
-            })
-
-            result.updated.push('Tax settings')
-            result.summary.successful++
-          }
-
-          // Import other tax data types...
-          // (Implementation similar to the individual import endpoints)
+          await importTaxDataPayload(user.id, taxDataRequest, result)
         }
       } catch (error) {
         console.error('Error importing tax data:', error)
@@ -379,5 +361,254 @@ export async function POST(request: NextRequest) {
       { error: 'Failed to import selected data' },
       { status: 500 }
     )
+  }
+}
+
+async function importTaxDataPayload(
+  userId: string,
+  payload: ImportTaxDataRequest,
+  result: ImportResult
+) {
+  const options = payload.options ?? { conflictResolution: 'skip', replaceExisting: false }
+
+  // Import tax settings
+  if (payload.taxSettings) {
+    try {
+      result.summary.totalProcessed++
+
+      const updateData: any = {}
+      if (payload.taxSettings.claimedTaxFreeThreshold !== undefined) {
+        updateData.claimedTaxFreeThreshold = payload.taxSettings.claimedTaxFreeThreshold
+      }
+      if (payload.taxSettings.isForeignResident !== undefined) {
+        updateData.isForeignResident = payload.taxSettings.isForeignResident
+      }
+      if (payload.taxSettings.hasTaxFileNumber !== undefined) {
+        updateData.hasTaxFileNumber = payload.taxSettings.hasTaxFileNumber
+      }
+      if (payload.taxSettings.medicareExemption !== undefined) {
+        updateData.medicareExemption = payload.taxSettings.medicareExemption
+      }
+
+      await prisma.taxSettings.upsert({
+        where: { userId },
+        update: updateData,
+        create: {
+          userId,
+          ...updateData
+        }
+      })
+
+      result.updated.push('Tax settings')
+      result.summary.successful++
+    } catch (error) {
+      console.error('Error importing tax settings (selective):', error)
+      result.errors.push({
+        type: 'validation',
+        field: 'taxSettings',
+        message: `Failed to import tax settings: ${error instanceof Error ? error.message : 'Unknown error'}`
+      })
+      result.summary.failed++
+      result.success = false
+    }
+  }
+
+  if (payload.taxCoefficients && payload.taxCoefficients.length > 0) {
+    for (let i = 0; i < payload.taxCoefficients.length; i++) {
+      const coeff = payload.taxCoefficients[i]
+      result.summary.totalProcessed++
+
+      try {
+        const coeffData = {
+          taxYear: coeff.taxYear,
+          scale: coeff.scale,
+          earningsFrom: new Decimal(coeff.earningsFrom),
+          earningsTo: coeff.earningsTo ? new Decimal(coeff.earningsTo) : null,
+          coefficientA: new Decimal(coeff.coefficientA),
+          coefficientB: new Decimal(coeff.coefficientB),
+          description: coeff.description || null,
+          isActive: true
+        }
+
+        if (options.replaceExisting) {
+          await prisma.taxCoefficient.upsert({
+            where: {
+              taxYear_scale_earningsFrom: {
+                taxYear: coeff.taxYear,
+                scale: coeff.scale,
+                earningsFrom: new Decimal(coeff.earningsFrom)
+              }
+            },
+            update: coeffData,
+            create: coeffData
+          })
+          result.updated.push(`Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}`)
+        } else {
+          const existing = await prisma.taxCoefficient.findUnique({
+            where: {
+              taxYear_scale_earningsFrom: {
+                taxYear: coeff.taxYear,
+                scale: coeff.scale,
+                earningsFrom: new Decimal(coeff.earningsFrom)
+              }
+            }
+          })
+
+          if (existing) {
+            if (options.conflictResolution === 'skip') {
+              result.skipped.push(`Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}: already exists`)
+              result.summary.skipped++
+              continue
+            } else if (options.conflictResolution === 'overwrite') {
+              await prisma.taxCoefficient.update({
+                where: { id: existing.id },
+                data: coeffData
+              })
+              result.updated.push(`Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}`)
+            }
+          } else {
+            await prisma.taxCoefficient.create({ data: coeffData })
+            result.created.push(`Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}`)
+          }
+        }
+
+        result.summary.successful++
+      } catch (error) {
+        console.error(`Error importing tax coefficient (selective) ${i}:`, error)
+        result.errors.push({
+          type: 'validation',
+          field: 'taxCoefficients',
+          message: `Failed to import tax coefficient: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          index: i
+        })
+        result.summary.failed++
+        result.success = false
+      }
+    }
+  }
+
+  if (payload.stslRates && payload.stslRates.length > 0) {
+    for (let i = 0; i < payload.stslRates.length; i++) {
+      const rate = payload.stslRates[i]
+      result.summary.totalProcessed++
+
+      try {
+        const rateData = {
+          taxYear: rate.taxYear,
+          scale: rate.scale,
+          earningsFrom: new Decimal(rate.earningsFrom),
+          earningsTo: rate.earningsTo ? new Decimal(rate.earningsTo) : null,
+          coefficientA: new Decimal(rate.coefficientA),
+          coefficientB: new Decimal(rate.coefficientB),
+          description: rate.description || null,
+          isActive: true
+        }
+
+        if (options.replaceExisting) {
+          await prisma.stslRate.upsert({
+            where: {
+              taxYear_scale_earningsFrom: {
+                taxYear: rate.taxYear,
+                scale: rate.scale,
+                earningsFrom: new Decimal(rate.earningsFrom)
+              }
+            },
+            update: rateData,
+            create: rateData
+          })
+          result.updated.push(`STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}`)
+        } else {
+          const existing = await prisma.stslRate.findUnique({
+            where: {
+              taxYear_scale_earningsFrom: {
+                taxYear: rate.taxYear,
+                scale: rate.scale,
+                earningsFrom: new Decimal(rate.earningsFrom)
+              }
+            }
+          })
+
+          if (existing) {
+            if (options.conflictResolution === 'skip') {
+              result.skipped.push(`STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}: already exists`)
+              result.summary.skipped++
+              continue
+            } else if (options.conflictResolution === 'overwrite') {
+              await prisma.stslRate.update({
+                where: { id: existing.id },
+                data: rateData
+              })
+              result.updated.push(`STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}`)
+            }
+          } else {
+            await prisma.stslRate.create({ data: rateData })
+            result.created.push(`STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}`)
+          }
+        }
+
+        result.summary.successful++
+      } catch (error) {
+        console.error(`Error importing STSL rate (selective) ${i}:`, error)
+        result.errors.push({
+          type: 'validation',
+          field: 'stslRates',
+          message: `Failed to import STSL rate: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          index: i
+        })
+        result.summary.failed++
+        result.success = false
+      }
+    }
+  }
+
+  if (payload.taxRateConfigs && payload.taxRateConfigs.length > 0) {
+    for (let i = 0; i < payload.taxRateConfigs.length; i++) {
+      const config = payload.taxRateConfigs[i]
+      result.summary.totalProcessed++
+
+      try {
+        const existing = await prisma.taxRateConfig.findFirst({
+          where: { taxYear: config.taxYear, description: config.description || undefined }
+        })
+
+        if (existing) {
+          if (options.conflictResolution === 'skip') {
+            result.skipped.push(`Tax rate config ${config.taxYear}: already exists`)
+            result.summary.skipped++
+            continue
+          } else if (options.conflictResolution === 'overwrite' || options.replaceExisting) {
+            await prisma.taxRateConfig.update({
+              where: { id: existing.id },
+              data: {
+                description: config.description || null,
+                isActive: true
+              }
+            })
+            result.updated.push(`Tax rate config ${config.taxYear}`)
+          }
+        } else {
+          await prisma.taxRateConfig.create({
+            data: {
+              taxYear: config.taxYear,
+              description: config.description || null,
+              isActive: true
+            }
+          })
+          result.created.push(`Tax rate config ${config.taxYear}`)
+        }
+
+        result.summary.successful++
+      } catch (error) {
+        console.error(`Error importing tax rate config (selective) ${i}:`, error)
+        result.errors.push({
+          type: 'validation',
+          field: 'taxRateConfigs',
+          message: `Failed to import tax rate config: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          index: i
+        })
+        result.summary.failed++
+        result.success = false
+      }
+    }
   }
 }

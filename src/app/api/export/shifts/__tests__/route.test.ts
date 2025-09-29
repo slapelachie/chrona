@@ -2,11 +2,13 @@ import { GET } from '../route'
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db'
 import { Decimal } from 'decimal.js'
+import { parseCsv } from '@/lib/csv-utils'
+import { vi } from 'vitest'
 
-jest.mock('@/lib/db', () => ({
+vi.mock('@/lib/db', () => ({
   prisma: {
     shift: {
-      findMany: jest.fn()
+      findMany: vi.fn()
     }
   }
 }))
@@ -49,53 +51,53 @@ const mockShifts = [
 
 describe('/api/export/shifts', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('GET', () => {
     it('should export shifts successfully', async () => {
-      ;(prisma.shift.findMany as jest.Mock).mockResolvedValue(mockShifts)
+      ;(prisma.shift.findMany as vi.Mock).mockResolvedValue(mockShifts)
 
       const request = new NextRequest('http://localhost:3000/api/export/shifts')
       const response = await GET(request)
 
       expect(response.status).toBe(200)
-      expect(response.headers.get('Content-Type')).toBe('application/json')
+      expect(response.headers.get('Content-Type')).toContain('text/csv')
       expect(response.headers.get('Content-Disposition')).toContain('attachment')
 
       const responseText = await response.text()
-      const exportData = JSON.parse(responseText)
+      const rows = parseCsv(responseText)
 
-      expect(exportData.shifts).toHaveLength(1)
-      expect(exportData.shifts[0]).toMatchObject({
-        id: 'shift1',
-        payGuideId: 'guide1',
-        payGuideName: 'Test Guide',
-        startTime: '2023-12-01T09:00:00.000Z',
-        endTime: '2023-12-01T17:00:00.000Z',
-        totalHours: '8',
-        basePay: '200',
-        overtimePay: '0',
-        penaltyPay: '50',
-        totalPay: '250',
-        notes: 'Test shift'
-      })
+      expect(rows).toHaveLength(2)
+      expect(rows[0]).toEqual([
+        'pay_guide_name',
+        'start_time',
+        'end_time',
+        'notes',
+        'breaks',
+        'total_hours',
+        'base_pay',
+        'overtime_pay',
+        'penalty_pay',
+        'total_pay'
+      ])
 
-      expect(exportData.shifts[0].breakPeriods).toHaveLength(1)
-      expect(exportData.shifts[0].penaltySegments).toHaveLength(1)
-      expect(exportData.shifts[0].overtimeSegments).toHaveLength(0)
-
-      expect(exportData.metadata).toMatchObject({
-        totalShifts: 1,
-        dateRange: {
-          earliest: '2023-12-01T09:00:00.000Z',
-          latest: '2023-12-01T09:00:00.000Z'
-        }
-      })
+      expect(rows[1]).toEqual([
+        'Test Guide',
+        '2023-12-01T09:00:00.000Z',
+        '2023-12-01T17:00:00.000Z',
+        'Test shift',
+        '2023-12-01T12:00:00.000Z|2023-12-01T13:00:00.000Z',
+        '8',
+        '200',
+        '0',
+        '50',
+        '250'
+      ])
     })
 
     it('should filter shifts by date range', async () => {
-      ;(prisma.shift.findMany as jest.Mock).mockResolvedValue([])
+      ;(prisma.shift.findMany as vi.Mock).mockResolvedValue([])
 
       const url = new URL('http://localhost:3000/api/export/shifts')
       url.searchParams.set('startDate', '2023-12-01T00:00:00Z')
@@ -109,7 +111,8 @@ describe('/api/export/shifts', () => {
           startTime: {
             gte: new Date('2023-12-01T00:00:00Z'),
             lte: new Date('2023-12-31T23:59:59Z')
-          }
+          },
+          payGuide: { isActive: true }
         },
         include: {
           payGuide: { select: { name: true, isActive: true } },
@@ -122,7 +125,7 @@ describe('/api/export/shifts', () => {
     })
 
     it('should filter shifts by pay guide', async () => {
-      ;(prisma.shift.findMany as jest.Mock).mockResolvedValue([])
+      ;(prisma.shift.findMany as vi.Mock).mockResolvedValue([])
 
       const url = new URL('http://localhost:3000/api/export/shifts')
       url.searchParams.set('payGuideId', 'guide123')
@@ -132,7 +135,8 @@ describe('/api/export/shifts', () => {
 
       expect(prisma.shift.findMany).toHaveBeenCalledWith({
         where: {
-          payGuideId: 'guide123'
+          payGuideId: 'guide123',
+          payGuide: { isActive: true }
         },
         include: {
           payGuide: { select: { name: true, isActive: true } },
@@ -145,7 +149,7 @@ describe('/api/export/shifts', () => {
     })
 
     it('should include inactive pay guides when requested', async () => {
-      ;(prisma.shift.findMany as jest.Mock).mockResolvedValue([])
+      ;(prisma.shift.findMany as vi.Mock).mockResolvedValue([])
 
       const url = new URL('http://localhost:3000/api/export/shifts')
       url.searchParams.set('includeInactive', 'true')
@@ -166,7 +170,7 @@ describe('/api/export/shifts', () => {
     })
 
     it('should handle empty shifts array', async () => {
-      ;(prisma.shift.findMany as jest.Mock).mockResolvedValue([])
+      ;(prisma.shift.findMany as vi.Mock).mockResolvedValue([])
 
       const request = new NextRequest('http://localhost:3000/api/export/shifts')
       const response = await GET(request)
@@ -174,14 +178,13 @@ describe('/api/export/shifts', () => {
       expect(response.status).toBe(200)
 
       const responseText = await response.text()
-      const exportData = JSON.parse(responseText)
+      const rows = parseCsv(responseText)
 
-      expect(exportData.shifts).toHaveLength(0)
-      expect(exportData.metadata.totalShifts).toBe(0)
+      expect(rows).toHaveLength(1)
     })
 
     it('should handle database errors', async () => {
-      ;(prisma.shift.findMany as jest.Mock).mockRejectedValue(new Error('Database error'))
+      ;(prisma.shift.findMany as vi.Mock).mockRejectedValue(new Error('Database error'))
 
       const request = new NextRequest('http://localhost:3000/api/export/shifts')
       const response = await GET(request)

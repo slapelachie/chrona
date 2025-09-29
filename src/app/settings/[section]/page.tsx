@@ -6,17 +6,17 @@ import { SETTINGS_SECTIONS } from '@/lib/settings-sections'
 type SectionKey = keyof typeof SETTINGS_SECTIONS
 
 type SettingsSectionPageProps = {
-  params: {
+  params: Promise<{
     section: string
-  }
+  }>
 }
 
 export function generateStaticParams() {
   return (Object.keys(SETTINGS_SECTIONS) as SectionKey[]).map(section => ({ section }))
 }
 
-export default function SettingsSectionPage({ params }: SettingsSectionPageProps) {
-  const { section: rawSection } = params
+export default async function SettingsSectionPage({ params }: SettingsSectionPageProps) {
+  const { section: rawSection } = await params
   if (!isSectionKey(rawSection)) {
     notFound()
   }

@@ -5,10 +5,18 @@ import { validateShiftsImport } from '@/lib/import-validation'
 import { calculateAndUpdateShift, fetchShiftBreakPeriods, updateShiftWithCalculation } from '@/lib/shift-calculation'
 import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
+import { parseShiftsCsv } from '@/lib/import-csv'
 
 export async function POST(request: NextRequest) {
   try {
-    const body: ImportShiftsRequest = await request.json()
+    const contentType = request.headers.get('content-type') ?? ''
+    const url = new URL(request.url)
+    const body: ImportShiftsRequest = contentType.includes('application/json')
+      ? await request.json()
+      : parseShiftsCsv(await request.text(), {
+          conflictResolution: url.searchParams.get('conflictResolution'),
+          validatePayGuides: url.searchParams.get('validatePayGuides')
+        })
 
     // Validate the import request
     const validator = await validateShiftsImport(body)
@@ -171,6 +179,14 @@ export async function POST(request: NextRequest) {
         result.summary.failed++
         result.success = false
       }
+    }
+
+    if (result.summary.successful > 0) {
+      result.warnings.push({
+        type: 'dependency',
+        field: 'payPeriods',
+        message: 'Pay periods were created automatically. Review default extras in Settings if they should apply.'
+      })
     }
 
     return NextResponse.json(result, { status: result.success ? 200 : 207 }) // 207 = Multi-Status

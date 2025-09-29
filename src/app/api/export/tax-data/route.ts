@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import JSZip from 'jszip'
 import { prisma } from '@/lib/db'
-import { ExportTaxDataResponse } from '@/types'
+import { buildPaygTaxCsv, buildStslTaxCsv } from '@/lib/export-csv'
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,56 +64,31 @@ export async function GET(request: NextRequest) {
       })
     ])
 
-    const includedTaxYears = Array.from(new Set([
-      ...taxCoefficients.map(tc => tc.taxYear),
-      ...stslRates.map(sr => sr.taxYear),
-      ...taxRateConfigs.map(trc => trc.taxYear)
-    ])).sort().reverse()
-
-    const exportData: ExportTaxDataResponse = {
-      taxSettings: {
+    const paygCsv = buildPaygTaxCsv(
+      {
         claimedTaxFreeThreshold: taxSettings.claimedTaxFreeThreshold,
         isForeignResident: taxSettings.isForeignResident,
         hasTaxFileNumber: taxSettings.hasTaxFileNumber,
-        medicareExemption: taxSettings.medicareExemption,
-        // No hecsHelpRate; STSL is derived from Schedule 8 rates
+        medicareExemption: taxSettings.medicareExemption
       },
-      taxCoefficients: taxCoefficients.map(tc => ({
-        taxYear: tc.taxYear,
-        scale: tc.scale,
-        earningsFrom: tc.earningsFrom.toString(),
-        earningsTo: tc.earningsTo?.toString(),
-        coefficientA: tc.coefficientA.toString(),
-        coefficientB: tc.coefficientB.toString(),
-        description: tc.description || undefined,
-        isActive: tc.isActive
-      })),
-      stslRates: stslRates.map(sr => ({
-        taxYear: sr.taxYear,
-        scale: sr.scale,
-        earningsFrom: sr.earningsFrom.toString(),
-        earningsTo: sr.earningsTo?.toString(),
-        coefficientA: sr.coefficientA.toString(),
-        coefficientB: sr.coefficientB.toString(),
-        description: sr.description || undefined,
-        isActive: sr.isActive
-      })),
-      taxRateConfigs: taxRateConfigs.map(trc => ({
-        taxYear: trc.taxYear,
-        description: trc.description || undefined,
-        isActive: trc.isActive
-      })),
-      metadata: {
-        exportedAt: new Date().toISOString(),
-        includedTaxYears
-      }
-    }
+      taxCoefficients,
+      taxRateConfigs
+    )
 
-    const filename = `chrona-tax-data-export-${new Date().toISOString().slice(0, 10)}.json`
+    const stslCsv = buildStslTaxCsv(stslRates)
+
+    const zip = new JSZip()
+    zip.file('tax-data-payg.csv', paygCsv)
+    zip.file('tax-data-stsl.csv', stslCsv)
+
+    const buffer = await zip.generateAsync({ type: 'uint8array' })
+    const filename = `chrona-tax-data-export-${new Date().toISOString().slice(0, 10)}.zip`
     
-    return new Response(JSON.stringify(exportData, null, 2), {
+    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
+
+    return new Response(arrayBuffer, {
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${filename}"`
       }
     })
