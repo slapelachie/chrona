@@ -4,6 +4,7 @@ import {
   Bell,
   Database,
   FileText,
+  Gift,
   Settings,
   Table,
   User2,
@@ -15,6 +16,7 @@ import {
   PayGuideSelector,
   PersonalInfoForm,
   TaxSettingsForm,
+  DefaultPayPeriodExtrasSettings,
 } from '@/components/settings'
 
 export type SettingsCategory = 'Personal' | 'Pay & Tax' | 'Productivity' | 'Administration'
@@ -62,6 +64,15 @@ export const SETTINGS_SECTIONS = {
     category: 'Pay & Tax',
     icon: Wallet,
     statusKey: 'defaultPayGuide',
+  },
+  'pay-period-defaults': {
+    slug: 'pay-period-defaults',
+    title: 'Pay Period Extras',
+    subtitle: 'Default allowances & deductions',
+    description: 'Configure extras added to new pay periods',
+    component: DefaultPayPeriodExtrasSettings,
+    category: 'Pay & Tax',
+    icon: Gift,
   },
   tax: {
     slug: 'tax',

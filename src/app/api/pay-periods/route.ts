@@ -13,6 +13,8 @@ import {
   validateString,
   validateDateRange,
 } from '@/lib/validation'
+import { applyDefaultExtrasToPayPeriod } from '@/lib/pay-period-default-extras'
+import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 
 // GET /api/pay-periods - List pay periods with filtering and pagination
 export async function GET(request: NextRequest) {
@@ -259,15 +261,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create the pay period
-    const payPeriod = await prisma.payPeriod.create({
-      data: {
-        userId: user.id,
-        startDate,
-        endDate,
-        status: body.status || 'open',
-      },
+    // Create the pay period with default extras in a single transaction
+    const { payPeriod, createdExtras } = await prisma.$transaction(async (tx) => {
+      const createdPayPeriod = await tx.payPeriod.create({
+        data: {
+          userId: user.id,
+          startDate,
+          endDate,
+          status: body.status || 'open',
+        },
+      })
+
+      const extrasCount = await applyDefaultExtrasToPayPeriod(user.id, createdPayPeriod.id, tx)
+
+      return { payPeriod: createdPayPeriod, createdExtras: extrasCount }
     })
+
+    if (createdExtras > 0) {
+      await PayPeriodSyncService.onExtrasChanged(payPeriod.id)
+    }
 
     // Transform to response format
     const response: PayPeriodResponse = {

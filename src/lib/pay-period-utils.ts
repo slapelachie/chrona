@@ -2,6 +2,8 @@ import { prisma } from '@/lib/db'
 import { PayPeriod, PayPeriodStatus, PayPeriodType } from '@/types'
 import { TimeZoneHelper } from './calculations/timezone-helper'
 import { formatInTimeZone } from 'date-fns-tz'
+import { applyDefaultExtrasToPayPeriod } from '@/lib/pay-period-default-extras'
+import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 
 /**
  * Pay Period Utilities
@@ -98,7 +100,7 @@ export function calculateMonthlyPeriod(date: Date): {
 /**
  * Calculates the pay period that contains a given date based on the pay period type
  */
-export function calculatePayPeriod(date: Date, payPeriodType: PayPeriodType): {
+function calculatePayPeriodUtc(date: Date, payPeriodType: PayPeriodType): {
   startDate: Date
   endDate: Date
 } {
@@ -114,6 +116,39 @@ export function calculatePayPeriod(date: Date, payPeriodType: PayPeriodType): {
   }
 }
 
+function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
+  const offsetStr = formatInTimeZone(date, timeZone, 'xxx')
+  const sign = offsetStr.startsWith('-') ? -1 : 1
+  const [hours, minutes] = offsetStr.slice(1).split(':').map(Number)
+  return sign * ((hours || 0) * 60 + (minutes || 0)) * 60 * 1000
+}
+
+export function calculatePayPeriod(
+  date: Date,
+  payPeriodType: PayPeriodType,
+  timeZone?: string
+): { startDate: Date; endDate: Date } {
+  if (!timeZone) {
+    return calculatePayPeriodUtc(date, payPeriodType)
+  }
+
+  const helper = new TimeZoneHelper(timeZone)
+  const localDateStr = formatInTimeZone(date, timeZone, 'yyyy-MM-dd')
+  const localMidnight = helper.createLocalMidnight(new Date(`${localDateStr}T12:00:00Z`))
+  const offsetMs = getTimeZoneOffsetMs(localMidnight, timeZone)
+  const adjustedDate = new Date(localMidnight.getTime() + offsetMs)
+
+  const { startDate: adjustedStart, endDate: adjustedEnd } = calculatePayPeriodUtc(adjustedDate, payPeriodType)
+
+  const startOffset = getTimeZoneOffsetMs(adjustedStart, timeZone)
+  const endOffset = getTimeZoneOffsetMs(adjustedEnd, timeZone)
+
+  const startDate = new Date(adjustedStart.getTime() - startOffset)
+  const endDate = new Date(adjustedEnd.getTime() - endOffset)
+
+  return { startDate, endDate }
+}
+
 /**
  * Finds an existing pay period for a user and date, or creates one if it doesn't exist
  * Uses upsert pattern to handle concurrent requests safely
@@ -125,23 +160,7 @@ export async function findOrCreatePayPeriod(
   shiftDate: Date,
   payGuideTimezone: string
 ): Promise<PayPeriod> {
-  // Convert shift date to local timezone date for pay period calculation
-  const tzHelper = new TimeZoneHelper(payGuideTimezone)
-  const localDateStr = formatInTimeZone(shiftDate, payGuideTimezone, 'yyyy-MM-dd')
-  const localShiftDate = tzHelper.createLocalMidnight(new Date(`${localDateStr}T12:00:00Z`))
-
-  // First try to find existing pay period
-  const existingPayPeriod = await prisma.payPeriod.findFirst({
-    where: {
-      userId,
-      startDate: { lte: localShiftDate },
-      endDate: { gte: localShiftDate },
-    },
-  })
-
-  if (existingPayPeriod) {
-    return existingPayPeriod as PayPeriod
-  }
+  const targetTimeZone = payGuideTimezone || 'Australia/Sydney'
 
   // Get user's pay period type configuration
   const user = await prisma.user.findUnique({
@@ -153,25 +172,67 @@ export async function findOrCreatePayPeriod(
     throw new Error(`User not found: ${userId}`)
   }
 
-  // Calculate the pay period for this date using user's preference and pay guide timezone
-  const { startDate, endDate } = calculatePayPeriod(localShiftDate, user.payPeriodType)
+  const { startDate: periodStart, endDate: periodEnd } = calculatePayPeriod(
+    shiftDate,
+    user.payPeriodType,
+    targetTimeZone
+  )
 
-  // Use upsert to handle concurrent creation attempts
-  const payPeriod = await prisma.payPeriod.upsert({
+  const existingPayPeriod = await prisma.payPeriod.findUnique({
     where: {
       userId_startDate: {
         userId,
-        startDate,
+        startDate: periodStart,
       },
     },
-    update: {}, // No update needed if it exists
-    create: {
+  })
+
+  if (existingPayPeriod) {
+    if (existingPayPeriod.endDate.getTime() !== periodEnd.getTime()) {
+      await prisma.payPeriod.update({
+        where: { id: existingPayPeriod.id },
+        data: { endDate: periodEnd },
+      })
+      existingPayPeriod.endDate = periodEnd
+    }
+    return existingPayPeriod as PayPeriod
+  }
+
+  const overlappingPayPeriod = await prisma.payPeriod.findFirst({
+    where: {
       userId,
-      startDate,
-      endDate,
-      status: 'open' as PayPeriodStatus,
+      startDate: { lte: shiftDate },
+      endDate: { gte: shiftDate },
     },
   })
+
+  if (overlappingPayPeriod) {
+    const updated = await prisma.payPeriod.update({
+      where: { id: overlappingPayPeriod.id },
+      data: { startDate: periodStart, endDate: periodEnd },
+    })
+    return updated as PayPeriod
+  }
+
+  // Use upsert to handle concurrent creation attempts
+  const { payPeriod, createdExtras } = await prisma.$transaction(async (tx) => {
+    const created = await tx.payPeriod.create({
+      data: {
+        userId,
+        startDate: periodStart,
+        endDate: periodEnd,
+        status: 'open' as PayPeriodStatus,
+      },
+    })
+
+    const extrasCount = await applyDefaultExtrasToPayPeriod(userId, created.id, tx)
+
+    return { payPeriod: created, createdExtras: extrasCount }
+  })
+
+  if (createdExtras > 0) {
+    await PayPeriodSyncService.onExtrasChanged(payPeriod.id)
+  }
 
   return payPeriod as PayPeriod
 }

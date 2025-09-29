@@ -8,7 +8,7 @@ export async function GET(_request: NextRequest) {
   try {
     // Get the default user (single-user app assumption)
     const user = await prisma.user.findFirst({
-      select: { id: true, name: true, payPeriodType: true }
+      select: { id: true, name: true, payPeriodType: true, timezone: true }
     })
 
     if (!user) {
@@ -20,7 +20,8 @@ export async function GET(_request: NextRequest) {
 
     // Compute the current period range without creating a DB record
     const now = new Date()
-    const { startDate, endDate } = calculatePayPeriod(now, user.payPeriodType)
+    const timeZone = user.timezone || 'Australia/Sydney'
+    const { startDate, endDate } = calculatePayPeriod(now, user.payPeriodType, timeZone)
 
     // Try to find an existing current pay period (do NOT create one if missing)
     const currentPayPeriod = await prisma.payPeriod.findUnique({

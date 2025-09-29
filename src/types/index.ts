@@ -117,6 +117,19 @@ export interface PayPeriodExtra {
   updatedAt: Date
 }
 
+export interface PayPeriodExtraTemplate {
+  id: string
+  userId: string
+  label: string
+  description?: string | null
+  amount: Decimal
+  taxable: boolean
+  active: boolean
+  sortOrder: number
+  createdAt: Date
+  updatedAt: Date
+}
+
 // =============================================================================
 // BUSINESS LOGIC TYPES
 // =============================================================================
@@ -401,6 +414,34 @@ export interface PayPeriodExtraResponse
   amount: string
   createdAt: string
   updatedAt: string
+}
+
+export interface PayPeriodExtraTemplateResponse
+  extends Omit<
+    PayPeriodExtraTemplate,
+    'amount' | 'createdAt' | 'updatedAt'
+  > {
+  amount: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreatePayPeriodExtraTemplateRequest {
+  label: string
+  description?: string | null
+  amount: string
+  taxable?: boolean
+  active?: boolean
+  sortOrder?: number
+}
+
+export interface UpdatePayPeriodExtraTemplateRequest {
+  label?: string
+  description?: string | null
+  amount?: string
+  taxable?: boolean
+  active?: boolean
+  sortOrder?: number
 }
 
 export interface CreatePayPeriodRequest {

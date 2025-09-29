@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Single-user app: find the user
-    const user = await prisma.user.findFirst()
+    const user = await prisma.user.findFirst({ select: { id: true, payPeriodType: true, timezone: true } })
     if (!user) {
       return NextResponse.json({ error: 'No user found. Please seed the database first.' }, { status: 400 })
     }
@@ -43,8 +43,10 @@ export async function POST(request: NextRequest) {
     const touched = new Set<string>()
     let moved = 0
 
+    const timeZone = user.timezone || 'Australia/Sydney'
+
     for (const s of shifts) {
-      const { startDate } = calculatePayPeriod(s.startTime, newPayPeriodType)
+      const { startDate, endDate } = calculatePayPeriod(s.startTime, newPayPeriodType, timeZone)
       // Upsert target pay period by composite (userId, startDate)
       const target = await prisma.payPeriod.upsert({
         where: { userId_startDate: { userId: user.id, startDate } },
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
         create: {
           userId: user.id,
           startDate,
-          endDate: calculatePayPeriod(s.startTime, newPayPeriodType).endDate,
+          endDate,
           status: 'open',
         }
       })
