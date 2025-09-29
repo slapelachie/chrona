@@ -3,16 +3,17 @@
 import React from 'react'
 import Link from 'next/link'
 import { AppShell } from '@/components/layout'
+import { SETTINGS_SECTION_LIST } from '@/lib/settings-sections'
 
 export default function SettingsIndexPage() {
   const items = [
-    { href: '/settings/personal', title: 'Personal Information', desc: 'Name, email, timezone, pay period type' },
-    { href: '/settings/pay-guide', title: 'Pay Guide', desc: 'Choose a default pay guide' },
+    ...SETTINGS_SECTION_LIST.map(section => ({
+      href: `/settings/${section.slug}`,
+      title: section.title,
+      desc: section.description,
+    })),
     { href: '/pay-guides', title: 'Pay Guides (Manage)', desc: 'Add, edit, deactivate, or delete pay guides' },
-    { href: '/settings/tax', title: 'Tax Settings', desc: 'TFN, tax-free threshold, Medicare, HECS-HELP' },
     { href: '/settings/tax-tables', title: 'Tax Tables (Admin)', desc: 'PAYG coefficients and HECS thresholds' },
-    { href: '/settings/notifications', title: 'Notifications', desc: 'Email and reminder preferences' },
-    { href: '/settings/data', title: 'Data Management', desc: 'Export data, import preferences' },
   ]
 
   return (

@@ -18,3 +18,21 @@ export function getCurrentAuTaxYearString(): string {
   return getTaxYearStringFromDate(new Date())
 }
 
+export function getTaxYearBounds(taxYear: string): { start: Date; end: Date } {
+  const [startYearStr, endYearSuffix] = taxYear.split('-')
+  const startYear = Number(startYearStr)
+  if (!startYearStr || Number.isNaN(startYear) || endYearSuffix?.length !== 2) {
+    throw new Error(`Invalid tax year string: ${taxYear}`)
+  }
+  const endYear = Number(`${startYearStr.slice(0, 2)}${endYearSuffix}`)
+  const start = new Date(Date.UTC(startYear, 6, 1, 0, 0, 0, 0))
+  const end = new Date(Date.UTC(endYear, 5, 30, 23, 59, 59, 999))
+  return { start, end }
+}
+
+export function normalizeTaxYear(taxYear?: string | null): string {
+  if (taxYear && taxYear.includes('-')) {
+    return taxYear
+  }
+  return getCurrentAuTaxYearString()
+}

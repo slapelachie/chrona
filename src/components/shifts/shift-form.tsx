@@ -45,18 +45,19 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     startTime: '',
     endTime: '',
     notes: '',
-    breakPeriods: []
+    breakPeriods: [],
   })
-  
+
   const [payGuides, setPayGuides] = useState<PayGuide[]>([])
   const [payPreview, setPayPreview] = useState<PayPreview | null>(null)
-  const [payCalculation, setPayCalculation] = useState<PayCalculationResult | null>(null)
+  const [payCalculation, setPayCalculation] =
+    useState<PayCalculationResult | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(mode === 'edit')
-  
+
   const router = useRouter()
 
   // Fetch pay guides on component mount
@@ -75,13 +76,18 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       const timeoutId = setTimeout(() => {
         fetchPayPreview()
       }, 500) // Debounce API calls
-      
+
       return () => clearTimeout(timeoutId)
     } else {
       setPayPreview(null)
       setPayCalculation(null)
     }
-  }, [formData.payGuideId, formData.startTime, formData.endTime, formData.breakPeriods])
+  }, [
+    formData.payGuideId,
+    formData.startTime,
+    formData.endTime,
+    formData.breakPeriods,
+  ])
 
   const fetchPayGuides = async () => {
     try {
@@ -100,26 +106,26 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     if (mode !== 'create') return
     if (formData.payGuideId) return
     if (!prefs?.defaultPayGuideId) return
-    const exists = payGuides.some(pg => pg.id === prefs.defaultPayGuideId)
+    const exists = payGuides.some((pg) => pg.id === prefs.defaultPayGuideId)
     if (exists) {
-      setFormData(prev => ({ ...prev, payGuideId: prefs.defaultPayGuideId! }))
+      setFormData((prev) => ({ ...prev, payGuideId: prefs.defaultPayGuideId! }))
     }
   }, [mode, prefs?.defaultPayGuideId, payGuides, formData.payGuideId])
 
   const fetchShiftData = async () => {
     if (!shiftId) return
-    
+
     try {
       setInitialLoading(true)
       const response = await fetch(`/api/shifts/${shiftId}`)
       if (response.ok) {
         const data = await response.json()
         const shift = data.data
-        
+
         // Convert UTC dates to local datetime-local format
         const startTime = new Date(shift.startTime)
         const endTime = new Date(shift.endTime)
-        
+
         const breakPeriods = (shift.breakPeriods || []).map((bp: any) => ({
           id: bp.id,
           startTime: bp.startTime,
@@ -143,15 +149,15 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   const fetchPayPreview = async () => {
     try {
       setPreviewLoading(true)
-      
+
       // Transform break periods for API
       const breakPeriods = formData.breakPeriods
-        .filter(bp => bp.startTime && bp.endTime)
-        .map(bp => ({
+        .filter((bp) => bp.startTime && bp.endTime)
+        .map((bp) => ({
           startTime: new Date(bp.startTime).toISOString(),
-          endTime: new Date(bp.endTime).toISOString()
+          endTime: new Date(bp.endTime).toISOString(),
         }))
-      
+
       const response = await fetch('/api/shifts/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -159,26 +165,26 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
           payGuideId: formData.payGuideId,
           startTime: new Date(formData.startTime).toISOString(),
           endTime: new Date(formData.endTime).toISOString(),
-          breakPeriods
-        })
+          breakPeriods,
+        }),
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         const calculation = data.data.calculation
-        
+
         // Store the complete calculation for breakdown
         setPayCalculation(calculation)
-        
+
         // Transform the PayCalculationResult to PayPreview format for backward compatibility
         const preview: PayPreview = {
           totalHours: calculation.shift.totalHours.toString(),
           basePay: calculation.breakdown.basePay.toString(),
           overtimePay: calculation.breakdown.overtimePay.toString(),
           penaltyPay: calculation.breakdown.penaltyPay.toString(),
-          totalPay: calculation.breakdown.totalPay.toString()
+          totalPay: calculation.breakdown.totalPay.toString(),
         }
-        
+
         setPayPreview(preview)
       }
     } catch (error) {
@@ -200,7 +206,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   const handleStartTimeChange = (value: string) => {
     // Always set start time
     // Adjust end time depending on whether we already have one
-    setFormData(prev => {
+    setFormData((prev) => {
       const next = { ...prev, startTime: value }
       try {
         const newStart = value ? new Date(value) : null
@@ -210,7 +216,9 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
             // Preserve existing duration
             const prevStart = prev.startTime ? new Date(prev.startTime) : null
             const prevEnd = new Date(prev.endTime as string)
-            const prevDuration = prevStart ? (prevEnd.getTime() - prevStart.getTime()) : 0
+            const prevDuration = prevStart
+              ? prevEnd.getTime() - prevStart.getTime()
+              : 0
             if (prevDuration > 0) {
               const newEnd = new Date(newStart.getTime() + prevDuration)
               next.endTime = formatDateTimeLocal(newEnd)
@@ -226,96 +234,96 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       }
       return next
     })
-    if (errors.startTime) setErrors(prev => ({ ...prev, startTime: '' }))
+    if (errors.startTime) setErrors((prev) => ({ ...prev, startTime: '' }))
   }
 
   const handleEndTimeChange = (value: string) => {
-    setFormData(prev => ({ ...prev, endTime: value }))
-    if (errors.endTime) setErrors(prev => ({ ...prev, endTime: '' }))
+    setFormData((prev) => ({ ...prev, endTime: value }))
+    if (errors.endTime) setErrors((prev) => ({ ...prev, endTime: '' }))
   }
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
-    
+
     if (!formData.payGuideId) {
       newErrors.payGuideId = 'Please select a pay guide'
     }
-    
+
     if (!formData.startTime) {
       newErrors.startTime = 'Start time is required'
     }
-    
+
     if (!formData.endTime) {
       newErrors.endTime = 'End time is required'
     }
-    
+
     if (formData.startTime && formData.endTime) {
       const start = new Date(formData.startTime)
       const end = new Date(formData.endTime)
-      
+
       if (end <= start) {
         newErrors.endTime = 'End time must be after start time'
       }
-      
+
       const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
       if (durationHours > 24) {
         newErrors.endTime = 'Shift cannot be longer than 24 hours'
       }
     }
-    
+
     if (formData.notes && formData.notes.length > 500) {
       newErrors.notes = 'Notes cannot exceed 500 characters'
     }
-    
+
     // Validate break periods
     for (let i = 0; i < formData.breakPeriods.length; i++) {
       const breakPeriod = formData.breakPeriods[i]
       if (breakPeriod.startTime && breakPeriod.endTime) {
         const start = new Date(breakPeriod.startTime)
         const end = new Date(breakPeriod.endTime)
-        
+
         if (end <= start) {
           newErrors.breakPeriods = `Break ${i + 1}: End time must be after start time`
           break
         }
-        
+
         if (formData.startTime && formData.endTime) {
           const shiftStart = new Date(formData.startTime)
           const shiftEnd = new Date(formData.endTime)
-          
+
           if (start < shiftStart || end > shiftEnd) {
             newErrors.breakPeriods = `Break ${i + 1}: Break must be within shift time`
             break
           }
         }
-        
+
         // Check for overlapping break periods
         for (let j = i + 1; j < formData.breakPeriods.length; j++) {
           const otherBreak = formData.breakPeriods[j]
           if (otherBreak.startTime && otherBreak.endTime) {
             const otherStart = new Date(otherBreak.startTime)
             const otherEnd = new Date(otherBreak.endTime)
-            
-            if ((start < otherEnd && end > otherStart)) {
+
+            if (start < otherEnd && end > otherStart) {
               newErrors.breakPeriods = `Break ${i + 1} and Break ${j + 1} overlap`
               break
             }
           }
         }
-        
+
         if (newErrors.breakPeriods) break
       }
     }
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const handleInputChange = (field: keyof ShiftData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    setFormData((prev) => ({ ...prev, [field]: value }))
     // Clear error when user starts typing
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }))
+      setErrors((prev) => ({ ...prev, [field]: '' }))
     }
   }
 
@@ -328,8 +336,8 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               startTime: new Date(breakPeriod.startTime).toISOString(),
-              endTime: new Date(breakPeriod.endTime).toISOString()
-            })
+              endTime: new Date(breakPeriod.endTime).toISOString(),
+            }),
           })
         } catch (error) {
           console.error('Failed to create break period:', error)
@@ -341,37 +349,37 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!validateForm()) return
-    
+
     try {
       setSubmitting(true)
-      
+
       const payload = {
         payGuideId: formData.payGuideId,
         startTime: new Date(formData.startTime).toISOString(),
         endTime: new Date(formData.endTime).toISOString(),
-        notes: formData.notes || undefined
+        notes: formData.notes || undefined,
       }
-      
+
       const url = mode === 'create' ? '/api/shifts' : `/api/shifts/${shiftId}`
       const method = mode === 'create' ? 'POST' : 'PUT'
-      
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         const newShiftId = data.data.id
-        
+
         // Create break periods after successful shift creation
         if (mode === 'create' && formData.breakPeriods.length > 0) {
           await createBreakPeriods(newShiftId)
         }
-        
+
         router.push(`/shifts/${newShiftId}`)
       } else {
         const errorData = await response.json()
@@ -403,14 +411,20 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     return (
       <Card>
         <CardBody>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '2rem',
-            gap: '0.5rem'
-          }}>
-            <Loader size={20} style={{ color: 'var(--color-primary)' }} className="spinner" />
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '2rem',
+              gap: '0.5rem',
+            }}
+          >
+            <Loader
+              size={20}
+              style={{ color: 'var(--color-primary)' }}
+              className="spinner"
+            />
             <span style={{ color: 'var(--color-text-secondary)' }}>
               Loading shift data...
             </span>
@@ -424,52 +438,62 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     <Card>
       <CardBody>
         <form onSubmit={handleSubmit}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div
+            style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
+          >
             {/* Pay Guide Selection */}
             <div>
-              <Form.Label style={{ 
-                color: 'var(--color-text-primary)', 
-                fontWeight: '500',
-                marginBottom: '0.5rem',
-                display: 'block'
-              }}>
+              <Form.Label
+                style={{
+                  color: 'var(--color-text-primary)',
+                  fontWeight: '500',
+                  marginBottom: '0.5rem',
+                  display: 'block',
+                }}
+              >
                 Pay Guide *
               </Form.Label>
               <Form.Select
                 value={formData.payGuideId}
-                onChange={(e) => handleInputChange('payGuideId', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('payGuideId', e.target.value)
+                }
                 style={{
                   backgroundColor: 'var(--color-surface)',
                   border: `1px solid ${errors.payGuideId ? 'var(--color-danger)' : 'var(--color-border)'}`,
                   color: 'var(--color-text-primary)',
                   borderRadius: '6px',
-                  padding: '0.75rem'
+                  padding: '0.75rem',
                 }}
               >
                 <option value="">Select a pay guide</option>
-                {payGuides.map(guide => (
+                {payGuides.map((guide) => (
                   <option key={guide.id} value={guide.id}>
                     {guide.name} (${guide.baseRate}/hr)
                   </option>
                 ))}
               </Form.Select>
               {errors.payGuideId && (
-                <div style={{ 
-                  color: 'var(--color-danger)', 
-                  fontSize: '0.875rem', 
-                  marginTop: '0.25rem' 
-                }}>
+                <div
+                  style={{
+                    color: 'var(--color-danger)',
+                    fontSize: '0.875rem',
+                    marginTop: '0.25rem',
+                  }}
+                >
                   {errors.payGuideId}
                 </div>
               )}
             </div>
 
             {/* Date and Time Inputs */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '1rem'
-            }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: '1rem',
+              }}
+            >
               <Input
                 type="datetime-local"
                 label="Start Time"
@@ -479,7 +503,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
                 leftIcon={<Calendar size={16} />}
                 required
               />
-              
+
               <Input
                 type="datetime-local"
                 label="End Time"
@@ -494,8 +518,8 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
             {/* Break Periods */}
             <BreakPeriodsInput
               breakPeriods={formData.breakPeriods}
-              onBreakPeriodsChange={(breakPeriods) => 
-                setFormData(prev => ({ ...prev, breakPeriods }))
+              onBreakPeriodsChange={(breakPeriods) =>
+                setFormData((prev) => ({ ...prev, breakPeriods }))
               }
               shiftStartTime={formData.startTime}
               shiftEndTime={formData.endTime}
@@ -508,33 +532,51 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
                 {previewLoading && (
                   <Card variant="outlined">
                     <CardBody>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                        <DollarSign size={16} style={{ color: 'var(--color-primary)' }} />
-                        <h4 style={{ 
-                          color: 'var(--color-text-primary)', 
-                          margin: 0, 
-                          fontSize: '1rem',
-                          fontWeight: '600'
-                        }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          marginBottom: '1rem',
+                        }}
+                      >
+                        <DollarSign
+                          size={16}
+                          style={{ color: 'var(--color-primary)' }}
+                        />
+                        <h4
+                          style={{
+                            color: 'var(--color-text-primary)',
+                            margin: 0,
+                            fontSize: '1rem',
+                            fontWeight: '600',
+                          }}
+                        >
                           Pay Preview
                         </h4>
-                        <Loader size={16} style={{ color: 'var(--color-primary)' }} className="spinner" />
+                        <Loader
+                          size={16}
+                          style={{ color: 'var(--color-primary)' }}
+                          className="spinner"
+                        />
                       </div>
-                      <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        padding: '2rem',
-                        color: 'var(--color-text-secondary)'
-                      }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '2rem',
+                          color: 'var(--color-text-secondary)',
+                        }}
+                      >
                         Calculating pay breakdown...
                       </div>
                     </CardBody>
                   </Card>
                 )}
-                
+
                 {payCalculation && !previewLoading && (
-                  <PayBreakdown 
+                  <PayBreakdown
                     calculation={payCalculation}
                     isPreview={true}
                     showHeader={true}
@@ -546,12 +588,14 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
 
             {/* Notes */}
             <div>
-              <Form.Label style={{ 
-                color: 'var(--color-text-primary)', 
-                fontWeight: '500',
-                marginBottom: '0.5rem',
-                display: 'block'
-              }}>
+              <Form.Label
+                style={{
+                  color: 'var(--color-text-primary)',
+                  fontWeight: '500',
+                  marginBottom: '0.5rem',
+                  display: 'block',
+                }}
+              >
                 Notes
               </Form.Label>
               <Form.Control
@@ -566,25 +610,34 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
                   color: 'var(--color-text-primary)',
                   borderRadius: '6px',
                   resize: 'vertical',
-                  minHeight: '80px'
+                  minHeight: '80px',
                 }}
               />
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginTop: '0.25rem'
-              }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '0.25rem',
+                }}
+              >
                 {errors.notes && (
-                  <div style={{ color: 'var(--color-danger)', fontSize: '0.875rem' }}>
+                  <div
+                    style={{
+                      color: 'var(--color-danger)',
+                      fontSize: '0.875rem',
+                    }}
+                  >
                     {errors.notes}
                   </div>
                 )}
-                <div style={{ 
-                  color: 'var(--color-text-tertiary)', 
-                  fontSize: '0.875rem',
-                  marginLeft: 'auto'
-                }}>
+                <div
+                  style={{
+                    color: 'var(--color-text-tertiary)',
+                    fontSize: '0.875rem',
+                    marginLeft: 'auto',
+                  }}
+                >
                   {formData.notes.length}/500
                 </div>
               </div>
@@ -592,25 +645,29 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
 
             {/* Submit Error */}
             {errors.submit && (
-              <div style={{ 
-                color: 'var(--color-danger)', 
-                textAlign: 'center',
-                padding: '0.75rem',
-                backgroundColor: 'var(--color-danger-bg)',
-                borderRadius: '6px',
-                border: '1px solid var(--color-danger)'
-              }}>
+              <div
+                style={{
+                  color: 'var(--color-danger)',
+                  textAlign: 'center',
+                  padding: '0.75rem',
+                  backgroundColor: 'var(--color-danger-bg)',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-danger)',
+                }}
+              >
                 {errors.submit}
               </div>
             )}
 
             {/* Form Actions */}
-            <div style={{ 
-              display: 'flex', 
-              gap: '1rem', 
-              justifyContent: 'flex-end',
-              flexWrap: 'wrap'
-            }}>
+            <div
+              style={{
+                display: 'flex',
+                gap: '1rem',
+                justifyContent: 'flex-end',
+                flexWrap: 'wrap',
+              }}
+            >
               <Button
                 type="button"
                 variant="outline"
@@ -622,7 +679,12 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
               <Button
                 type="submit"
                 variant="primary"
-                disabled={submitting || !formData.payGuideId || !formData.startTime || !formData.endTime}
+                disabled={
+                  submitting ||
+                  !formData.payGuideId ||
+                  !formData.startTime ||
+                  !formData.endTime
+                }
                 isLoading={submitting}
               >
                 {mode === 'create' ? 'Create Shift' : 'Update Shift'}

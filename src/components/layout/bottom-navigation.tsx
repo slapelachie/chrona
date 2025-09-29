@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   Home,
   Calendar,
+  BarChart4,
   Settings
 } from 'lucide-react'
 import './bottom-navigation.scss'
@@ -27,6 +28,11 @@ const navigationItems: NavigationItem[] = [
     href: '/timeline',
     icon: <Calendar size={24} />,
     label: 'Timeline'
+  },
+  {
+    href: '/statistics',
+    icon: <BarChart4 size={24} />,
+    label: 'Statistics'
   },
   {
     href: '/settings',

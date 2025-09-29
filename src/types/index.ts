@@ -568,6 +568,85 @@ export interface PayPeriodSummary {
   totalPay?: string
 }
 
+export interface FinancialYearPayPeriodStat {
+  id: string
+  startDate: string
+  endDate: string
+  status: PayPeriodStatus
+  totals: {
+    gross: string
+    rosteredGross: string
+    net: string
+    actual: string
+    variance: string
+    withholdings: string
+    payg: string
+    stsl: string
+    extrasTaxable: string
+    extrasNonTaxable: string
+    extrasPositive: string
+    extrasNegative: string
+  }
+  hours: {
+    total: string
+    overtime: string
+    penalty: string
+    ordinary: string
+  }
+  breakdown: {
+    basePay: string
+    overtimePay: string
+    penaltyPay: string
+    averageRate: string
+  }
+}
+
+export interface FinancialYearStatisticsResponse {
+  taxYear: string
+  range: {
+    start: string
+    end: string
+    currentDate: string
+  }
+  user: {
+    id: string
+    name: string | null
+    payPeriodType: PayPeriodType
+  }
+  totals: {
+    gross: string
+    net: string
+    actual: string
+    variance: string
+    withholdings: string
+    payg: string
+    stsl: string
+    extrasTaxable: string
+    extrasNonTaxable: string
+    extrasPositive: string
+    extrasNegative: string
+    basePay: string
+    overtimePay: string
+    penaltyPay: string
+  }
+  hours: {
+    total: string
+    overtime: string
+    penalty: string
+    ordinary: string
+    averagePerPeriod: string
+  }
+  averages: {
+    grossPerPeriod: string
+    netPerPeriod: string
+    payRate: string
+    medianPayRate: string
+    medianGrossPerPeriod: string
+  }
+  statusCounts: Record<PayPeriodStatus, number>
+  payPeriods: FinancialYearPayPeriodStat[]
+}
+
 // Lightweight response types for list views
 export interface ShiftListItem {
   id: string
