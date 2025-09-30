@@ -19,15 +19,36 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { RefreshCw, Sparkle, Zap } from 'lucide-react'
+import { ChevronDown, RefreshCw, Sparkle, Zap } from 'lucide-react'
 import { Button, Card, CardBody } from '../ui'
-import { useFinancialYearStats } from '@/hooks/use-financial-year-stats'
+import { QuarterFilterValue, useFinancialYearStats } from '@/hooks/use-financial-year-stats'
 import { FinancialYearPayPeriodStat, PayPeriodStatus } from '@/types'
 import { StatusBadge } from '@/components/pay-periods/status-badge'
 import { buildChartData, buildMonthlyBuckets, buildWithholdingShare, toNumber } from './statistics-utils'
 import './statistics.scss'
 
-type ChartMetricKey = 'gross' | 'rosteredGross' | 'net' | 'actual' | 'payg' | 'stsl'
+type ChartMetricKey = 'gross' | 'net' | 'actual' | 'payg' | 'stsl'
+
+type SummaryTone = 'neutral' | 'positive' | 'negative'
+
+interface SummaryCardDetail {
+  label: string
+  value: string
+  tone?: SummaryTone
+}
+
+interface SummaryCardSection {
+  title: string
+  items: SummaryCardDetail[]
+}
+
+interface SummaryCardData {
+  key: string
+  label: string
+  total: string
+  tone: SummaryTone
+  sections: SummaryCardSection[]
+}
 
 interface MetricConfig {
   key: ChartMetricKey
@@ -39,7 +60,6 @@ interface MetricConfig {
 
 const palette = {
   primary: '#00BCD4',
-  primaryDark: '#0097A7',
   primaryLight: '#00E5FF',
   warning: '#FFC107',
   danger: '#F44336',
@@ -93,12 +113,52 @@ const hoursFmt = new Intl.NumberFormat('en-AU', {
 
 const metricConfigs: MetricConfig[] = [
   { key: 'gross', label: 'Gross Pay', color: palette.primary, formatter: (v) => currency.format(v) },
-  { key: 'rosteredGross', label: 'Rostered Gross', color: palette.primaryDark, formatter: (v) => currency.format(v) },
   { key: 'net', label: 'Net Pay', color: palette.primaryLight, formatter: (v) => currency.format(v) },
   { key: 'actual', label: 'Actual Pay', color: palette.warning, formatter: (v) => currency.format(v) },
   { key: 'payg', label: 'PAYG', color: palette.danger, formatter: (v) => currency.format(v) },
   { key: 'stsl', label: 'STSL', color: palette.accent, formatter: (v) => currency.format(v) },
 ]
+
+const quarterOptions: { value: QuarterFilterValue; label: string }[] = [
+  { value: 'all', label: 'All quarters' },
+  { value: '1', label: 'Q1 (Jul-Sep)' },
+  { value: '2', label: 'Q2 (Oct-Dec)' },
+  { value: '3', label: 'Q3 (Jan-Mar)' },
+  { value: '4', label: 'Q4 (Apr-Jun)' },
+]
+
+const formatPayRate = (value: number): string => `${currency.format(value)}/h`
+
+type DeltaResult = { text: string; tone: SummaryTone }
+
+function buildDelta(
+  current: number,
+  previous: number,
+  formatter: (value: number) => string,
+  zeroText: string
+): DeltaResult | null {
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) {
+    return null
+  }
+  const delta = current - previous
+  if (Math.abs(delta) < 1e-9) {
+    return { text: zeroText, tone: 'neutral' }
+  }
+  const sign = delta > 0 ? '+' : '-'
+  return {
+    text: `${sign}${formatter(Math.abs(delta))}`,
+    tone: delta > 0 ? 'positive' : 'negative',
+  }
+}
+
+const getCurrencyDelta = (current: number, previous: number) =>
+  buildDelta(current, previous, (value) => currency.format(value), '=$0.00')
+
+const getHoursDelta = (current: number, previous: number) =>
+  buildDelta(current, previous, (value) => `${hoursFmt.format(value)}h`, '=0.00h')
+
+const getPayRateDelta = (current: number, previous: number) =>
+  buildDelta(current, previous, (value) => `${currency.format(value)}/h`, `=${currency.format(0)}/h`)
 
 function Heatmap({ periods }: { periods: FinancialYearPayPeriodStat[] }) {
   if (periods.length === 0) {
@@ -135,8 +195,19 @@ function Heatmap({ periods }: { periods: FinancialYearPayPeriodStat[] }) {
 }
 
 export const StatisticsView: React.FC = () => {
-  const { data, error, loading, availableTaxYears, taxYear, setTaxYear, refresh } = useFinancialYearStats()
+  const {
+    data,
+    error,
+    loading,
+    availableTaxYears,
+    taxYear,
+    setTaxYear,
+    quarter,
+    setQuarter,
+    refresh,
+  } = useFinancialYearStats()
   const [activeMetricKeys, setActiveMetricKeys] = useState<ChartMetricKey[]>(metricConfigs.map((m) => m.key))
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(() => new Set())
 
   const payPeriods = data?.payPeriods ?? []
   const chartData = useMemo(() => buildChartData(payPeriods), [payPeriods])
@@ -144,6 +215,7 @@ export const StatisticsView: React.FC = () => {
   const totals = data?.totals
   const withholdingShare = totals ? buildWithholdingShare(totals) : []
   const selectedTaxYear = taxYear ?? data?.taxYear ?? (availableTaxYears[0] ?? '')
+  const selectedQuarter = quarter
 
   const toggleMetric = (key: ChartMetricKey) => {
     setActiveMetricKeys((prev) => {
@@ -155,7 +227,281 @@ export const StatisticsView: React.FC = () => {
     })
   }
 
+  const toggleCardExpansion = (key: string) => {
+    setExpandedCards((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
   const activeMetrics = metricConfigs.filter((config) => activeMetricKeys.includes(config.key))
+
+  const comparison = data?.comparison ?? null
+
+  const comparisonLabel = comparison
+    ? comparison.scope === 'quarter'
+      ? 'last quarter'
+      : 'last financial year'
+    : null
+
+  const comparisonTitle = comparison
+    ? comparison.scope === 'quarter'
+      ? 'Last quarter'
+      : 'Last financial year'
+    : null
+
+  const comparisonNote = comparison
+    ? `Comparing against ${comparisonLabel}${comparison.periodLabel ? ` (${comparison.periodLabel})` : ''}.`
+    : 'No historical data available for comparison yet.'
+
+  const comparisonSectionTitle = comparisonTitle ?? 'Previous period'
+
+  const activeQuarterLabel = quarterOptions.find((option) => option.value === selectedQuarter)?.label
+  const totalsHeading = selectedQuarter !== 'all'
+    ? `${activeQuarterLabel ?? 'Quarter'} Totals`
+    : `${selectedTaxYear} Financial Year Totals`
+
+  const resolveCurrencyDeltaDetail = (
+    label: string,
+    current: number,
+    previousValue?: string | null
+  ): SummaryCardDetail | null => {
+    if (!comparison || previousValue === undefined || previousValue === null) {
+      return null
+    }
+    const delta = getCurrencyDelta(current, toNumber(previousValue))
+    if (!delta) return null
+    return { label, value: delta.text, tone: delta.tone }
+  }
+
+  const resolveHoursDeltaDetail = (
+    label: string,
+    current: number,
+    previousValue?: string | null
+  ): SummaryCardDetail | null => {
+    if (!comparison || previousValue === undefined || previousValue === null) {
+      return null
+    }
+    const delta = getHoursDelta(current, toNumber(previousValue))
+    if (!delta) return null
+    return { label, value: delta.text, tone: delta.tone }
+  }
+
+  const resolvePayRateDeltaDetail = (
+    label: string,
+    current: number,
+    previousValue?: string | null
+  ): SummaryCardDetail | null => {
+    if (!comparison || previousValue === undefined || previousValue === null) {
+      return null
+    }
+    const delta = getPayRateDelta(current, toNumber(previousValue))
+    if (!delta) return null
+    return { label, value: delta.text, tone: delta.tone }
+  }
+
+  const grossTotalNumber = toNumber(totals?.gross)
+  const netTotalNumber = toNumber(totals?.net)
+  const actualTotalNumber = toNumber(totals?.actual)
+  const totalDeductionsNumber = toNumber(totals?.withholdings)
+  const totalHoursNumber = toNumber(data?.hours.total)
+  const averageGrossNumber = toNumber(data?.averages.grossPerPeriod)
+  const averageNetNumber = toNumber(data?.averages.netPerPeriod)
+  const averageActualNumber = toNumber(data?.averages.actualPerPeriod)
+  const averageHoursNumber = toNumber(data?.hours.averagePerPeriod)
+  const averagePayRateNumber = toNumber(data?.averages.payRate)
+  const totalHoursValue = `${hoursFmt.format(totalHoursNumber)}h`
+  const averageHoursValue = `${hoursFmt.format(averageHoursNumber)}h`
+  const averagePayRateValue = formatPayRate(averagePayRateNumber)
+  const totalDeductionsValue = currency.format(totalDeductionsNumber)
+  const paygValue = currency.format(toNumber(totals?.payg))
+  const stslValue = currency.format(toNumber(totals?.stsl))
+  const otherWithholdings = Math.max(
+    0,
+    toNumber(totals?.withholdings) - (toNumber(totals?.payg) + toNumber(totals?.stsl))
+  )
+  const otherWithholdingsValue = currency.format(otherWithholdings)
+  const varianceNumber = toNumber(totals?.variance)
+  const varianceValue = currency.format(varianceNumber)
+  const varianceTone = varianceNumber > 0 ? 'positive' : varianceNumber < 0 ? 'negative' : 'neutral'
+  const varianceDescriptor =
+    varianceNumber > 0 ? 'Above expectations' : varianceNumber < 0 ? 'Below expectations' : 'On target'
+
+  const grossComparisonItems = comparison && comparisonTitle
+    ? [
+        resolveCurrencyDeltaDetail('Total Δ', grossTotalNumber, comparison.totals.gross),
+        resolveCurrencyDeltaDetail('Avg Δ', averageGrossNumber, comparison.averages.grossPerPeriod),
+      ].filter((detail): detail is SummaryCardDetail => Boolean(detail))
+    : []
+
+  const netComparisonItems = comparison && comparisonTitle
+    ? [
+        resolveCurrencyDeltaDetail('Total Δ', netTotalNumber, comparison.totals.net),
+        resolveCurrencyDeltaDetail('Avg Δ', averageNetNumber, comparison.averages.netPerPeriod),
+      ].filter((detail): detail is SummaryCardDetail => Boolean(detail))
+    : []
+
+  const actualComparisonItems = comparison && comparisonTitle
+    ? [
+        resolveCurrencyDeltaDetail('Total Δ', actualTotalNumber, comparison.totals.actual),
+        resolveCurrencyDeltaDetail('Avg Δ', averageActualNumber, comparison.averages.actualPerPeriod),
+      ].filter((detail): detail is SummaryCardDetail => Boolean(detail))
+    : []
+
+  const deductionsComparisonItems = comparison && comparisonTitle
+    ? [resolveCurrencyDeltaDetail('Total Δ', totalDeductionsNumber, comparison.totals.withholdings)].filter(
+        (detail): detail is SummaryCardDetail => Boolean(detail)
+      )
+    : []
+
+  const hoursComparisonItems = comparison && comparisonTitle
+    ? [
+        resolveHoursDeltaDetail('Total Δ', totalHoursNumber, comparison.hours.total),
+        resolveHoursDeltaDetail('Avg Δ', averageHoursNumber, comparison.hours.averagePerPeriod),
+        resolvePayRateDeltaDetail('Avg rate Δ', averagePayRateNumber, comparison.averages.payRate),
+      ].filter((detail): detail is SummaryCardDetail => Boolean(detail))
+    : []
+
+  const varianceComparisonItems = comparison && comparisonTitle
+    ? [resolveCurrencyDeltaDetail('Total Δ', varianceNumber, comparison.totals.variance)].filter(
+        (detail): detail is SummaryCardDetail => Boolean(detail)
+      )
+    : []
+
+  const summaryCards: SummaryCardData[] = [
+    {
+      key: 'gross',
+      label: 'Gross Pay',
+      total: currency.format(grossTotalNumber),
+      tone: 'neutral' as const,
+      sections: [
+        {
+          title: 'This period',
+          items: [{ label: 'Avg / period', value: currency.format(averageGrossNumber) }],
+        },
+        ...(grossComparisonItems.length > 0
+          ? [
+              {
+                title: `Change vs ${comparisonSectionTitle}`,
+                items: grossComparisonItems,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      key: 'net',
+      label: 'Net Pay',
+      total: currency.format(netTotalNumber),
+      tone: 'neutral' as const,
+      sections: [
+        {
+          title: 'This period',
+          items: [{ label: 'Avg / period', value: currency.format(averageNetNumber) }],
+        },
+        ...(netComparisonItems.length > 0
+          ? [
+              {
+                title: `Change vs ${comparisonSectionTitle}`,
+                items: netComparisonItems,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      key: 'actual',
+      label: 'Actual Pay',
+      total: currency.format(actualTotalNumber),
+      tone: 'neutral' as const,
+      sections: [
+        {
+          title: 'This period',
+          items: [{ label: 'Avg / period', value: currency.format(averageActualNumber) }],
+        },
+        ...(actualComparisonItems.length > 0
+          ? [
+              {
+                title: `Change vs ${comparisonSectionTitle}`,
+                items: actualComparisonItems,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      key: 'deductions',
+      label: 'Total Deductions',
+      total: totalDeductionsValue,
+      tone: 'neutral' as const,
+      sections: [
+        {
+          title: 'This period',
+          items: [
+            { label: 'PAYG', value: paygValue },
+            { label: 'STSL', value: stslValue },
+            ...(otherWithholdings > 0 ? [{ label: 'Other', value: otherWithholdingsValue }] : []),
+          ],
+        },
+        ...(deductionsComparisonItems.length > 0
+          ? [
+              {
+                title: `Change vs ${comparisonSectionTitle}`,
+                items: deductionsComparisonItems,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      key: 'hours',
+      label: 'Hours Worked',
+      total: totalHoursValue,
+      tone: 'neutral' as const,
+      sections: [
+        {
+          title: 'This period',
+          items: [
+            { label: 'Avg / period', value: averageHoursValue },
+            { label: 'Avg pay rate', value: averagePayRateValue },
+          ],
+        },
+        ...(hoursComparisonItems.length > 0
+          ? [
+              {
+                title: `Change vs ${comparisonSectionTitle}`,
+                items: hoursComparisonItems,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      key: 'variance',
+      label: 'Variance',
+      total: varianceValue,
+      tone: varianceTone,
+      sections: [
+        {
+          title: 'This period',
+          items: [{ label: 'Actual vs expected', value: varianceDescriptor }],
+        },
+        ...(varianceComparisonItems.length > 0
+          ? [
+              {
+                title: `Change vs ${comparisonSectionTitle}`,
+                items: varianceComparisonItems,
+              },
+            ]
+          : []),
+      ],
+    },
+  ]
 
   if (loading && !data) {
     return (
@@ -172,17 +518,31 @@ export const StatisticsView: React.FC = () => {
   return (
     <div className="statistics">
       <div className="statistics__toolbar">
-        <div>
-          <p className="statistics__toolbar-label">Financial Year</p>
-          <select
-            className="statistics__select"
-            value={selectedTaxYear}
-            onChange={(event) => setTaxYear(event.target.value || undefined)}
-          >
-            {availableTaxYears.map((option) => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
+        <div className="statistics__toolbar-inputs">
+          <div>
+            <p className="statistics__toolbar-label">Financial Year</p>
+            <select
+              className="statistics__select"
+              value={selectedTaxYear}
+              onChange={(event) => setTaxYear(event.target.value || undefined)}
+            >
+              {availableTaxYears.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <p className="statistics__toolbar-label">Quarter</p>
+            <select
+              className="statistics__select"
+              value={selectedQuarter}
+              onChange={(event) => setQuarter(event.target.value as QuarterFilterValue)}
+            >
+              {quarterOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <Button
           type="button"
@@ -190,7 +550,7 @@ export const StatisticsView: React.FC = () => {
           variant="primary"
           className="statistics__refresh"
           leftIcon={<RefreshCw size={16} />}
-          onClick={() => refresh(selectedTaxYear)}
+          onClick={() => refresh(selectedTaxYear || undefined, selectedQuarter)}
           isLoading={loading}
           loadingText="Refreshing"
         >
@@ -209,33 +569,59 @@ export const StatisticsView: React.FC = () => {
       <div className="statistics__grid">
         <Card variant="elevated">
           <CardBody>
-            <h3>Year-to-date Totals</h3>
+            <h3>{totalsHeading}</h3>
             <div className="statistics__summary-grid">
-              <div>
-                <p className="statistics__summary-label">Gross Pay</p>
-                <p className="statistics__summary-value">{currency.format(toNumber(totals?.gross))}</p>
-              </div>
-              <div>
-                <p className="statistics__summary-label">Net Pay</p>
-                <p className="statistics__summary-value">{currency.format(toNumber(totals?.net))}</p>
-              </div>
-              <div>
-                <p className="statistics__summary-label">Actual Pay</p>
-                <p className="statistics__summary-value">{currency.format(toNumber(totals?.actual))}</p>
-              </div>
-              <div>
-                <p className="statistics__summary-label">Variance</p>
-                <p className="statistics__summary-value statistics__summary-value--accent">{currency.format(toNumber(totals?.variance))}</p>
-              </div>
-              <div>
-                <p className="statistics__summary-label">Total Hours</p>
-                <p className="statistics__summary-value">{hoursFmt.format(toNumber(data?.hours.total))}h</p>
-              </div>
-              <div>
-                <p className="statistics__summary-label">Average Pay Rate</p>
-                <p className="statistics__summary-value">{currency.format(toNumber(data?.averages.payRate))}/h</p>
-              </div>
+              {summaryCards.map((card) => (
+                <div
+                  key={card.key}
+                  className={`statistics__summary-card${
+                    card.tone !== 'neutral' ? ` statistics__summary-card--${card.tone}` : ''
+                  }`}
+                >
+                  <div className="statistics__summary-main">
+                    <p className="statistics__summary-label">{card.label}</p>
+                    <p className="statistics__summary-value">{card.total}</p>
+                  </div>
+                  {card.sections.length > 1 && (
+                    <button
+                      type="button"
+                      className={`statistics__summary-toggle${expandedCards.has(card.key) ? ' statistics__summary-toggle--expanded' : ''}`}
+                      onClick={() => toggleCardExpansion(card.key)}
+                      aria-expanded={expandedCards.has(card.key)}
+                    >
+                      <span>{expandedCards.has(card.key) ? 'Hide comparison' : 'Show comparison'}</span>
+                      <ChevronDown size={14} aria-hidden className="statistics__summary-toggle-icon" />
+                    </button>
+                  )}
+                  {card.sections.map((section, index) => {
+                    if (index > 0 && !expandedCards.has(card.key)) {
+                      return null
+                    }
+                    return (
+                      <div key={`${card.key}-${section.title}`} className="statistics__summary-section">
+                        <p className="statistics__summary-section-title">{section.title}</p>
+                        <dl className="statistics__summary-details">
+                          {section.items.map((detail) => {
+                            const toneClass = detail.tone && detail.tone !== 'neutral'
+                              ? ` statistics__summary-detail-value--${detail.tone}`
+                              : ''
+                            return (
+                              <React.Fragment key={`${card.key}-${section.title}-${detail.label}`}>
+                                <dt>{detail.label}</dt>
+                                <dd className={`statistics__summary-detail-value${toneClass}`}>{detail.value}</dd>
+                              </React.Fragment>
+                            )
+                          })}
+                        </dl>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
             </div>
+            <p className={`statistics__comparison-note${comparison ? '' : ' statistics__comparison-note--muted'}`}>
+              {comparisonNote}
+            </p>
             <div className="statistics__status-bar">
               {data && Object.entries(data.statusCounts).map(([status, count]) => (
                 <div key={status} className="statistics__status-chip">

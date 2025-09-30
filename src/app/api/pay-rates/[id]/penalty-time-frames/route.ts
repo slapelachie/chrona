@@ -103,7 +103,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         payGuideId: id,
         name: body.name,
         multiplier: new Decimal(body.multiplier),
-        dayOfWeek: body.dayOfWeek || null,
+        dayOfWeek: body.dayOfWeek ?? null,
         isPublicHoliday: body.isPublicHoliday || false,
         startTime: body.startTime || null,
         endTime: body.endTime || null,

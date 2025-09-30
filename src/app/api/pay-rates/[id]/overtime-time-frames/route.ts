@@ -104,7 +104,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         name: body.name,
         firstThreeHoursMult: new Decimal(body.firstThreeHoursMult),
         afterThreeHoursMult: new Decimal(body.afterThreeHoursMult),
-        dayOfWeek: body.dayOfWeek || null,
+        dayOfWeek: body.dayOfWeek ?? null,
         isPublicHoliday: body.isPublicHoliday || false,
         startTime: body.startTime || null,
         endTime: body.endTime || null,

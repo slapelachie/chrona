@@ -19,7 +19,6 @@ export function buildChartData(periods: FinancialYearPayPeriodStat[]) {
       id: period.id,
       label,
       gross: toNumber(period.totals.gross),
-      rosteredGross: toNumber(period.totals.rosteredGross),
       net: toNumber(period.totals.net),
       actual: toNumber(period.totals.actual),
       withholdings,

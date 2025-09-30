@@ -290,6 +290,35 @@ describe('Overtime Time Frames Route API', () => {
         expect(result.data.description).toBeNull()
         expect(result.data.isActive).toBe(true) // Default value
       })
+
+      it('should persist Sunday dayOfWeek when provided', async () => {
+        const overtimeData: CreateOvertimeTimeFrameRequest = {
+          name: 'Sunday Overtime',
+          firstThreeHoursMult: '2',
+          afterThreeHoursMult: '2.5',
+          dayOfWeek: 0,
+        }
+
+        const { POST } = await import('@/app/api/pay-rates/[id]/overtime-time-frames/route')
+        const request = new MockRequest(`http://localhost/api/pay-rates/${testPayGuideId}/overtime-time-frames`, {
+          method: 'POST',
+          body: overtimeData,
+        })
+        const params = Promise.resolve({ id: testPayGuideId })
+
+        const response = await POST(request as any, { params })
+        const result = await response.json()
+
+        expect(response.status).toBe(201)
+        expect(result.data.dayOfWeek).toBe(0)
+
+        const saved = await prisma.overtimeTimeFrame.findFirst({
+          where: { name: 'Sunday Overtime' },
+          select: { dayOfWeek: true },
+        })
+
+        expect(saved?.dayOfWeek).toBe(0)
+      })
     })
 
     describe('Validation and Error Handling', () => {

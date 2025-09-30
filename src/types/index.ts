@@ -642,8 +642,49 @@ export interface FinancialYearPayPeriodStat {
   }
 }
 
+export interface FinancialYearComparisonSnapshot {
+  scope: 'financialYear' | 'quarter'
+  label: string
+  periodLabel: string
+  taxYear: string
+  quarter: number | null
+  totals: {
+    gross: string
+    net: string
+    actual: string
+    variance: string
+    withholdings: string
+    payg: string
+    stsl: string
+    extrasTaxable: string
+    extrasNonTaxable: string
+    extrasPositive: string
+    extrasNegative: string
+    basePay: string
+    overtimePay: string
+    penaltyPay: string
+  }
+  hours: {
+    total: string
+    overtime: string
+    penalty: string
+    ordinary: string
+    averagePerPeriod: string
+  }
+  averages: {
+    grossPerPeriod: string
+    netPerPeriod: string
+    actualPerPeriod: string
+    payRate: string
+    medianPayRate: string
+    medianGrossPerPeriod: string
+  }
+}
+
 export interface FinancialYearStatisticsResponse {
   taxYear: string
+  quarter: number | null
+  availableTaxYears: string[]
   range: {
     start: string
     end: string
@@ -680,12 +721,14 @@ export interface FinancialYearStatisticsResponse {
   averages: {
     grossPerPeriod: string
     netPerPeriod: string
+    actualPerPeriod: string
     payRate: string
     medianPayRate: string
     medianGrossPerPeriod: string
   }
   statusCounts: Record<PayPeriodStatus, number>
   payPeriods: FinancialYearPayPeriodStat[]
+  comparison: FinancialYearComparisonSnapshot | null
 }
 
 // Lightweight response types for list views
