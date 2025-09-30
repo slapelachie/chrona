@@ -6,6 +6,7 @@ import { POST as createShift } from '../route'
 import { PUT as updateShift, DELETE as deleteShift } from '../[id]/route'
 import { NextRequest } from 'next/server'
 
+const ORIGINAL_DB_URL = process.env.DATABASE_URL ?? 'file:../prisma/dev.db'
 const DB_URL = 'file:./shifts-automatic-sync-test.db'
 let prisma: PrismaClient
 
@@ -84,7 +85,7 @@ describe('Shift API Automatic Sync Integration Tests', () => {
 
   // Restore default DB URL for subsequent suites
   afterAll(async () => {
-    process.env.DATABASE_URL = 'file:./dev.db'
+    process.env.DATABASE_URL = ORIGINAL_DB_URL
   })
 
   describe('POST /api/shifts', () => {

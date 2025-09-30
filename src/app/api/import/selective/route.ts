@@ -6,6 +6,7 @@ import { calculateAndUpdateShift, fetchShiftBreakPeriods, updateShiftWithCalcula
 import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 import { Decimal } from 'decimal.js'
+import { detectMissingPayPeriods } from '@/lib/import-pay-period-warning'
 
 interface SelectiveImportRequest {
   data: any // The exported data object
@@ -38,7 +39,9 @@ export async function POST(request: NextRequest) {
     const { selectedTypes, conflictResolution, importSettings = {} } = options
 
     // Get the default user (single user app)
-    const user = await prisma.user.findFirst()
+    const user = await prisma.user.findFirst({
+      select: { id: true, payPeriodType: true }
+    })
     if (!user) {
       return NextResponse.json(
         { error: 'No user found. Please seed the database first.' },
@@ -46,133 +49,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Import shifts if selected and present
-    if (selectedTypes.includes('shifts') && data.shifts?.shifts) {
-      const successBefore = result.summary.successful
-      try {
-        const shiftsRequest = {
-          shifts: data.shifts.shifts.map((shift: any) => ({
-            payGuideName: shift.payGuideName,
-            startTime: shift.startTime,
-            endTime: shift.endTime,
-            notes: shift.notes,
-            breakPeriods: shift.breakPeriods
-          })),
-          options: {
-            conflictResolution,
-            validatePayGuides: importSettings.validatePayGuides ?? true
-          }
-        }
-
-        const validator = await validateShiftsImport(shiftsRequest)
-        if (validator.hasErrors()) {
-          result.errors.push(...validator.getErrors())
-          result.summary.failed += shiftsRequest.shifts.length
-        } else {
-          // Process shifts import (simplified version of the full logic)
-          const payGuides = await prisma.payGuide.findMany({
-            select: { id: true, name: true, isActive: true, timezone: true }
-          })
-          const payGuideMap = new Map(payGuides.map(pg => [pg.name, pg]))
-
-          for (const shiftData of shiftsRequest.shifts) {
-            result.summary.totalProcessed++
-            
-            const payGuide = payGuideMap.get(shiftData.payGuideName)
-            if (!payGuide) {
-              result.errors.push({
-                type: 'dependency',
-                field: 'payGuideName',
-                message: `Pay guide "${shiftData.payGuideName}" not found`
-              })
-              result.summary.failed++
-              continue
-            }
-
-            const startTime = new Date(shiftData.startTime)
-            const endTime = new Date(shiftData.endTime)
-            
-            // Check for conflicts if not overwriting
-            if (conflictResolution === 'skip') {
-              const overlappingShifts = await prisma.shift.findMany({
-                where: {
-                  userId: user.id,
-                  OR: [
-                    { startTime: { lte: startTime }, endTime: { gte: startTime } },
-                    { startTime: { lte: endTime }, endTime: { gte: endTime } },
-                    { startTime: { gte: startTime }, endTime: { lte: endTime } }
-                  ]
-                }
-              })
-
-              if (overlappingShifts.length > 0) {
-                result.skipped.push(`Shift: overlaps with existing shift`)
-                result.summary.skipped++
-                continue
-              }
-            }
-
-            const payPeriod = await findOrCreatePayPeriod(user.id, startTime, payGuide.timezone)
-            
-            const shift = await prisma.shift.create({
-              data: {
-                userId: user.id,
-                payGuideId: payGuide.id,
-                startTime,
-                endTime,
-                notes: shiftData.notes || null,
-                payPeriodId: payPeriod.id
-              }
-            })
-
-            if (shiftData.breakPeriods && shiftData.breakPeriods.length > 0) {
-              await prisma.breakPeriod.createMany({
-                data: shiftData.breakPeriods.map((bp: any) => ({
-                  shiftId: shift.id,
-                  startTime: new Date(bp.startTime),
-                  endTime: new Date(bp.endTime)
-                }))
-              })
-            }
-
-            const breakPeriods = await fetchShiftBreakPeriods(shift.id)
-            const calculation = await calculateAndUpdateShift({
-              payGuideId: payGuide.id,
-              startTime,
-              endTime,
-              breakPeriods
-            })
-
-            if (calculation) {
-              await updateShiftWithCalculation(shift.id, calculation)
-            }
-
-            await PayPeriodSyncService.onShiftCreated(shift.id)
-            
-            result.created.push(`Shift: ${shiftData.startTime} to ${shiftData.endTime}`)
-            result.summary.successful++
-          }
-        }
-      } catch (error) {
-        console.error('Error importing shifts:', error)
-        result.errors.push({
-          type: 'validation',
-          field: 'shifts',
-          message: `Failed to import shifts: ${error instanceof Error ? error.message : 'Unknown error'}`
-        })
-        result.success = false
-      } finally {
-        if (result.summary.successful > successBefore) {
-          result.warnings.push({
-            type: 'dependency',
-            field: 'payPeriods',
-            message: 'Pay periods were created automatically. Review default extras in Settings if they should apply.'
-          })
-        }
-      }
-    }
-
-    // Import pay guides if selected and present
+    // Import pay guides first if selected so dependent data can reference them
     if (selectedTypes.includes('payGuides') && data.payGuides?.payGuides) {
       try {
         const payGuidesRequest = {
@@ -253,7 +130,7 @@ export async function POST(request: NextRequest) {
                 prisma.overtimeTimeFrame.deleteMany({ where: { payGuideId: existingGuideId } }),
                 prisma.publicHoliday.deleteMany({ where: { payGuideId: existingGuideId } })
               ])
-              
+
               result.updated.push(`Pay guide "${finalName}"`)
             } else {
               payGuide = await prisma.payGuide.create({
@@ -262,6 +139,12 @@ export async function POST(request: NextRequest) {
               
               result.created.push(`Pay guide "${finalName}"`)
             }
+
+            existingNames.set(finalName, {
+              id: payGuide.id,
+              name: finalName,
+              isActive: payGuide.isActive
+            })
 
             // Create related data
             if (guideData.penaltyTimeFrames && guideData.penaltyTimeFrames.length > 0) {
@@ -317,6 +200,143 @@ export async function POST(request: NextRequest) {
           type: 'validation',
           field: 'payGuides',
           message: `Failed to import pay guides: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+        result.success = false
+      }
+    }
+
+    // Import shifts after pay guides so references resolve correctly
+    if (selectedTypes.includes('shifts') && data.shifts?.shifts) {
+      try {
+        const shiftsRequest = {
+          shifts: data.shifts.shifts.map((shift: any) => ({
+            payGuideName: shift.payGuideName,
+            startTime: shift.startTime,
+            endTime: shift.endTime,
+            notes: shift.notes,
+            breakPeriods: shift.breakPeriods
+          })),
+          options: {
+            conflictResolution,
+            validatePayGuides: importSettings.validatePayGuides ?? true
+          }
+        }
+
+        const validator = await validateShiftsImport(shiftsRequest)
+        if (validator.hasErrors()) {
+          result.errors.push(...validator.getErrors())
+          result.summary.failed += shiftsRequest.shifts.length
+        } else {
+          const payGuides = await prisma.payGuide.findMany({
+            select: { id: true, name: true, isActive: true, timezone: true }
+          })
+          const payGuideMap = new Map(payGuides.map(pg => [pg.name, pg]))
+
+          const defaultExtrasCount = await prisma.payPeriodExtraTemplate.count({
+            where: { userId: user.id, active: true },
+          })
+
+          if (defaultExtrasCount > 0) {
+            const missingPayPeriods = await detectMissingPayPeriods({
+              userId: user.id,
+              payPeriodType: user.payPeriodType,
+              shifts: shiftsRequest.shifts,
+              payGuideMap,
+            })
+
+            if (missingPayPeriods > 0) {
+              const plural = missingPayPeriods === 1 ? '' : 's'
+              result.warnings.push({
+                type: 'dependency',
+                field: 'payPeriods',
+                message: `Import will create ${missingPayPeriods} new pay period${plural}. Configure default extras in Settings before importing if they should apply.`,
+              })
+            }
+          }
+
+          for (const shiftData of shiftsRequest.shifts) {
+            result.summary.totalProcessed++
+            
+            const payGuide = payGuideMap.get(shiftData.payGuideName)
+            if (!payGuide) {
+              result.errors.push({
+                type: 'dependency',
+                field: 'payGuideName',
+                message: `Pay guide "${shiftData.payGuideName}" not found`
+              })
+              result.summary.failed++
+              continue
+            }
+
+            const startTime = new Date(shiftData.startTime)
+            const endTime = new Date(shiftData.endTime)
+
+            if (conflictResolution === 'skip') {
+              const overlappingShifts = await prisma.shift.findMany({
+                where: {
+                  userId: user.id,
+                  OR: [
+                    { startTime: { lte: startTime }, endTime: { gte: startTime } },
+                    { startTime: { lte: endTime }, endTime: { gte: endTime } },
+                    { startTime: { gte: startTime }, endTime: { lte: endTime } }
+                  ]
+                }
+              })
+
+              if (overlappingShifts.length > 0) {
+                result.skipped.push(`Shift: overlaps with existing shift`)
+                result.summary.skipped++
+                continue
+              }
+            }
+
+            const payPeriod = await findOrCreatePayPeriod(user.id, startTime, payGuide.timezone)
+
+            const shift = await prisma.shift.create({
+              data: {
+                userId: user.id,
+                payGuideId: payGuide.id,
+                startTime,
+                endTime,
+                notes: shiftData.notes || null,
+                payPeriodId: payPeriod.id
+              }
+            })
+
+            if (shiftData.breakPeriods && shiftData.breakPeriods.length > 0) {
+              await prisma.breakPeriod.createMany({
+                data: shiftData.breakPeriods.map((bp: any) => ({
+                  shiftId: shift.id,
+                  startTime: new Date(bp.startTime),
+                  endTime: new Date(bp.endTime)
+                }))
+              })
+            }
+
+            const breakPeriods = await fetchShiftBreakPeriods(shift.id)
+            const calculation = await calculateAndUpdateShift({
+              payGuideId: payGuide.id,
+              startTime,
+              endTime,
+              breakPeriods
+            })
+
+            if (calculation) {
+              await updateShiftWithCalculation(shift.id, calculation)
+            }
+
+            await PayPeriodSyncService.onShiftCreated(shift.id)
+
+            result.created.push(`Shift: ${shiftData.startTime} to ${shiftData.endTime}`)
+            result.summary.successful++
+          }
+        }
+      } catch (error) {
+        console.error('Error importing shifts:', error)
+        result.errors.push({
+          type: 'validation',
+          field: 'shifts',
+          message: `Failed to import shifts: ${error instanceof Error ? error.message : 'Unknown error'}`
         })
         result.success = false
       }

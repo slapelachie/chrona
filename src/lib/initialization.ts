@@ -1,7 +1,9 @@
 import { prisma } from '@/lib/db'
+import { ensureDatabaseMigrated } from '@/lib/database-migration'
 
 export async function isAppInitialized(): Promise<boolean> {
   try {
+    await ensureDatabaseMigrated()
     const userCount = await prisma.user.count()
     return userCount > 0
   } catch (e) {
@@ -18,6 +20,7 @@ export type InitPayload = {
 }
 
 export async function performInitialSetup(payload: InitPayload) {
+  await ensureDatabaseMigrated()
   const name = payload.name?.trim() || 'User'
   const email = payload.email?.trim().toLowerCase() || 'user@chrona.app'
   const timezone = payload.timezone || 'Australia/Sydney'

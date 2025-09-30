@@ -1,7 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
 import { prisma } from '@/lib/db'
 import { GET, POST, PUT } from '../route'
 import { NextRequest } from 'next/server'
+
+const ORIGINAL_DB_URL = process.env.DATABASE_URL
+const DB_URL = 'file:./tax-settings-test.db'
+
+beforeAll(() => {
+  process.env.DATABASE_URL = DB_URL
+})
+
+afterAll(() => {
+  process.env.DATABASE_URL = ORIGINAL_DB_URL
+})
 
 describe('Tax Settings API', () => {
   const user = {
@@ -13,7 +24,6 @@ describe('Tax Settings API', () => {
   }
 
   beforeEach(async () => {
-    process.env.DATABASE_URL = 'file:./dev.db'
     await prisma.yearToDateTax.deleteMany()
     await prisma.taxSettings.deleteMany()
     await prisma.user.deleteMany()

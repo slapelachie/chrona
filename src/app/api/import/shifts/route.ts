@@ -6,6 +6,7 @@ import { calculateAndUpdateShift, fetchShiftBreakPeriods, updateShiftWithCalcula
 import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 import { parseShiftsCsv } from '@/lib/import-csv'
+import { detectMissingPayPeriods } from '@/lib/import-pay-period-warning'
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +38,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the default user (single user app)
-    const user = await prisma.user.findFirst()
+    const user = await prisma.user.findFirst({
+      select: { id: true, payPeriodType: true }
+    })
     if (!user) {
       return NextResponse.json(
         { error: 'No user found. Please seed the database first.' },
@@ -51,11 +54,35 @@ export async function POST(request: NextRequest) {
     })
     const payGuideMap = new Map(payGuides.map(pg => [pg.name, pg]))
 
+    const baseWarnings = [...validator.getWarnings()]
+
+    const defaultExtrasCount = await prisma.payPeriodExtraTemplate.count({
+      where: { userId: user.id, active: true },
+    })
+
+    if (defaultExtrasCount > 0) {
+      const missingPayPeriods = await detectMissingPayPeriods({
+        userId: user.id,
+        payPeriodType: user.payPeriodType,
+        shifts: body.shifts,
+        payGuideMap,
+      })
+
+      if (missingPayPeriods > 0) {
+        const plural = missingPayPeriods === 1 ? '' : 's'
+        baseWarnings.push({
+          type: 'dependency',
+          field: 'payPeriods',
+          message: `Import will create ${missingPayPeriods} new pay period${plural}. Configure default extras in Settings before importing if they should apply.`,
+        })
+      }
+    }
+
     const result: ImportResult = {
       success: true,
       summary: { totalProcessed: 0, successful: 0, skipped: 0, failed: 0 },
       errors: [],
-      warnings: validator.getWarnings(),
+      warnings: baseWarnings,
       created: [],
       updated: [],
       skipped: []
@@ -179,14 +206,6 @@ export async function POST(request: NextRequest) {
         result.summary.failed++
         result.success = false
       }
-    }
-
-    if (result.summary.successful > 0) {
-      result.warnings.push({
-        type: 'dependency',
-        field: 'payPeriods',
-        message: 'Pay periods were created automatically. Review default extras in Settings if they should apply.'
-      })
     }
 
     return NextResponse.json(result, { status: result.success ? 200 : 207 }) // 207 = Multi-Status

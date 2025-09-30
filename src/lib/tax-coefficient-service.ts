@@ -128,15 +128,19 @@ export class TaxCoefficientService {
         return config
       }
 
-      // Truly missing: nothing for this year
-      throw new Error(`No tax configuration found for tax year ${taxYear}`)
+      // Truly missing: nothing for this year, fall back to canned configuration so import flows continue
+      console.warn(`No tax configuration found for tax year ${taxYear}. Using fallback configuration.`)
+      const fallback = this.getFallbackTaxConfig(taxYear)
+      this.taxConfigCache.set(cacheKey, fallback)
+      this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+      return fallback
     } catch (error: any) {
       console.error('Error loading tax configuration from database:', error)
-      if (error instanceof Error && error.message.includes('No tax configuration found')) {
-        throw error
-      }
       console.warn('Falling back to hardcoded tax configuration')
-      return this.getFallbackTaxConfig()
+      const fallback = this.getFallbackTaxConfig(taxYear)
+      this.taxConfigCache.set(cacheKey, fallback)
+      this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+      return fallback
     }
   }
 
@@ -202,9 +206,9 @@ export class TaxCoefficientService {
     return [...scale1Coefficients, ...scale2Coefficients]
   }
 
-  private static getFallbackTaxConfig(): TaxRateConfig {
+  private static getFallbackTaxConfig(taxYear = '2024-25'): TaxRateConfig {
     return {
-      taxYear: '2024-25',
+      taxYear,
       stslRates: [],
       coefficients: this.getFallbackCoefficients(),
     }

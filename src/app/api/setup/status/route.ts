@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { ensureDatabaseMigrated } from '@/lib/database-migration'
 
 export async function GET() {
   try {
+    await ensureDatabaseMigrated()
     const userCount = await prisma.user.count()
     const payGuides = await prisma.payGuide.count()
     const initialized = userCount > 0
@@ -17,4 +19,3 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to load setup status' }, { status: 500 })
   }
 }
-
