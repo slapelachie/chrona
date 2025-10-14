@@ -328,8 +328,24 @@
 
   &__actions {
     display: flex;
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--spacing-xs);
     margin-top: var(--spacing-md);
+  }
+
+  &__action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+  }
+
+  &__action-error {
+    font-size: var(--font-size-xs);
+    color: var(--color-danger);
+    text-align: right;
+    max-width: 320px;
   }
 }
 
@@ -351,6 +367,10 @@
     }
 
     &__actions {
+      align-items: stretch;
+    }
+
+    &__action-buttons {
       justify-content: stretch;
 
       button {

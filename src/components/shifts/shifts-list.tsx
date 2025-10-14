@@ -13,6 +13,7 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
+  ShieldCheck,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import {
@@ -53,6 +54,8 @@ export const ShiftsList: React.FC = () => {
     totalPages: 0
   })
   const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({})
+  const [verifyBusy, setVerifyBusy] = useState<Record<string, boolean>>({})
+  const [verifyErrors, setVerifyErrors] = useState<Record<string, string | null>>({})
 
   const mapSortField = (field?: string) => {
     switch (field) {
@@ -276,6 +279,34 @@ export const ShiftsList: React.FC = () => {
 
   const handleShiftClick = (shiftId: string) => {
     router.push(`/shifts/${shiftId}`)
+  }
+
+  const handleVerifyPayPeriod = async (payPeriodId: string) => {
+    setVerifyBusy(prev => ({ ...prev, [payPeriodId]: true }))
+    setVerifyErrors(prev => ({ ...prev, [payPeriodId]: null }))
+
+    try {
+      const res = await fetch(`/api/pay-periods/${payPeriodId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'verified' }),
+      })
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null)
+        const message =
+          (json && (json.message || json.error)) ||
+          'Unable to verify pay period. Please try again.'
+        throw new Error(message)
+      }
+
+      await fetchTimeline()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to verify pay period.'
+      setVerifyErrors(prev => ({ ...prev, [payPeriodId]: message }))
+    } finally {
+      setVerifyBusy(prev => ({ ...prev, [payPeriodId]: false }))
+    }
   }
 
   const handlePageChange = (newPage: number) => {
@@ -607,13 +638,34 @@ export const ShiftsList: React.FC = () => {
                           )}
 
                           <div className="shifts-timeline__actions">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => router.push(`/pay-periods/${item.payPeriod.id}`)}
-                            >
-                              Open Pay Period
-                            </Button>
+                            <div className="shifts-timeline__action-buttons">
+                              {item.payPeriod.status === 'pending' && isPaid && (
+                                <Button
+                                  size="sm"
+                                  variant="success"
+                                  leftIcon={verifyBusy[item.payPeriod.id]
+                                    ? <Loader2 size={16} className="animate-spin" />
+                                    : <ShieldCheck size={16} />}
+                                  disabled={!!verifyBusy[item.payPeriod.id]}
+                                  onClick={() => handleVerifyPayPeriod(item.payPeriod.id)}
+                                >
+                                  {verifyBusy[item.payPeriod.id] ? 'Marking…' : 'Mark Verified'}
+                                </Button>
+                              )}
+
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => router.push(`/pay-periods/${item.payPeriod.id}`)}
+                              >
+                                Open Pay Period
+                              </Button>
+                            </div>
+                            {verifyErrors[item.payPeriod.id] && (
+                              <div className="shifts-timeline__action-error">
+                                {verifyErrors[item.payPeriod.id]}
+                              </div>
+                            )}
                           </div>
                         </CardBody>
                       </Card>
