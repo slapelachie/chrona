@@ -125,6 +125,11 @@
   border: 1px solid rgba(110, 89, 247, 0.3);
 }
 
+.settings-inline-help {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
 .settings-toggle {
   width: 100%;
   display: flex;

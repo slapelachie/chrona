@@ -2,6 +2,30 @@ import { prisma } from '@/lib/db'
 import { Decimal } from 'decimal.js'
 import { UpdatePayGuideRequest } from '@/types'
 
+export const generateUniquePayGuideName = async (baseName: string): Promise<string> => {
+  const trimmedBase = baseName.trim()
+  if (!trimmedBase) {
+    throw new Error('Base name is required to generate pay guide name')
+  }
+
+  let candidate = trimmedBase
+  let counter = 2
+
+  // First check if the base name is free
+  const exists = await prisma.payGuide.findUnique({ where: { name: candidate } })
+  if (!exists) return candidate
+
+  while (true) {
+    candidate = `${trimmedBase} (${counter})`
+    const collision = await prisma.payGuide.findUnique({ where: { name: candidate } })
+    if (!collision) return candidate
+    counter += 1
+    if (counter > 1000) {
+      throw new Error('Unable to generate unique pay guide name')
+    }
+  }
+}
+
 export const checkPayGuideNameUniqueness = async (
   name: string,
   excludeId?: string

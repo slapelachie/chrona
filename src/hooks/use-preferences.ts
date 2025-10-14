@@ -5,6 +5,7 @@ type Prefs = {
   emailReminders?: boolean
   payPeriodAlerts?: boolean
   shiftReminders?: boolean
+  defaultShiftLengthMinutes?: number
 }
 
 const KEY = 'chrona:prefs'
@@ -46,4 +47,3 @@ export function usePreferences() {
 
   return { prefs, update, reset }
 }
-

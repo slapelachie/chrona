@@ -2,10 +2,12 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button, Card, Input } from '@/components/ui'
 import { PayGuideListItem, PayGuidesListResponse } from '@/types'
 
 export const PayGuidesList: React.FC = () => {
+  const router = useRouter()
   const [items, setItems] = useState<PayGuideListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -47,6 +49,28 @@ export const PayGuidesList: React.FC = () => {
     }
   }
 
+  const duplicate = async (id: string) => {
+    try {
+      const res = await fetch(`/api/pay-rates/${id}/duplicate`, { method: 'POST' })
+      const json = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        alert(json?.error || json?.message || 'Failed to duplicate pay guide')
+        return
+      }
+
+      fetchGuides()
+
+      const newId = json?.data?.id
+      if (newId) {
+        router.push(`/pay-guides/${newId}/edit?source=${id}`)
+      }
+    } catch (error) {
+      console.error('Failed to duplicate pay guide:', error)
+      alert('Failed to duplicate pay guide. Please try again.')
+    }
+  }
+
   return (
     <div className="d-flex flex-column gap-3">
       <div className="d-flex gap-2 align-items-center flex-wrap">
@@ -83,6 +107,9 @@ export const PayGuidesList: React.FC = () => {
                 <Button size="sm" variant="outline" onClick={() => toggleActive(pg.id, pg.isActive)}>
                   {pg.isActive ? 'Deactivate' : 'Activate'}
                 </Button>
+                <Button size="sm" variant="outline" onClick={() => duplicate(pg.id)}>
+                  Duplicate
+                </Button>
                 <Button size="sm" variant="ghost" onClick={() => remove(pg.id)}>Delete</Button>
               </div>
             </div>
@@ -92,4 +119,3 @@ export const PayGuidesList: React.FC = () => {
     </div>
   )
 }
-

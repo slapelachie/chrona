@@ -12,16 +12,20 @@ import {
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Form } from 'react-bootstrap'
-import { PayCalculationResult } from '@/types'
+import { PayCalculationResult, PayPeriodType } from '@/types'
 import { BreakPeriodsInput, BreakPeriodInput } from './break-periods-input'
 import { PayBreakdown } from './pay-breakdown'
 import { usePreferences } from '@/hooks/use-preferences'
+import { calculatePayPeriodRange } from '@/lib/pay-period-range'
 
 interface PayGuide {
   id: string
   name: string
   baseRate: string
   description?: string
+  effectiveFrom: string
+  effectiveTo?: string
+  timezone?: string
 }
 
 interface PayPreview {
@@ -45,6 +49,10 @@ interface ShiftData {
   breakPeriods: BreakPeriodInput[]
 }
 
+const LAST_SHIFT_START_KEY = 'shift-form:last-start-time'
+const LAST_SHIFT_END_KEY = 'shift-form:last-end-time'
+const LAST_SHIFT_PAY_GUIDE_KEY = 'shift-form:last-pay-guide-id'
+
 export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   const { prefs } = usePreferences()
   const [formData, setFormData] = useState<ShiftData>({
@@ -66,6 +74,23 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   const [initialBreakPeriods, setInitialBreakPeriods] =
     useState<BreakPeriodInput[]>([])
   const bannerRef = useRef<HTMLDivElement | null>(null)
+  const lastDurationMsRef = useRef<number | null>(null)
+  const fallbackShiftDurationMinutes = Math.min(
+    Math.max(prefs?.defaultShiftLengthMinutes ?? 180, 15),
+    24 * 60,
+  )
+  const fallbackShiftDurationMs = fallbackShiftDurationMinutes * 60 * 1000
+  const [userContext, setUserContext] = useState<{
+    payPeriodType: PayPeriodType
+    timezone: string
+  } | null>(null)
+  const [payPeriodWarning, setPayPeriodWarning] = useState<{
+    periodStart: Date
+    periodEnd: Date
+    effectiveFrom: Date
+    effectiveTo?: Date | null
+  } | null>(null)
+  const [payPeriodRangeLabel, setPayPeriodRangeLabel] = useState<string>('')
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -91,6 +116,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
 
   // Fetch pay guides on component mount
   useEffect(() => {
+    fetchUser()
     fetchPayGuides()
     if (mode === 'edit' && shiftId) {
       fetchShiftData()
@@ -131,13 +157,29 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
 
   const fetchPayGuides = async () => {
     try {
-      const response = await fetch('/api/pay-rates?active=true&limit=50')
+      const response = await fetch('/api/pay-rates?active=true&limit=50&include=metadata')
       if (response.ok) {
         const data = await response.json()
         setPayGuides(data.data?.payGuides || [])
       }
     } catch (error) {
       console.error('Failed to fetch pay guides:', error)
+    }
+  }
+
+  const fetchUser = async () => {
+    try {
+      const response = await fetch('/api/user')
+      if (!response.ok) return
+      const data = await response.json()
+      if (data?.data) {
+        setUserContext({
+          payPeriodType: data.data.payPeriodType,
+          timezone: data.data.timezone,
+        })
+      }
+    } catch (error) {
+      console.error('Failed to fetch user context:', error)
     }
   }
 
@@ -151,6 +193,18 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       setFormData((prev) => ({ ...prev, payGuideId: prefs.defaultPayGuideId! }))
     }
   }, [mode, prefs?.defaultPayGuideId, payGuides, formData.payGuideId])
+
+  useEffect(() => {
+    if (!formData.payGuideId) return
+    if (payGuides.length === 0) return
+    const exists = payGuides.some((pg) => pg.id === formData.payGuideId)
+    if (!exists) {
+      setFormData((prev) => ({ ...prev, payGuideId: '' }))
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem(LAST_SHIFT_PAY_GUIDE_KEY)
+      }
+    }
+  }, [formData.payGuideId, payGuides])
 
   const fetchShiftData = async () => {
     if (!shiftId) return
@@ -251,23 +305,20 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       const next = { ...prev, startTime: value }
       try {
         const newStart = value ? new Date(value) : null
-        const hasEnd = !!prev.endTime
-        if (newStart) {
-          if (hasEnd) {
-            // Preserve existing duration
-            const prevStart = prev.startTime ? new Date(prev.startTime) : null
-            const prevEnd = new Date(prev.endTime as string)
-            const prevDuration = prevStart
-              ? prevEnd.getTime() - prevStart.getTime()
-              : 0
-            if (prevDuration > 0) {
-              const newEnd = new Date(newStart.getTime() + prevDuration)
-              next.endTime = formatDateTimeLocal(newEnd)
-            }
-          } else {
-            // Default to 3 hours after new start
-            const newEnd = new Date(newStart.getTime() + 3 * 60 * 60 * 1000)
+        if (newStart && !Number.isNaN(newStart.getTime())) {
+          const preservedDuration =
+            lastDurationMsRef.current && lastDurationMsRef.current > 0
+              ? lastDurationMsRef.current
+              : null
+
+          if (preservedDuration) {
+            const newEnd = new Date(newStart.getTime() + preservedDuration)
             next.endTime = formatDateTimeLocal(newEnd)
+            lastDurationMsRef.current = preservedDuration
+          } else {
+            const newEnd = new Date(newStart.getTime() + fallbackShiftDurationMs)
+            next.endTime = formatDateTimeLocal(newEnd)
+            lastDurationMsRef.current = fallbackShiftDurationMs
           }
         }
       } catch {
@@ -282,6 +333,93 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     setFormData((prev) => ({ ...prev, endTime: value }))
     if (errors.endTime) setErrors((prev) => ({ ...prev, endTime: '' }))
   }
+
+  useEffect(() => {
+    if (!formData.startTime || !formData.endTime) return
+
+    const start = new Date(formData.startTime)
+    const end = new Date(formData.endTime)
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return
+
+    const diff = end.getTime() - start.getTime()
+    if (diff > 0) {
+      lastDurationMsRef.current = diff
+    }
+  }, [formData.startTime, formData.endTime])
+
+  useEffect(() => {
+    if (!lastDurationMsRef.current || lastDurationMsRef.current <= 0) {
+      lastDurationMsRef.current = fallbackShiftDurationMs
+    }
+  }, [fallbackShiftDurationMs])
+
+  const formatDisplayDate = (date: Date) =>
+    new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(date)
+
+  useEffect(() => {
+    if (mode !== 'create') return
+    const selectedGuide = formData.payGuideId
+      ? payGuides.find((guide) => guide.id === formData.payGuideId)
+      : null
+
+    if (!selectedGuide || !formData.startTime || !userContext) {
+      setPayPeriodWarning(null)
+      setPayPeriodRangeLabel('')
+      return
+    }
+
+    try {
+      const startDate = new Date(formData.startTime)
+      if (Number.isNaN(startDate.getTime())) {
+        setPayPeriodWarning(null)
+        setPayPeriodRangeLabel('')
+        return
+      }
+
+      const effectiveTimezone = selectedGuide.timezone || userContext.timezone
+      const { startDate: periodStart, endDate: periodEnd } =
+        calculatePayPeriodRange(startDate, userContext.payPeriodType, effectiveTimezone)
+
+      const effectiveFrom = new Date(selectedGuide.effectiveFrom)
+      const effectiveTo = selectedGuide.effectiveTo
+        ? new Date(selectedGuide.effectiveTo)
+        : null
+
+      const outOfRange =
+        periodStart < effectiveFrom ||
+        (effectiveTo !== null && periodEnd > effectiveTo)
+
+      setPayPeriodRangeLabel(
+        `${formatDisplayDate(periodStart)} – ${formatDisplayDate(periodEnd)}`,
+      )
+
+      if (outOfRange) {
+        setPayPeriodWarning({
+          periodStart,
+          periodEnd,
+          effectiveFrom,
+          effectiveTo,
+        })
+      } else {
+        setPayPeriodWarning(null)
+      }
+    } catch (error) {
+      console.error('Failed to calculate pay period range:', error)
+      setPayPeriodWarning(null)
+      setPayPeriodRangeLabel('')
+    }
+  }, [
+    mode,
+    formData.payGuideId,
+    formData.startTime,
+    payGuides,
+    userContext,
+  ])
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
@@ -493,11 +631,13 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     setInitialBreakPeriods(updatedBreakPeriods.map((bp) => ({ ...bp })))
   }
 
-  const resetForm = () => {
+  const resetForm = (
+    preserved?: Partial<Pick<ShiftData, 'startTime' | 'endTime' | 'payGuideId'>>,
+  ) => {
     setFormData({
-      payGuideId: '',
-      startTime: '',
-      endTime: '',
+      payGuideId: preserved?.payGuideId ?? '',
+      startTime: preserved?.startTime ?? '',
+      endTime: preserved?.endTime ?? '',
       notes: '',
       breakPeriods: [],
     })
@@ -564,7 +704,25 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
         }
 
         if (mode === 'create') {
-          resetForm()
+          if (typeof window !== 'undefined') {
+            if (formData.startTime) {
+              sessionStorage.setItem(LAST_SHIFT_START_KEY, formData.startTime)
+            }
+            if (formData.endTime) {
+              sessionStorage.setItem(LAST_SHIFT_END_KEY, formData.endTime)
+            } else {
+              sessionStorage.removeItem(LAST_SHIFT_END_KEY)
+            }
+            if (formData.payGuideId) {
+              sessionStorage.setItem(LAST_SHIFT_PAY_GUIDE_KEY, formData.payGuideId)
+            }
+          }
+
+          resetForm({
+            payGuideId: formData.payGuideId,
+            startTime: formData.startTime,
+            endTime: formData.endTime,
+          })
           const params = new URLSearchParams(Array.from(searchParams.entries()))
           params.set('status', 'success')
           const query = params.toString()
@@ -612,6 +770,46 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       router.push('/timeline')
     }
   }
+
+  useEffect(() => {
+    if (mode !== 'create') return
+    if (typeof window === 'undefined') return
+
+    const isSamePageReferrer = (() => {
+      try {
+        if (!document.referrer) return false
+        const refUrl = new URL(document.referrer)
+        return refUrl.pathname.startsWith('/shifts/new')
+      } catch {
+        return false
+      }
+    })()
+
+    if (!isSamePageReferrer) {
+      sessionStorage.removeItem(LAST_SHIFT_START_KEY)
+      sessionStorage.removeItem(LAST_SHIFT_END_KEY)
+      sessionStorage.removeItem(LAST_SHIFT_PAY_GUIDE_KEY)
+      lastDurationMsRef.current = fallbackShiftDurationMs
+      return
+    }
+
+    const storedStart = sessionStorage.getItem(LAST_SHIFT_START_KEY)
+    const storedEnd = sessionStorage.getItem(LAST_SHIFT_END_KEY)
+    const storedGuide = sessionStorage.getItem(LAST_SHIFT_PAY_GUIDE_KEY)
+
+    if (!storedStart && !storedEnd && !storedGuide) return
+
+    setFormData((prev) => {
+      if (prev.startTime || prev.endTime || prev.payGuideId) return prev
+
+      return {
+        ...prev,
+        payGuideId: storedGuide ?? prev.payGuideId,
+        startTime: storedStart ?? prev.startTime,
+        endTime: storedEnd ?? prev.endTime,
+      }
+    })
+  }, [mode])
 
   if (initialLoading) {
     return (
@@ -739,6 +937,36 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
                 required
               />
             </div>
+
+            {payPeriodWarning && (
+              <div
+                role="alert"
+                style={{
+                  display: 'flex',
+                  gap: '0.75rem',
+                  padding: '0.85rem 1rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--color-warning)',
+                  backgroundColor: 'var(--color-warning-bg)',
+                  color: 'var(--color-text-primary)',
+                  alignItems: 'flex-start',
+                }}
+              >
+                <AlertTriangle
+                  size={18}
+                  style={{ color: 'var(--color-warning)', marginTop: '0.15rem' }}
+                  aria-hidden
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <strong style={{ fontSize: '0.95rem' }}>
+                    Pay guide validity warning
+                  </strong>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
+                    {`The selected pay period (${payPeriodRangeLabel}) extends outside the pay guide's effective window (${formatDisplayDate(payPeriodWarning.effectiveFrom)}${payPeriodWarning.effectiveTo ? ` – ${formatDisplayDate(payPeriodWarning.effectiveTo)}` : ' onwards'}). Double-check the pay guide choice before saving.`}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Break Periods */}
             <BreakPeriodsInput

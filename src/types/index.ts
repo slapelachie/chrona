@@ -253,6 +253,13 @@ export interface UpdatePayGuideRequest {
   isActive?: boolean
 }
 
+export interface DuplicatePayGuideRequest {
+  name?: string
+  effectiveFrom?: string
+  effectiveTo?: string | null
+  isActive?: boolean
+}
+
 export interface PayGuideResponse extends Omit<PayGuide, 'baseRate'> {
   baseRate: string
 }
