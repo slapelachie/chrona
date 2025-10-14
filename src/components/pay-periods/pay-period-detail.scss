@@ -58,6 +58,11 @@
     color: var(--color-warning);
   }
 
+  &__shifts {
+    display: grid;
+    gap: var(--spacing-sm);
+  }
+
   &__verification-body {
     display: grid;
     gap: 0.75rem;

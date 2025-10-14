@@ -11,9 +11,16 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import { PayPeriodResponse, PayPeriodStatus, TaxCalculationResponse, ShiftResponse } from '@/types'
+import {
+  PayPeriodResponse,
+  PayPeriodStatus,
+  TaxCalculationResponse,
+  ShiftResponse,
+  ShiftListItem,
+} from '@/types'
 import { StatusBadge, statusAccentColor } from './status-badge'
 import { formatPayPeriodDate } from '@/lib/date-utils'
+import { ShiftCard } from '@/components/shifts/shift-card'
 import './pay-period-detail.scss'
 
 interface Props {
@@ -71,6 +78,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
   }>({ type: '', description: '', amount: '' })
   const [shifts, setShifts] = useState<ShiftResponse[]>([])
   const [shiftsExpanded, setShiftsExpanded] = useState(false)
+  const [payGuideLookup, setPayGuideLookup] = useState<Record<string, string>>({})
   const isVerified = useMemo(() => pp?.status === 'verified', [pp])
 
   const fetchPayPeriod = async () => {
@@ -249,6 +257,24 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payPeriodId])
 
+  useEffect(() => {
+    const fetchPayGuides = async () => {
+      try {
+        const res = await fetch('/api/pay-rates?fields=id,name&limit=200')
+        if (!res.ok) return
+        const json = await res.json().catch(() => null)
+        const entries = json?.data?.payGuides?.map((pg: { id: string; name: string }) => [pg.id, pg.name]) ?? []
+        if (entries.length) {
+          setPayGuideLookup(Object.fromEntries(entries))
+        }
+      } catch (e) {
+        console.warn('Unable to preload pay guide names for pay period detail', e)
+      }
+    }
+
+    fetchPayGuides()
+  }, [])
+
   const formatCurrency = (amount?: string) => {
     if (!amount) return '-'
     const n = Number(amount)
@@ -302,6 +328,41 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
       tone: 'warning' as const,
     }
   }, [pp, readiness])
+
+  const shiftListItems = useMemo<ShiftListItem[]>(() => {
+    return shifts.map(shift => {
+      const item: ShiftListItem = {
+        id: shift.id,
+        userId: shift.userId,
+        payGuideId: shift.payGuideId,
+        payPeriodId: shift.payPeriodId || '',
+        startTime: new Date(shift.startTime),
+        endTime: new Date(shift.endTime),
+        totalHours: shift.totalHours,
+        totalPay: shift.totalPay,
+        notes: shift.notes ?? undefined,
+      }
+
+      const guideName = payGuideLookup[shift.payGuideId]
+      if (guideName) {
+        ;(item as any).payGuide = {
+          id: shift.payGuideId,
+          name: guideName,
+        }
+      }
+
+      return item
+    })
+  }, [shifts, payGuideLookup])
+
+  const visibleShiftItems = useMemo(
+    () => (shiftsExpanded ? shiftListItems : shiftListItems.slice(0, 3)),
+    [shiftListItems, shiftsExpanded]
+  )
+
+  const handleShiftOpen = (shiftId: string) => {
+    router.push(`/shifts/${shiftId}`)
+  }
 
   const variance = useMemo(() => {
     if (!pp?.netPay || !actualPay) return null
@@ -799,102 +860,22 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                       No shifts recorded for this period
                     </div>
                   ) : (
-                    <div style={{ display: 'grid', gap: '0.5rem' }}>
-                      {shifts
-                        .slice(0, shiftsExpanded ? shifts.length : 3)
-                        .map((shift, index) => (
-                          <div
-                            key={shift.id}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: '1fr auto auto',
-                              gap: '1rem',
-                              alignItems: 'center',
-                              padding: '0.75rem',
-                              backgroundColor:
-                                'var(--color-background-secondary)',
-                              borderRadius: '6px',
-                            }}
-                          >
-                            <div>
-                              <div
-                                style={{
-                                  fontWeight: 600,
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                {new Date(shift.startTime).toLocaleDateString(
-                                  'en-AU',
-                                  {
-                                    weekday: 'short',
-                                    month: 'short',
-                                    day: 'numeric',
-                                  }
-                                )}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: '0.75rem',
-                                  color: 'var(--color-text-secondary)',
-                                }}
-                              >
-                                {new Date(shift.startTime).toLocaleTimeString(
-                                  'en-AU',
-                                  { hour: '2-digit', minute: '2-digit' }
-                                )}{' '}
-                                -{' '}
-                                {new Date(shift.endTime).toLocaleTimeString(
-                                  'en-AU',
-                                  { hour: '2-digit', minute: '2-digit' }
-                                )}
-                              </div>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <div
-                                style={{
-                                  fontSize: '0.75rem',
-                                  color: 'var(--color-text-secondary)',
-                                }}
-                              >
-                                Hours
-                              </div>
-                              <div
-                                style={{
-                                  fontWeight: 600,
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                {shift.totalHours || '0'}
-                              </div>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <div
-                                style={{
-                                  fontSize: '0.75rem',
-                                  color: 'var(--color-text-secondary)',
-                                }}
-                              >
-                                Total Pay
-                              </div>
-                              <div
-                                style={{
-                                  fontWeight: 700,
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                ${formatCurrency(shift.totalPay)}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      {!shiftsExpanded && shifts.length > 3 && (
+                    <div className="pay-period-detail__shifts">
+                      {visibleShiftItems.map(shift => (
+                        <ShiftCard
+                          key={shift.id}
+                          shift={shift}
+                          onClick={() => handleShiftOpen(shift.id)}
+                        />
+                      ))}
+                      {!shiftsExpanded && shiftListItems.length > 3 && (
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => setShiftsExpanded(true)}
                           style={{ marginTop: '0.5rem' }}
                         >
-                          Show {shifts.length - 3} more shifts
+                          Show {shiftListItems.length - 3} more shifts
                         </Button>
                       )}
                     </div>

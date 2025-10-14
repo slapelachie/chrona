@@ -281,6 +281,11 @@ export const ShiftsList: React.FC = () => {
     router.push(`/shifts/${shiftId}`)
   }
 
+  const handleOpenPayPeriod = (payPeriodId: string) => {
+    if (typeof window === 'undefined') return
+    window.open(`/pay-periods/${payPeriodId}`, '_blank', 'noopener,noreferrer')
+  }
+
   const handleVerifyPayPeriod = async (payPeriodId: string) => {
     setVerifyBusy(prev => ({ ...prev, [payPeriodId]: true }))
     setVerifyErrors(prev => ({ ...prev, [payPeriodId]: null }))
@@ -656,7 +661,7 @@ export const ShiftsList: React.FC = () => {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => router.push(`/pay-periods/${item.payPeriod.id}`)}
+                                onClick={() => handleOpenPayPeriod(item.payPeriod.id)}
                               >
                                 Open Pay Period
                               </Button>
