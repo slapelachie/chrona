@@ -5,17 +5,16 @@ import { useRouter } from 'next/navigation'
 import { Card, CardBody, CardHeader, Button, Input } from '../ui'
 import {
   DollarSign,
-  FileDown,
   Loader2,
-  Play,
   ShieldCheck,
   TriangleAlert,
   Plus,
   Trash2,
 } from 'lucide-react'
-import { PayPeriodResponse, TaxCalculationResponse, ShiftResponse } from '@/types'
+import { PayPeriodResponse, PayPeriodStatus, TaxCalculationResponse, ShiftResponse } from '@/types'
 import { StatusBadge, statusAccentColor } from './status-badge'
 import { formatPayPeriodDate } from '@/lib/date-utils'
+import './pay-period-detail.scss'
 
 interface Props {
   payPeriodId: string
@@ -27,6 +26,23 @@ type TaxState =
   | { status: 'ready'; data: TaxCalculationResponse['taxCalculation'] }
   | { status: 'error'; error: string }
 
+type ReadinessState = {
+  status: PayPeriodStatus
+  isFuture: boolean
+  readyForVerification: boolean
+  totalShifts: number
+  shiftsWithPay: number
+  shiftsWithoutPay: number
+  blockers: string[]
+  timezone: string | null
+}
+
+type ReadinessDescriptor = {
+  headline: string
+  description: string
+  tone?: 'success' | 'warning' | 'info'
+}
+
 export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -35,13 +51,9 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
   const [tax, setTax] = useState<TaxState>({ status: 'idle' })
   const [actualPay, setActualPay] = useState('')
   const [verifyBusy, setVerifyBusy] = useState(false)
-  const [processReady, setProcessReady] = useState<{
-    canProcess: boolean
-    message?: string
-    blockers?: string[]
-  } | null>(null)
-  const [processError, setProcessError] = useState<string | null>(null)
-  const [processSuccess, setProcessSuccess] = useState<string | null>(null)
+  const [readiness, setReadiness] = useState<ReadinessState | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null)
   const [openBusy, setOpenBusy] = useState(false)
   const [extras, setExtras] = useState<
     Array<{
@@ -100,73 +112,44 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
     }
   }
 
-  const fetchProcessReadiness = async () => {
+  const fetchReadiness = async () => {
     try {
-      const res = await fetch(`/api/pay-periods/${payPeriodId}/process`)
+      const res = await fetch(`/api/pay-periods/${payPeriodId}/readiness`)
       const json = await res.json().catch(() => null)
-      if (res.ok) {
-        setProcessReady({
-          canProcess: !!json?.data?.canProcess,
-          message: json?.message,
-          blockers: json?.data?.blockers || [],
-        })
-      } else {
-        setProcessReady({
-          canProcess: false,
-          message: json?.message || 'Not ready to process',
-          blockers: json?.errors?.map?.((e: any) => e.message) || [],
-        })
+      if (!res.ok || !json?.data) {
+        throw new Error(json?.message || 'Unable to load readiness data')
       }
-    } catch {
-      setProcessReady({
-        canProcess: false,
-        message: 'Unable to determine processing readiness',
-      })
+      setReadiness(json.data as ReadinessState)
+    } catch (e) {
+      console.error('Failed to load readiness', e)
+      setReadiness(null)
     }
   }
 
-  const processPayPeriod = async () => {
+  const refreshPayPeriod = async () => {
     try {
       setVerifyBusy(true)
-      setProcessError(null)
-      setProcessSuccess(null)
-      const res = await fetch(`/api/pay-periods/${payPeriodId}/process`, {
+      setActionError(null)
+      setActionSuccess(null)
+      const res = await fetch(`/api/pay-periods/${payPeriodId}/recalculate`, {
         method: 'POST',
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
-        const msg =
-          json?.message || json?.error || 'Failed to process pay period'
+        const msg = json?.message || json?.error || 'Failed to refresh pay period'
         throw new Error(msg)
       }
       await fetchPayPeriod()
       await fetchTax()
-      await fetchProcessReadiness()
-      setProcessSuccess(
-        'Pay period processed successfully! All shifts and extras have been calculated with taxes.'
-      )
-      // Clear success message after 5 seconds
-      setTimeout(() => setProcessSuccess(null), 5000)
+      await fetchReadiness()
+      setActionSuccess('Pay period recalculated.')
+      setTimeout(() => setActionSuccess(null), 5000)
     } catch (e) {
       const msg =
-        e instanceof Error ? e.message : 'Processing failed. Please try again.'
-      setProcessError(msg)
-    } finally {
-      setVerifyBusy(false)
-    }
-  }
-
-  const runTaxOnly = async () => {
-    try {
-      setVerifyBusy(true)
-      const res = await fetch(
-        `/api/pay-periods/${payPeriodId}/tax-calculation`,
-        { method: 'POST' }
-      )
-      if (!res.ok) throw new Error('Failed to calculate taxes')
-      await fetchTax()
-    } catch (e) {
-      alert('Tax calculation failed.')
+        e instanceof Error
+          ? e.message
+          : 'Unable to refresh pay period. Please try again.'
+      setActionError(msg)
     } finally {
       setVerifyBusy(false)
     }
@@ -178,11 +161,11 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
       const res = await fetch(`/api/pay-periods/${payPeriodId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'open' }),
+        body: JSON.stringify({ status: 'pending' }),
       })
       if (!res.ok) throw new Error('Failed to open pay period')
       await fetchPayPeriod()
-      await fetchProcessReadiness()
+      await fetchReadiness()
     } catch (e) {
       alert('Could not open the period. Please try again.')
     } finally {
@@ -193,6 +176,8 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
   const saveVerification = async (markVerified: boolean) => {
     try {
       setVerifyBusy(true)
+      setActionError(null)
+      setActionSuccess(null)
       const payload: any = {}
       if (actualPay) payload.actualPay = actualPay
       if (markVerified) payload.status = 'verified'
@@ -203,56 +188,19 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
       })
       if (!res.ok) throw new Error('Failed to save verification')
       await fetchPayPeriod()
+      await fetchReadiness()
+      if (markVerified) {
+        setActionSuccess('Pay period marked as verified.')
+      } else {
+        setActionSuccess('Actual pay saved.')
+      }
+      setTimeout(() => setActionSuccess(null), 5000)
     } catch (e) {
-      alert('Failed to save verification.')
+      const msg = e instanceof Error ? e.message : 'Failed to save verification.'
+      setActionError(msg)
     } finally {
       setVerifyBusy(false)
     }
-  }
-
-  const exportJSON = async () => {
-    const res = await fetch(`/api/pay-periods/${payPeriodId}?include=shifts`)
-    if (!res.ok) return alert('Export failed')
-    const json = await res.json()
-    const blob = new Blob([JSON.stringify(json.data, null, 2)], {
-      type: 'application/json',
-    })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `pay-period-${payPeriodId}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const exportCSV = async () => {
-    const res = await fetch(
-      `/api/pay-periods/${payPeriodId}?include=shifts,extras`
-    )
-    if (!res.ok) return alert('Export failed')
-    const json = await res.json()
-    const data = json.data as PayPeriodResponse
-    const shifts = (data.shifts || []) as ShiftResponse[]
-    const header = ['Shift ID', 'Start', 'End', 'Total Hours', 'Total Pay']
-    const rows = shifts.map((s) => [
-      s.id,
-      new Date(s.startTime).toISOString(),
-      new Date(s.endTime).toISOString(),
-      s.totalHours || '',
-      s.totalPay || '',
-    ])
-    const csv = [header, ...rows]
-      .map((r) =>
-        r.map((v) => `"${(v ?? '').toString().replace(/"/g, '""')}"`).join(',')
-      )
-      .join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `pay-period-${payPeriodId}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
   const addExtra = async () => {
@@ -271,6 +219,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
       setNewExtra({ type: '', description: '', amount: '' })
       await fetchPayPeriod()
       await fetchTax()
+      await fetchReadiness()
     }
   }
 
@@ -281,6 +230,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
     if (res.ok) {
       await fetchPayPeriod()
       await fetchTax()
+      await fetchReadiness()
     }
   }
 
@@ -295,7 +245,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
   }, [payPeriodId])
 
   useEffect(() => {
-    fetchProcessReadiness()
+    fetchReadiness()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payPeriodId])
 
@@ -307,6 +257,51 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
       maximumFractionDigits: 2,
     })
   }
+
+  const readinessInfo = useMemo<ReadinessDescriptor | null>(() => {
+    if (!pp) return null
+    if (!readiness) {
+      return {
+        headline: 'Readiness unavailable',
+        description: 'Refresh totals to try again.',
+      }
+    }
+
+    if (pp.status === 'verified') {
+      return {
+        headline: 'Verified',
+        description: 'Reopen the pay period to make further changes.',
+        tone: 'success' as const,
+      }
+    }
+
+    if (readiness.isFuture) {
+      const endLabel = formatPayPeriodDate(pp.endDate, { month: 'short', day: 'numeric' })
+      return {
+        headline: 'Upcoming period',
+        description: `Ends ${endLabel}. Totals will update as shifts are added.`,
+        tone: 'info' as const,
+      }
+    }
+
+    if (readiness.readyForVerification) {
+      return {
+        headline: 'Ready for verification',
+        description: `${readiness.totalShifts} shift${readiness.totalShifts === 1 ? '' : 's'} have calculated pay.`,
+        tone: 'success' as const,
+      }
+    }
+
+    const blockers = readiness.blockers.length > 0
+      ? readiness.blockers.join(' • ')
+      : 'Review outstanding items before verifying.'
+
+    return {
+      headline: 'Needs attention',
+      description: blockers,
+      tone: 'warning' as const,
+    }
+  }, [pp, readiness])
 
   const variance = useMemo(() => {
     if (!pp?.netPay || !actualPay) return null
@@ -367,7 +362,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
         )}
         {error && <div style={{ color: 'var(--color-danger)' }}>{error}</div>}
 
-        {processError && (
+        {actionError && (
           <div
             style={{
               padding: '0.75rem',
@@ -377,11 +372,11 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
               color: 'var(--color-danger)',
             }}
           >
-            <strong>Processing Error:</strong> {processError}
+            <strong>Action Error:</strong> {actionError}
           </div>
         )}
 
-        {processSuccess && (
+        {actionSuccess && (
           <div
             style={{
               padding: '0.75rem',
@@ -391,7 +386,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
               color: 'var(--color-success)',
             }}
           >
-            <strong>Success:</strong> {processSuccess}
+            <strong>Success:</strong> {actionSuccess}
           </div>
         )}
 
@@ -909,193 +904,75 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
             </div>
 
             {/* Sidebar Column */}
-            <div
-              className="sidebar-section"
-              style={{ display: 'grid', gap: '1rem' }}
-            >
-              {/* Status Progression */}
+            <div className="sidebar-section pay-period-detail__sidebar">
               <Card variant="outlined">
                 <CardHeader>
-                  <h3 style={{ margin: 0, fontSize: '0.875rem' }}>Progress</h3>
+                  <h3 className="pay-period-detail__section-title">Readiness</h3>
                 </CardHeader>
-                <CardBody style={{ padding: '0.75rem' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.75rem',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        color:
-                          pp.status === 'open'
-                            ? 'var(--color-primary)'
-                            : 'var(--color-success)',
-                        fontWeight: pp.status === 'open' ? 600 : 400,
-                      }}
-                    >
-                      {pp.status === 'open' ? '○' : '●'} Open
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        color:
-                          pp.status === 'processing'
-                            ? 'var(--color-warning)'
-                            : ['paid', 'verified'].includes(pp.status)
-                              ? 'var(--color-success)'
-                              : 'var(--color-text-secondary)',
-                        fontWeight: pp.status === 'processing' ? 600 : 400,
-                      }}
-                    >
-                      {pp.status === 'processing'
-                        ? '◉'
-                        : ['paid', 'verified'].includes(pp.status)
-                          ? '●'
-                          : '○'}{' '}
-                      Processing
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        color:
-                          pp.status === 'paid'
-                            ? 'var(--color-info)'
-                            : isVerified
-                              ? 'var(--color-success)'
-                              : 'var(--color-text-secondary)',
-                        fontWeight: pp.status === 'paid' ? 600 : 400,
-                      }}
-                    >
-                      {pp.status === 'paid' ? '◉' : isVerified ? '●' : '○'}{' '}
-                      Paid
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        color: isVerified
-                          ? 'var(--color-success)'
-                          : 'var(--color-text-secondary)',
-                        fontWeight: isVerified ? 600 : 400,
-                      }}
-                    >
-                      {isVerified ? '●' : '○'} Verified
+                <CardBody className="pay-period-detail__readiness-body">
+                  <div className="pay-period-detail__readiness-header">
+                    <StatusBadge status={(pp.status as 'pending' | 'verified')} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                        {readinessInfo?.headline ?? '—'}
+                      </div>
+                      <div className={['pay-period-detail__readiness-description',
+                        readinessInfo?.tone ? `pay-period-detail__readiness-description--${readinessInfo.tone}` : ''
+                      ].filter(Boolean).join(' ')}>
+                        {readinessInfo?.description ?? 'Readiness data unavailable.'}
+                      </div>
                     </div>
                   </div>
+                  {readiness && readiness.blockers.length > 0 && pp.status === 'pending' && !readiness.readyForVerification && (
+                    <div className="pay-period-detail__readiness-blockers">
+                      <span className="pay-period-detail__readiness-blockers-title">Blockers</span>
+                      <ul className="pay-period-detail__readiness-blockers-list">
+                        {readiness.blockers.map((blocker) => (
+                          <li key={blocker}>{blocker}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </CardBody>
               </Card>
 
-              {/* Actions */}
               <Card variant="outlined">
                 <CardHeader>
-                  <h3 style={{ margin: 0, fontSize: '0.875rem' }}>Actions</h3>
+                  <h3 className="pay-period-detail__section-title">Actions</h3>
                 </CardHeader>
-                <CardBody style={{ padding: '0.75rem' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.5rem',
-                    }}
-                  >
-                    {/* Primary Action based on status */}
-                    {pp.status === 'open' && (
-                      <Button
-                        size="sm"
-                        leftIcon={<Play size={16} />}
-                        disabled={verifyBusy || !processReady?.canProcess}
-                        onClick={processPayPeriod}
-                        title={
-                          processReady?.canProcess
-                            ? 'Process pay period and calculate taxes'
-                            : processReady?.blockers?.join(', ') ||
-                              'Not ready to process'
-                        }
-                      >
-                        {verifyBusy ? 'Processing…' : 'Process'}
-                      </Button>
-                    )}
-
-                    {pp.status === 'processing' && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          color: 'var(--color-success)',
-                          padding: '0.5rem',
-                          backgroundColor: 'var(--color-background-secondary)',
-                          borderRadius: '4px',
-                        }}
-                      >
-                        <ShieldCheck size={16} />
-                        <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                          Ready for verification
-                        </span>
+                <CardBody className="pay-period-detail__actions-body">
+                  <div className="pay-period-detail__actions-group">
+                    <Button
+                      size="sm"
+                      leftIcon={<Loader2 size={16} className={verifyBusy ? 'loading-pulse' : undefined} />}
+                      disabled={verifyBusy || pp.status === 'verified'}
+                      onClick={refreshPayPeriod}
+                    >
+                      {verifyBusy ? 'Refreshing…' : 'Refresh totals & tax'}
+                    </Button>
+                    {pp.status === 'verified' && (
+                      <div className="pay-period-detail__actions-note">
+                        Reopen the pay period before recalculating totals.
                       </div>
                     )}
+                  </div>
 
-                    {pp.status === 'paid' && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          color: 'var(--color-info)',
-                          padding: '0.5rem',
-                          backgroundColor: 'var(--color-background-secondary)',
-                          borderRadius: '4px',
-                        }}
-                      >
-                        <DollarSign size={16} />
-                        <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                          Payment recorded
-                        </span>
+                  <div className="pay-period-detail__actions-group">
+                    <Button
+                      size="sm"
+                      variant="success"
+                      leftIcon={<ShieldCheck size={16} />}
+                      disabled={verifyBusy || !pp || pp.status !== 'pending' || !(readiness?.readyForVerification ?? false)}
+                      onClick={() => saveVerification(true)}
+                    >
+                      {verifyBusy ? 'Marking…' : 'Mark Verified'}
+                    </Button>
+                    {pp?.status === 'pending' && !(readiness?.readyForVerification ?? false) && (
+                      <div className="pay-period-detail__actions-note pay-period-detail__actions-note--warning">
+                        Complete outstanding items before verifying.
                       </div>
                     )}
-
                     {isVerified && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          color: 'var(--color-success)',
-                          padding: '0.5rem',
-                          backgroundColor: 'var(--color-background-secondary)',
-                          borderRadius: '4px',
-                        }}
-                      >
-                        <ShieldCheck size={16} />
-                        <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                          ✓ Verified
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Utility Actions */}
-                    {pp.status === 'open' && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={runTaxOnly}
-                        disabled={verifyBusy}
-                      >
-                        Preview Tax
-                      </Button>
-                    )}
-
-                    {pp.status !== 'open' && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -1105,46 +982,21 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                         {openBusy ? 'Opening…' : 'Reopen to Edit'}
                       </Button>
                     )}
-
-                    {/* Export Actions */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '0.5rem',
-                        marginTop: '0.5rem',
-                      }}
-                    >
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        leftIcon={<FileDown size={16} />}
-                        onClick={exportCSV}
-                      >
-                        CSV
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        leftIcon={<FileDown size={16} />}
-                        onClick={exportJSON}
-                      >
-                        JSON
-                      </Button>
-                    </div>
                   </div>
+
                 </CardBody>
               </Card>
 
-              {/* Verification Section - Only show when processing/paid/verified */}
-              {(pp.status === 'processing' || pp.status === 'paid' || isVerified) && (
+              {/* Verification Section - Only show when pending or verified */}
+              {(pp.status === 'pending' || isVerified) && (
                 <Card variant="outlined">
                   <CardHeader>
-                    <h3 style={{ margin: 0, fontSize: '0.875rem' }}>
+                    <h3 className="pay-period-detail__section-title">
                       Verification
                     </h3>
                   </CardHeader>
-                  <CardBody style={{ padding: '0.75rem' }}>
-                    <div style={{ display: 'grid', gap: '0.75rem' }}>
+                  <CardBody>
+                    <div className="pay-period-detail__verification-body">
                       <div>
                         <label
                           style={{
@@ -1162,20 +1014,17 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                           value={actualPay}
                           onChange={(e) => setActualPay(e.target.value)}
                           placeholder={`Expected: ${formatCurrency(pp.netPay)}`}
-                          style={{ fontSize: '0.875rem' }}
+                          className="pay-period-detail__actual-input"
                         />
                       </div>
-                      <div
-                        style={{
-                          fontSize: '0.75rem',
-                          color:
-                            variance === null
-                              ? 'var(--color-text-secondary)'
-                              : variance === 0
-                                ? 'var(--color-success)'
-                                : 'var(--color-warning)',
-                        }}
-                      >
+                      <div className={[
+                        'pay-period-detail__variance-text',
+                        variance === 0
+                          ? 'pay-period-detail__variance-text--success'
+                          : variance
+                              ? 'pay-period-detail__variance-text--warning'
+                              : ''
+                      ].filter(Boolean).join(' ')}>
                         {variance === null
                           ? 'Enter actual amount'
                           : variance === 0
@@ -1183,29 +1032,13 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                             : `Variance: ${variance > 0 ? '+' : ''}$${Math.abs(variance).toFixed(2)}`}
                       </div>
                       {!isVerified && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '0.5rem',
-                          }}
+                        <Button
+                          size="sm"
+                          onClick={() => saveVerification(false)}
+                          disabled={verifyBusy}
                         >
-                          <Button
-                            size="sm"
-                            onClick={() => saveVerification(false)}
-                            disabled={verifyBusy}
-                          >
-                            Save Amount
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="success"
-                            onClick={() => saveVerification(true)}
-                            disabled={verifyBusy}
-                          >
-                            Mark Verified
-                          </Button>
-                        </div>
+                          Save Amount
+                        </Button>
                       )}
                     </div>
                   </CardBody>

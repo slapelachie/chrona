@@ -282,12 +282,12 @@ async function main() {
 
   const currentPayPeriod = await prisma.payPeriod.upsert({
     where: { userId_startDate: { userId: user.id, startDate: payPeriodStart } },
-    update: { endDate: payPeriodEnd, status: 'open' },
+    update: { endDate: payPeriodEnd, status: 'pending' },
     create: {
       userId: user.id,
       startDate: payPeriodStart,
       endDate: payPeriodEnd,
-      status: 'open',
+      status: 'pending',
     },
   })
   console.log(
@@ -363,12 +363,12 @@ async function main() {
 
     const shiftPayPeriod = await prisma.payPeriod.upsert({
       where: { userId_startDate: { userId: user.id, startDate: sPPStart } },
-      update: { endDate: sPPEnd, status: 'open' },
+      update: { endDate: sPPEnd, status: 'pending' },
       create: {
         userId: user.id,
         startDate: sPPStart,
         endDate: sPPEnd,
-        status: 'open',
+        status: 'pending',
       },
     })
 
@@ -519,7 +519,7 @@ async function main() {
     },
     update: {
       endDate: previousPayPeriodEnd,
-      status: 'paid',
+      status: 'verified',
       totalHours: new Decimal('76.5'),
       totalPay: new Decimal('2145.75'),
       paygWithholding: new Decimal('429.15'),
@@ -531,7 +531,7 @@ async function main() {
       userId: user.id,
       startDate: previousPayPeriodStart,
       endDate: previousPayPeriodEnd,
-      status: 'paid',
+      status: 'verified',
       totalHours: new Decimal('76.5'),
       totalPay: new Decimal('2145.75'),
       paygWithholding: new Decimal('429.15'),

@@ -142,29 +142,28 @@ export class PayPeriodTaxService {
   }
 
   /**
-   * Process pay period when status changes to 'processing'
-   * This is the main entry point for tax calculations
+   * Recalculate pay totals and taxes without mutating status.
    */
-  static async processPayPeriod(payPeriodId: string): Promise<PayPeriod> {
-    // Import sync service to ensure proper calculation including extras
+  static async recalculatePayPeriod(payPeriodId: string): Promise<PayPeriod> {
     const { PayPeriodSyncService } = await import('./pay-period-sync-service')
-    
-    // First calculate/recalculate pay totals from shifts AND extras using sync service
+
     await PayPeriodSyncService.syncPayPeriod(payPeriodId)
-    
-    // Then calculate taxes (which requires totalPay to be set)
     await this.calculatePayPeriodTax(payPeriodId)
-    
-    // Update status to processing
-    const processedPayPeriod = await prisma.payPeriod.update({
+
+    const refreshed = await prisma.payPeriod.findUnique({
       where: { id: payPeriodId },
-      data: { 
-        status: 'processing',
-        updatedAt: new Date()
-      }
+      include: {
+        shifts: {
+          orderBy: { startTime: 'asc' },
+        },
+      },
     })
 
-    return processedPayPeriod as PayPeriod
+    if (!refreshed) {
+      throw new Error('Failed to load pay period after recalculation')
+    }
+
+    return refreshed as PayPeriod
   }
 
 

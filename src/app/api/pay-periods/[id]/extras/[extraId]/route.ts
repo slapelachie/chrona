@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { Decimal } from 'decimal.js'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
+import { PayPeriodLockedError, requirePayPeriodEditable } from '@/lib/pay-period-guards'
+import { ApiValidationResponse } from '@/types'
 
 // PUT /api/pay-periods/[id]/extras/[extraId] - update an extra
 export async function PUT(
@@ -22,6 +24,21 @@ export async function PUT(
 
     const existing = await prisma.payPeriodExtra.findUnique({ where: { id: extraId } })
     if (!existing || existing.payPeriodId !== payPeriodId) return NextResponse.json({ error: 'Extra not found' }, { status: 404 })
+
+    try {
+      await requirePayPeriodEditable(existing.payPeriodId)
+    } catch (error) {
+      if (error instanceof PayPeriodLockedError) {
+        return NextResponse.json(
+          {
+            errors: [{ field: 'payPeriodId', message: 'Reopen the pay period before modifying extras.' }],
+            message: 'Pay period locked',
+          } as ApiValidationResponse,
+          { status: 423 }
+        )
+      }
+      throw error
+    }
 
     const updated = await prisma.payPeriodExtra.update({ where: { id: extraId }, data })
     await PayPeriodSyncService.onExtrasChanged(payPeriodId)
@@ -51,6 +68,21 @@ export async function DELETE(
     const existing = await prisma.payPeriodExtra.findUnique({ where: { id: extraId } })
     if (!existing || existing.payPeriodId !== payPeriodId) return NextResponse.json({ error: 'Extra not found' }, { status: 404 })
 
+    try {
+      await requirePayPeriodEditable(existing.payPeriodId)
+    } catch (error) {
+      if (error instanceof PayPeriodLockedError) {
+        return NextResponse.json(
+          {
+            errors: [{ field: 'payPeriodId', message: 'Reopen the pay period before modifying extras.' }],
+            message: 'Pay period locked',
+          } as ApiValidationResponse,
+          { status: 423 }
+        )
+      }
+      throw error
+    }
+
     await prisma.payPeriodExtra.delete({ where: { id: extraId } })
     await PayPeriodSyncService.onExtrasChanged(payPeriodId)
 
@@ -60,4 +92,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete extra' }, { status: 500 })
   }
 }
-

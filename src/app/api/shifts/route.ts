@@ -27,6 +27,7 @@ import {
   applyFieldSelection,
 } from '@/lib/api-response-utils'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
+import { PayPeriodLockedError, requirePayPeriodEditable } from '@/lib/pay-period-guards'
 
 // GET /api/shifts - List shifts with filtering and pagination
 export async function GET(request: NextRequest) {
@@ -210,6 +211,21 @@ export async function POST(request: NextRequest) {
     // Find or create appropriate pay period for the shift using pay guide timezone
     const startTime = new Date(body.startTime)
     const payPeriod = await findOrCreatePayPeriod(user.id, startTime, payGuide.timezone)
+
+    try {
+      await requirePayPeriodEditable(payPeriod.id)
+    } catch (error) {
+      if (error instanceof PayPeriodLockedError) {
+        return NextResponse.json(
+          {
+            errors: [{ field: 'payPeriodId', message: 'Reopen the pay period before adding shifts.' }],
+            message: 'Pay period locked',
+          } as ApiValidationResponse,
+          { status: 423 }
+        )
+      }
+      throw error
+    }
 
     // Create the shift without calculations first
     const shift = await prisma.shift.create({

@@ -18,6 +18,7 @@ import {
   updateShiftWithCalculation 
 } from '@/lib/shift-calculation'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
+import { PayPeriodLockedError, requirePayPeriodEditable } from '@/lib/pay-period-guards'
 
 interface RouteParams {
   params: Promise<{
@@ -168,6 +169,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         errors: [{ field: 'shiftId', message: 'Shift not found' }],
         message: 'Invalid shift'
       } as ApiValidationResponse, { status: 404 })
+    }
+
+    if (shift.payPeriodId) {
+      try {
+        await requirePayPeriodEditable(shift.payPeriodId)
+      } catch (error) {
+        if (error instanceof PayPeriodLockedError) {
+          return NextResponse.json(
+            {
+              errors: [{ field: 'payPeriodId', message: 'Reopen the pay period before adjusting breaks.' }],
+              message: 'Pay period locked',
+            } as ApiValidationResponse,
+            { status: 423 }
+          )
+        }
+        throw error
+      }
     }
 
     // Validate request body

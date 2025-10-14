@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Decimal } from 'decimal.js'
 let PayPeriodTaxService: any
-import { PayPeriodType } from '@/types'
+import { PayPeriodStatus, PayPeriodType } from '@/types'
 
 // Mock the database (use vi.hoisted to avoid hoisting issues)
 const { mockPrisma } = vi.hoisted(() => ({
@@ -25,6 +25,16 @@ const { mockPrisma } = vi.hoisted(() => ({
 
 vi.mock('@/lib/db', () => ({
   prisma: mockPrisma,
+}))
+
+const { mockPayPeriodSyncService } = vi.hoisted(() => ({
+  mockPayPeriodSyncService: {
+    syncPayPeriod: vi.fn(),
+  },
+}))
+
+vi.mock('@/lib/pay-period-sync-service', () => ({
+  PayPeriodSyncService: mockPayPeriodSyncService,
 }))
 
 // Mock the tax calculator
@@ -91,6 +101,7 @@ describe('PayPeriodTaxService', () => {
     // Import service after mocks are in place
     const mod = await import('../pay-period-tax-service')
     PayPeriodTaxService = mod.PayPeriodTaxService
+    mockPayPeriodSyncService.syncPayPeriod.mockReset()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -235,13 +246,13 @@ describe('PayPeriodTaxService', () => {
     })
   })
 
-  describe('processPayPeriod', () => {
-    it('should process pay period with tax calculations', async () => {
+  describe('recalculatePayPeriod', () => {
+    it('recalculates totals and returns refreshed pay period', async () => {
       const mockPayPeriod = {
         id: 'test-pay-period',
         userId: 'test-user',
         startDate: new Date('2024-08-01'),
-        status: 'open',
+        status: 'pending' as PayPeriodStatus,
         totalPay: new Decimal(2000),
         user: {
           payPeriodType: 'FORTNIGHTLY' as PayPeriodType,
@@ -258,8 +269,8 @@ describe('PayPeriodTaxService', () => {
           }
         },
         shifts: [
-          { totalHours: new Decimal(40), totalPay: new Decimal(1000) },
-          { totalHours: new Decimal(38), totalPay: new Decimal(1000) }
+          { id: 'shift-1', totalHours: new Decimal(40), totalPay: new Decimal(1000) },
+          { id: 'shift-2', totalHours: new Decimal(38), totalPay: new Decimal(1000) }
         ]
       }
 
@@ -269,49 +280,33 @@ describe('PayPeriodTaxService', () => {
         taxYear: '2024-25',
         grossIncome: new Decimal(10000),
         payGWithholding: new Decimal(1000),
-        medicareLevy: new Decimal(200),
-        hecsHelpAmount: new Decimal(0),
+        stslAmount: new Decimal(0),
         totalWithholdings: new Decimal(1200),
         lastUpdated: new Date(),
         createdAt: new Date(),
         updatedAt: new Date(),
       }
 
+      mockPayPeriodSyncService.syncPayPeriod.mockResolvedValue(undefined)
+
       mockPrisma.payPeriod.findUnique
-        .mockResolvedValueOnce(mockPayPeriod as any) // For calculatePayPeriodTotals
-        .mockResolvedValueOnce({ ...mockPayPeriod, totalPay: new Decimal(2000) } as any) // For calculatePayPeriodTax
+        .mockResolvedValueOnce(mockPayPeriod as any) // For calculatePayPeriodTax
+        .mockResolvedValueOnce({ ...mockPayPeriod, paygWithholding: new Decimal(300) } as any)
 
       mockPrisma.payPeriod.update
-        .mockResolvedValueOnce({ ...mockPayPeriod, totalPay: new Decimal(2000) } as any) // For calculatePayPeriodTotals
-        .mockResolvedValueOnce(mockPayPeriod as any) // For tax calculation update
-        .mockResolvedValueOnce({ ...mockPayPeriod, status: 'processing' } as any) // For status update
+        .mockResolvedValueOnce({ ...mockPayPeriod, paygWithholding: new Decimal(300) } as any)
 
       mockPrisma.taxSettings.findUnique.mockResolvedValue(mockPayPeriod.user.taxSettings as any)
       mockPrisma.yearToDateTax.findUnique.mockResolvedValue(mockYearToDateTax as any)
       mockPrisma.yearToDateTax.update.mockResolvedValue(mockYearToDateTax as any)
 
-      const result = await PayPeriodTaxService.processPayPeriod('test-pay-period')
+      const result = await PayPeriodTaxService.recalculatePayPeriod('test-pay-period')
 
-      // Should update status to processing
-      expect(result.status).toBe('processing')
-
-      // Should update pay period totals
-      expect(mockPrisma.payPeriod.update).toHaveBeenCalledWith({
-        where: { id: 'test-pay-period' },
-        data: expect.objectContaining({
-          totalHours: expect.any(Decimal),
-          totalPay: expect.any(Decimal),
-        })
-      })
-
-      // Should update status
-      expect(mockPrisma.payPeriod.update).toHaveBeenCalledWith({
-        where: { id: 'test-pay-period' },
-        data: {
-          status: 'processing',
-          updatedAt: expect.any(Date)
-        }
-      })
+      expect(mockPayPeriodSyncService.syncPayPeriod).toHaveBeenCalledWith('test-pay-period')
+      expect(mockPrisma.payPeriod.update).toHaveBeenCalled()
+      expect(result.id).toBe('test-pay-period')
+      expect(result.shifts?.length).toBe(2)
+      expect(result.status).toBe('pending')
     })
   })
 

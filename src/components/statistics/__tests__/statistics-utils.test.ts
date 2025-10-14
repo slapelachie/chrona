@@ -6,7 +6,7 @@ const stubPeriod = (overrides: Partial<FinancialYearPayPeriodStat> = {}): Financ
   id: overrides.id ?? 'pp-1',
   startDate: overrides.startDate ?? new Date('2025-07-01T00:00:00.000Z').toISOString(),
   endDate: overrides.endDate ?? new Date('2025-07-07T23:59:59.000Z').toISOString(),
-  status: overrides.status ?? 'processing',
+  status: overrides.status ?? 'pending',
   totals: {
     gross: '1500.50',
     rosteredGross: '1550.00',

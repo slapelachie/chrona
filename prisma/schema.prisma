@@ -17,6 +17,12 @@ enum PayPeriodType {
   MONTHLY
 }
 
+// Pay period lifecycle status
+enum PayPeriodStatus {
+  pending @map("PENDING")
+  verified @map("VERIFIED")
+}
+
 // Single user app - basic user information
 model User {
   id             String        @id @default(cuid())
@@ -237,7 +243,7 @@ model PayPeriod {
   endDate     DateTime // End of pay period (23:59:59 UTC)
   
   // Status tracking
-  status      String   @default("open") // "open", "processing", "verified"
+  status      PayPeriodStatus @default(pending)
   
   // Calculated totals (cached)
   totalHours  Decimal? // 76.5 hours

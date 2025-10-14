@@ -1,9 +1,9 @@
 "use client"
 
 import React from 'react'
-import { ShieldCheck, DollarSign, Loader2, Clock } from 'lucide-react'
+import { ShieldCheck, Clock } from 'lucide-react'
 
-type Status = 'open' | 'processing' | 'paid' | 'verified'
+type Status = 'pending' | 'verified'
 
 export interface StatusBadgeProps {
   status: Status
@@ -18,24 +18,11 @@ const STATUS_META: Record<Status, {
   bg: string // subtle background
   Icon: React.ComponentType<{ size?: number, className?: string }>
 }> = {
-  open: {
-    label: 'Open',
-    // Use a distinct indigo so it's clearly different from success green
+  pending: {
+    label: 'Pending',
     color: '#6E59F7',
     bg: 'rgba(110, 89, 247, 0.14)',
     Icon: Clock,
-  },
-  processing: {
-    label: 'Processing',
-    color: 'var(--color-warning)',
-    bg: 'rgba(255,193,7,0.16)',
-    Icon: Loader2,
-  },
-  paid: {
-    label: 'Paid',
-    color: 'var(--color-info)',
-    bg: 'rgba(0,229,255,0.16)',
-    Icon: DollarSign,
   },
   verified: {
     label: 'Verified',
@@ -73,17 +60,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
         border: emphasis ? `1px solid ${meta.color}` : `1px solid transparent`,
       }}
     >
-      <meta.Icon size={icon} className={status === 'processing' ? 'loading-rotate' : undefined} />
+      <meta.Icon size={icon} />
       {meta.label}
-      <style jsx>{`
-        .loading-rotate {
-          animation: spin 1.1s linear infinite;
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </span>
   )
 }

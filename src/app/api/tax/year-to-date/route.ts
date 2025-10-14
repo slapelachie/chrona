@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         userId: user.id,
         startDate: { gte: tyStart },
         endDate: { lte: tyEnd },
-        status: { in: ['processing','paid','verified'] },
+        status: { in: ['pending','verified'] },
       },
       select: { totalPay: true, totalWithholdings: true, actualPay: true }
     })

@@ -8,7 +8,7 @@ import { PayPeriodListItem, PayPeriodsListResponse } from '@/types'
 import { StatusBadge, statusAccentColor } from './status-badge'
 import { formatPayPeriodDate } from '@/lib/date-utils'
 
-type StatusFilter = 'all' | 'open' | 'processing' | 'paid' | 'verified'
+type StatusFilter = 'all' | 'pending' | 'verified'
 
 export const PayPeriodsList: React.FC = () => {
   const [loading, setLoading] = useState(true)
@@ -77,7 +77,7 @@ export const PayPeriodsList: React.FC = () => {
               />
             </div>
             <div style={{ display: 'flex', gap: '0.25rem' }}>
-              {(['all','open','processing','paid','verified'] as StatusFilter[]).map(s => (
+              {(['all','pending','verified'] as StatusFilter[]).map(s => (
                 <Button
                   key={s}
                   size="sm"

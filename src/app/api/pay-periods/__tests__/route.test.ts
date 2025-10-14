@@ -83,8 +83,7 @@ describe('Pay Periods API Routes', () => {
           userId: mockUser.id,
           startDate: new Date('2024-01-01'),
           endDate: new Date('2024-01-14'),
-          status: 'open',
-          verified: false,
+          status: 'pending',
         }
       })
 
@@ -93,8 +92,7 @@ describe('Pay Periods API Routes', () => {
           userId: mockUser.id,
           startDate: new Date('2024-01-15'),
           endDate: new Date('2024-01-28'),
-          status: 'paid',
-          verified: true,
+          status: 'verified',
         }
       })
 
@@ -116,8 +114,7 @@ describe('Pay Periods API Routes', () => {
           userId: mockUser.id,
           startDate: new Date('2024-01-01'),
           endDate: new Date('2024-01-14'),
-          status: 'open',
-          verified: false,
+          status: 'pending',
         }
       })
 
@@ -126,19 +123,18 @@ describe('Pay Periods API Routes', () => {
           userId: mockUser.id,
           startDate: new Date('2024-01-15'),
           endDate: new Date('2024-01-28'),
-          status: 'paid',
-          verified: true,
+          status: 'verified',
         }
       })
 
-      const request = new NextRequest('http://localhost:3000/api/pay-periods?status=open')
+      const request = new NextRequest('http://localhost:3000/api/pay-periods?status=pending')
       
       const response = await GET(request)
       const data = await response.json()
 
       expect(response.status).toBe(200)
       expect(data.data.payPeriods).toHaveLength(1)
-      expect(data.data.payPeriods[0].status).toBe('open')
+      expect(data.data.payPeriods[0].status).toBe('pending')
     })
 
     it('should include shifts when requested', async () => {
@@ -147,8 +143,7 @@ describe('Pay Periods API Routes', () => {
           userId: mockUser.id,
           startDate: new Date('2024-02-01'),
           endDate: new Date('2024-02-14'),
-          status: 'open',
-          verified: false,
+          status: 'pending',
         }
       })
 
@@ -184,8 +179,7 @@ describe('Pay Periods API Routes', () => {
             userId: mockUser.id,
             startDate: new Date(2024, 0, (i * 14) + 1), // Use proper Date constructor
             endDate: new Date(2024, 0, (i * 14) + 14),
-            status: 'open',
-            verified: false,
+            status: 'pending',
           }
         })
       }
@@ -224,7 +218,7 @@ describe('Pay Periods API Routes', () => {
       const requestBody = {
         startDate: '2024-01-01T00:00:00.000Z',
         endDate: '2024-01-14T23:59:59.999Z',
-        status: 'open'
+        status: 'pending'
       }
 
       const request = new NextRequest('http://localhost:3000/api/pay-periods', {
@@ -238,12 +232,11 @@ describe('Pay Periods API Routes', () => {
       expect(response.status).toBe(201)
       expect(data.data.startDate).toBe(requestBody.startDate)
       expect(data.data.endDate).toBe(requestBody.endDate)
-      expect(data.data.status).toBe('open')
-      expect(data.data.verified).toBe(false)
+      expect(data.data.status).toBe('pending')
       expect(data.message).toBe('Pay period created successfully')
     })
 
-    it('should default status to open when not provided', async () => {
+    it('should default status to pending when not provided', async () => {
       const requestBody = {
         startDate: '2024-01-01T00:00:00.000Z',
         endDate: '2024-01-14T23:59:59.999Z',
@@ -258,13 +251,13 @@ describe('Pay Periods API Routes', () => {
       const data = await response.json()
 
       expect(response.status).toBe(201)
-      expect(data.data.status).toBe('open')
+      expect(data.data.status).toBe('pending')
     })
 
     it('should validate required fields', async () => {
       const requestBody = {
         // Missing startDate and endDate
-        status: 'open'
+        status: 'pending'
       }
 
       const request = new NextRequest('http://localhost:3000/api/pay-periods', {
@@ -311,8 +304,7 @@ describe('Pay Periods API Routes', () => {
           userId: mockUser.id,
           startDate: new Date('2024-01-01'),
           endDate: new Date('2024-01-14'),
-          status: 'open',
-          verified: false,
+          status: 'pending',
         }
       })
 

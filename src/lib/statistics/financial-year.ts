@@ -122,7 +122,7 @@ function prepareStatusCounts(periods: FinancialYearStatisticsResponse['payPeriod
   return periods.reduce((acc, period) => {
     acc[period.status] = (acc[period.status] || 0) + 1
     return acc
-  }, { open: 0, processing: 0, paid: 0, verified: 0 } as Record<PayPeriodStatus, number>)
+  }, { pending: 0, verified: 0 } as Record<PayPeriodStatus, number>)
 }
 
 function buildTaxYearStringFromStartYear(startYear: number): string {

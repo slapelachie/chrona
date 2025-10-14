@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { Decimal } from 'decimal.js'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
+import { PayPeriodLockedError, requirePayPeriodEditable } from '@/lib/pay-period-guards'
 
 // GET /api/pay-periods/[id]/extras - list extras for a pay period
 export async function GET(
@@ -49,6 +50,21 @@ export async function POST(
     const period = await prisma.payPeriod.findUnique({ where: { id: payPeriodId } })
     if (!period) return NextResponse.json({ error: 'Pay period not found' }, { status: 404 })
 
+    try {
+      await requirePayPeriodEditable(payPeriodId)
+    } catch (error) {
+      if (error instanceof PayPeriodLockedError) {
+        return NextResponse.json(
+          {
+            errors: [{ field: 'payPeriodId', message: 'Reopen the pay period before modifying extras.' }],
+            message: 'Pay period locked',
+          },
+          { status: 423 }
+        )
+      }
+      throw error
+    }
+
     const extra = await prisma.payPeriodExtra.create({
       data: { payPeriodId, type, description: description || null, amount, taxable },
     })
@@ -69,4 +85,3 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to create extra' }, { status: 500 })
   }
 }
-

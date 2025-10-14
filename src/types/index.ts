@@ -134,7 +134,7 @@ export interface PayPeriodExtraTemplate {
 // BUSINESS LOGIC TYPES
 // =============================================================================
 
-export type PayPeriodStatus = 'open' | 'processing' | 'paid' | 'verified'
+export type PayPeriodStatus = 'pending' | 'verified'
 
 export interface PayCalculationResult {
   shift: {

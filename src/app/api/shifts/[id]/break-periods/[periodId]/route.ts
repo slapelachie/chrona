@@ -17,6 +17,7 @@ import {
   updateShiftWithCalculation 
 } from '@/lib/shift-calculation'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
+import { PayPeriodLockedError, requirePayPeriodEditable } from '@/lib/pay-period-guards'
 
 interface RouteParams {
   params: Promise<{
@@ -135,6 +136,23 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         { error: 'Break period not found' },
         { status: 404 }
       )
+    }
+
+    if (existingBreakPeriod.shift.payPeriodId) {
+      try {
+        await requirePayPeriodEditable(existingBreakPeriod.shift.payPeriodId)
+      } catch (error) {
+        if (error instanceof PayPeriodLockedError) {
+          return NextResponse.json(
+            {
+              errors: [{ field: 'payPeriodId', message: 'Reopen the pay period before updating breaks.' }],
+              message: 'Pay period locked',
+            } as ApiValidationResponse,
+            { status: 423 }
+          )
+        }
+        throw error
+      }
     }
 
     // Validate request body fields that are provided
@@ -277,6 +295,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       where: { 
         id: periodId,
         shiftId: shiftId
+      },
+      include: {
+        shift: true,
       }
     })
 
@@ -285,6 +306,23 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         { error: 'Break period not found' },
         { status: 404 }
       )
+    }
+
+    if (existingBreakPeriod.shift.payPeriodId) {
+      try {
+        await requirePayPeriodEditable(existingBreakPeriod.shift.payPeriodId)
+      } catch (error) {
+        if (error instanceof PayPeriodLockedError) {
+          return NextResponse.json(
+            {
+              errors: [{ field: 'payPeriodId', message: 'Reopen the pay period before deleting breaks.' }],
+              message: 'Pay period locked',
+            } as ApiValidationResponse,
+            { status: 423 }
+          )
+        }
+        throw error
+      }
     }
 
     // Delete the break period

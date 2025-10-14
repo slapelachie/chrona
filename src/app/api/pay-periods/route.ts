@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
     const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc'
     const startAfter = searchParams.get('startAfter')
     const endBefore = searchParams.get('endBefore')
-    const status = searchParams.get('status')
+    const statusRaw = searchParams.get('status')
+    const status = statusRaw ? statusRaw.toLowerCase() : undefined
     const includeShifts = searchParams.get('include')?.includes('shifts')
 
     // Validate pagination parameters
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
       validator.addError('sortOrder', 'Sort order must be asc or desc')
     }
 
-    if (status && !['open', 'processing', 'paid', 'verified'].includes(status)) {
+    if (status && !['pending', 'verified'].includes(status)) {
       validator.addError('status', 'Invalid status value')
     }
 
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (status) {
-      where.status = status
+      where.status = status as PayPeriodStatus
     }
 
     // Get total count for pagination
@@ -190,7 +191,8 @@ export async function POST(request: NextRequest) {
     validateString(body.startDate, 'startDate', validator)
     validateString(body.endDate, 'endDate', validator)
 
-    if (body.status && !['open', 'processing', 'paid', 'verified'].includes(body.status)) {
+    const normalizedStatus = body.status ? body.status.toLowerCase() : undefined
+    if (normalizedStatus && !['pending', 'verified'].includes(normalizedStatus)) {
       validator.addError('status', 'Invalid status value')
     }
 
@@ -268,7 +270,7 @@ export async function POST(request: NextRequest) {
           userId: user.id,
           startDate,
           endDate,
-          status: body.status || 'open',
+          status: (normalizedStatus as PayPeriodStatus | undefined) || 'pending',
         },
       })
 

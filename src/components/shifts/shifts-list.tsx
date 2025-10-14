@@ -24,7 +24,6 @@ import {
   ShiftResponse,
   PayGuideSummary,
 } from '@/types'
-import { StatusBadge, statusAccentColor } from '../pay-periods/status-badge'
 import { formatPayPeriodDate } from '@/lib/date-utils'
 import './shifts-list.scss'
 
@@ -486,7 +485,25 @@ export const ShiftsList: React.FC = () => {
             <>
               <div className="shifts-timeline">
                 {timelineItems.map(item => {
-                  const accent = statusAccentColor(item.payPeriod.status as 'open' | 'processing' | 'paid' | 'verified')
+                  const periodEnd = new Date(item.payPeriod.endDate)
+                  const isPastPeriod = periodEnd.getTime() < Date.now()
+                  const isVerified = item.payPeriod.status === 'verified'
+                  const isPaid = !isVerified && isPastPeriod
+                  const accent = isVerified
+                    ? 'var(--color-success)'
+                    : isPaid
+                      ? 'var(--color-warning)'
+                      : '#6E59F7'
+                  const timelineStatusLabel = isVerified
+                    ? 'Verified'
+                    : isPaid
+                      ? 'Paid'
+                      : 'Pending'
+                  const pillModifier = isVerified
+                    ? 'verified'
+                    : isPaid
+                      ? 'paid'
+                      : 'pending'
                   const primarySource = item.payPeriod.actualPay
                     ? 'Actual Pay'
                     : item.payPeriod.netPay
@@ -535,7 +552,11 @@ export const ShiftsList: React.FC = () => {
                               <div className="shifts-timeline__year">{formatYear(item.payPeriod.startDate)}</div>
                             </div>
                             <div className="shifts-timeline__header-actions">
-                              <StatusBadge status={item.payPeriod.status as 'open' | 'processing' | 'paid' | 'verified'} />
+                              <span
+                                className={`shifts-timeline__status-pill shifts-timeline__status-pill--${pillModifier}`}
+                              >
+                                {timelineStatusLabel}
+                              </span>
                               <Button
                                 size="sm"
                                 variant="ghost"

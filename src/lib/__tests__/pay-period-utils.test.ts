@@ -183,7 +183,7 @@ describe('Pay Period Utilities', () => {
       const payPeriod = await findOrCreatePayPeriod(user.id, shiftDate)
 
       expect(payPeriod.userId).toBe(user.id)
-      expect(payPeriod.status).toBe('open')
+      expect(payPeriod.status).toBe('pending')
       expect(payPeriod.verified).toBe(false)
       
       // Verify it's a fortnightly period

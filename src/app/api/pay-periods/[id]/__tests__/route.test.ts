@@ -59,8 +59,7 @@ describe('Individual Pay Period API Routes', () => {
         userId: mockUser.id,
         startDate: new Date('2024-01-01'),
         endDate: new Date('2024-01-14'),
-        status: 'open',
-        verified: false,
+        status: 'pending',
       }
     })
   })
@@ -87,8 +86,7 @@ describe('Individual Pay Period API Routes', () => {
 
       expect(response.status).toBe(200)
       expect(data.data.id).toBe(testPayPeriod.id)
-      expect(data.data.status).toBe('open')
-      expect(data.data.verified).toBe(false)
+      expect(data.data.status).toBe('pending')
     })
 
     it('should include shifts when requested', async () => {
@@ -131,7 +129,7 @@ describe('Individual Pay Period API Routes', () => {
   describe('PUT /api/pay-periods/[id]', () => {
     it('should update pay period status', async () => {
       const requestBody = {
-        status: 'processing'
+        status: 'verified'
       }
 
       const request = new NextRequest(`http://localhost:3000/api/pay-periods/${testPayPeriod.id}`, {
@@ -144,14 +142,14 @@ describe('Individual Pay Period API Routes', () => {
       const data = await response.json()
 
       expect(response.status).toBe(200)
-      expect(data.data.status).toBe('processing')
+      expect(data.data.status).toBe('verified')
       expect(data.message).toBe('Pay period updated successfully')
     })
 
     it('should update actual pay amount', async () => {
       const requestBody = {
         actualPay: '1500.50',
-        verified: true
+        status: 'verified'
       }
 
       const request = new NextRequest(`http://localhost:3000/api/pay-periods/${testPayPeriod.id}`, {
@@ -165,7 +163,7 @@ describe('Individual Pay Period API Routes', () => {
 
       expect(response.status).toBe(200)
       expect(data.data.actualPay).toBe('1500.5') // Decimal.js doesn't preserve trailing zeros
-      expect(data.data.verified).toBe(true)
+      expect(data.data.status).toBe('verified')
     })
 
     it('should update date ranges when no shifts exist', async () => {
@@ -230,8 +228,7 @@ describe('Individual Pay Period API Routes', () => {
           userId: mockUser.id,
           startDate: new Date('2024-01-15'),
           endDate: new Date('2024-01-28'),
-          status: 'open',
-          verified: false,
+          status: 'pending',
         }
       })
 
@@ -299,7 +296,7 @@ describe('Individual Pay Period API Routes', () => {
 
     it('should return 404 for non-existent pay period', async () => {
       const fakeId = 'fake-pay-period-id'
-      const requestBody = { status: 'processing' }
+      const requestBody = { status: 'verified' }
 
       const request = new NextRequest(`http://localhost:3000/api/pay-periods/${fakeId}`, {
         method: 'PUT',
@@ -408,7 +405,7 @@ describe('Individual Pay Period API Routes', () => {
       // Update pay period to processed status
       await prisma.payPeriod.update({
         where: { id: testPayPeriod.id },
-        data: { status: 'paid' }
+        data: { status: 'verified' }
       })
 
       const request = new NextRequest(`http://localhost:3000/api/pay-periods/${testPayPeriod.id}`) // No force flag
@@ -421,7 +418,7 @@ describe('Individual Pay Period API Routes', () => {
       expect(data.errors).toContainEqual(
         expect.objectContaining({ 
           field: 'status', 
-          message: 'Cannot delete paid pay period. Use force=true to override.' 
+          message: 'Cannot delete verified pay period. Use force=true to override.' 
         })
       )
       expect(data.metadata.canForceDelete).toBe(true)

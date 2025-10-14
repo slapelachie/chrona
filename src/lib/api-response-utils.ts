@@ -3,6 +3,7 @@ import {
   PayGuideListItem,
   PayGuideSummary,
   PayPeriodSummary,
+  PayPeriodResponse,
   ShiftResponse,
   PayGuideResponse,
 } from '@/types'
@@ -108,6 +109,41 @@ export function transformPayPeriodToSummary(payPeriod: any): PayPeriodSummary {
     endDate: payPeriod.endDate,
     status: payPeriod.status,
     totalPay: payPeriod.totalPay?.toString(),
+  }
+}
+
+export function transformPayPeriodToResponse(payPeriod: any): PayPeriodResponse {
+  return {
+    id: payPeriod.id,
+    userId: payPeriod.userId,
+    startDate: payPeriod.startDate,
+    endDate: payPeriod.endDate,
+    status: payPeriod.status,
+    totalHours: payPeriod.totalHours?.toString(),
+    totalPay: payPeriod.totalPay?.toString(),
+    paygWithholding: payPeriod.paygWithholding?.toString(),
+    stslAmount: payPeriod.stslAmount?.toString(),
+    totalWithholdings: payPeriod.totalWithholdings?.toString(),
+    netPay: payPeriod.netPay?.toString(),
+    actualPay: payPeriod.actualPay?.toString(),
+    createdAt: payPeriod.createdAt,
+    updatedAt: payPeriod.updatedAt,
+    shifts: (payPeriod.shifts ?? []).map((shift: any) => ({
+      id: shift.id,
+      userId: shift.userId,
+      payGuideId: shift.payGuideId,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      totalHours: shift.totalHours?.toString(),
+      basePay: shift.basePay?.toString(),
+      overtimePay: shift.overtimePay?.toString(),
+      penaltyPay: shift.penaltyPay?.toString(),
+      totalPay: shift.totalPay?.toString(),
+      notes: shift.notes || undefined,
+      payPeriodId: shift.payPeriodId || '',
+      createdAt: shift.createdAt,
+      updatedAt: shift.updatedAt,
+    })),
   }
 }
 

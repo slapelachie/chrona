@@ -103,7 +103,7 @@ export class PayPeriodSyncService {
     // Only calculate taxes if:
     // 1. Pay period has calculated total pay
     // 2. Pay period has shifts
-    // 3. Pay period is in open or processing status
+    // 3. Pay period is pending verification
     if (!payPeriod.totalPay || payPeriod.totalPay.isZero()) {
       console.log(`⚠️ Pay period ${payPeriodId} has no total pay, skipping tax calculation`)
       return
@@ -114,7 +114,7 @@ export class PayPeriodSyncService {
       return
     }
 
-    if (payPeriod.status !== 'open' && payPeriod.status !== 'processing') {
+    if (payPeriod.status !== 'pending') {
       console.log(`⚠️ Pay period ${payPeriodId} status is ${payPeriod.status}, skipping tax calculation`)
       return
     }

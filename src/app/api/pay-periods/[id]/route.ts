@@ -7,6 +7,7 @@ import {
   ApiValidationResponse,
   PayPeriodStatus,
 } from '@/types'
+import { transformPayPeriodToResponse } from '@/lib/api-response-utils'
 import { ValidationResult, validateString, validateDateRange, validateDecimal } from '@/lib/validation'
 
 // GET /api/pay-periods/[id] - Get specific pay period
@@ -43,42 +44,10 @@ export async function GET(
       )
     }
 
-    // Transform to response format
-    const response: PayPeriodResponse = {
-      id: payPeriod.id,
-      userId: payPeriod.userId,
-      startDate: payPeriod.startDate,
-      endDate: payPeriod.endDate,
-      status: payPeriod.status as PayPeriodStatus,
-      totalHours: payPeriod.totalHours?.toString(),
-      totalPay: payPeriod.totalPay?.toString(),
-      paygWithholding: payPeriod.paygWithholding?.toString(),
-      stslAmount: payPeriod.stslAmount?.toString(),
-      totalWithholdings: payPeriod.totalWithholdings?.toString(),
-      netPay: payPeriod.netPay?.toString(),
-      actualPay: payPeriod.actualPay?.toString(),
-      createdAt: payPeriod.createdAt,
-      updatedAt: payPeriod.updatedAt,
-    }
-
-    if (includeShifts && (payPeriod as any).shifts) {
-      response.shifts = (payPeriod as any).shifts.map((shift: any) => ({
-        id: shift.id,
-        userId: shift.userId,
-        payGuideId: shift.payGuideId,
-        startTime: shift.startTime,
-        endTime: shift.endTime,
-        totalHours: shift.totalHours?.toString(),
-        basePay: shift.basePay?.toString(),
-        overtimePay: shift.overtimePay?.toString(),
-        penaltyPay: shift.penaltyPay?.toString(),
-        totalPay: shift.totalPay?.toString(),
-        notes: shift.notes || undefined,
-        payPeriodId: shift.payPeriodId || '',
-        createdAt: shift.createdAt,
-        updatedAt: shift.updatedAt,
-      }))
-    }
+    const response: PayPeriodResponse = transformPayPeriodToResponse({
+      ...payPeriod,
+      shifts: includeShifts ? (payPeriod as any).shifts ?? [] : [],
+    })
 
     if (includeExtras && (payPeriod as any).extras) {
       ;(response as any).extras = (payPeriod as any).extras.map((ex: any) => ({
@@ -122,7 +91,8 @@ export async function PUT(
       validateString(body.endDate, 'endDate', validator)
     }
 
-    if (body.status && !['open', 'processing', 'paid', 'verified'].includes(body.status)) {
+    const normalizedStatus = body.status ? body.status.toLowerCase() : undefined
+    if (normalizedStatus && !['pending', 'verified'].includes(normalizedStatus)) {
       validator.addError('status', 'Invalid status value')
     }
 
@@ -164,6 +134,21 @@ export async function PUT(
           message: 'Invalid pay period',
         } as ApiValidationResponse,
         { status: 404 }
+      )
+    }
+
+    const updatedFields = Object.keys(body).filter((key) => (body as Record<string, unknown>)[key] !== undefined)
+
+    if (
+      existingPayPeriod.status === 'verified' &&
+      !(updatedFields.length === 1 && normalizedStatus === 'pending')
+    ) {
+      return NextResponse.json(
+        {
+          errors: [{ field: 'status', message: 'Reopen the pay period before making changes.' }],
+          message: 'Pay period locked',
+        } as ApiValidationResponse,
+        { status: 423 }
       )
     }
 
@@ -254,8 +239,8 @@ export async function PUT(
       updateData.endDate = new Date(body.endDate)
     }
 
-    if (body.status !== undefined) {
-      updateData.status = body.status
+    if (normalizedStatus !== undefined) {
+      updateData.status = normalizedStatus as PayPeriodStatus
     }
 
     if (body.actualPay !== undefined) {
@@ -266,30 +251,17 @@ export async function PUT(
     const updatedPayPeriod = await prisma.payPeriod.update({
       where: { id: payPeriodId },
       data: updateData,
+      include: {
+        shifts: {
+          orderBy: { startTime: 'asc' }
+        }
+      }
     })
 
-    // Transform to response format
-    const response: PayPeriodResponse = {
-      id: updatedPayPeriod.id,
-      userId: updatedPayPeriod.userId,
-      startDate: updatedPayPeriod.startDate,
-      endDate: updatedPayPeriod.endDate,
-      status: updatedPayPeriod.status as PayPeriodStatus,
-      totalHours: updatedPayPeriod.totalHours?.toString(),
-      totalPay: updatedPayPeriod.totalPay?.toString(),
-      paygWithholding: updatedPayPeriod.paygWithholding?.toString(),
-      stslAmount: updatedPayPeriod.stslAmount?.toString(),
-      totalWithholdings: updatedPayPeriod.totalWithholdings?.toString(),
-      netPay: updatedPayPeriod.netPay?.toString(),
-      actualPay: updatedPayPeriod.actualPay?.toString(),
-      createdAt: updatedPayPeriod.createdAt,
-      updatedAt: updatedPayPeriod.updatedAt,
-    }
-
-    return NextResponse.json(
-      { data: response, message: 'Pay period updated successfully' },
-      { status: 200 }
-    )
+    return NextResponse.json({
+      data: transformPayPeriodToResponse(updatedPayPeriod),
+      message: 'Pay period updated successfully',
+    })
   } catch (error) {
     console.error('Error updating pay period:', error)
     return NextResponse.json(
@@ -331,15 +303,15 @@ export async function DELETE(
 
     // Check if pay period can be safely deleted
     const shiftsCount = (payPeriod as any)._count.shifts
-    const isProcessedOrPaid = ['processing', 'paid', 'verified'].includes(payPeriod.status)
+    const isVerified = payPeriod.status === 'verified'
 
-    // Prevent deletion of processed/paid periods unless forced
-    if (isProcessedOrPaid && !force) {
+    // Prevent deletion of verified periods unless forced
+    if (isVerified && !force) {
       return NextResponse.json(
         {
           errors: [{
             field: 'status',
-            message: `Cannot delete ${payPeriod.status} pay period. Use force=true to override.`
+            message: `Cannot delete verified pay period. Use force=true to override.`
           }],
           message: 'Pay period cannot be deleted',
           metadata: {

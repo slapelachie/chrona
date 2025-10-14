@@ -383,7 +383,7 @@ describe('Database Models - Blackbox Tests', () => {
       expect(payPeriod.userId).toBe(user.id)
       expect(payPeriod.startDate).toEqual(payPeriodData.startDate)
       expect(payPeriod.endDate).toEqual(payPeriodData.endDate)
-      expect(payPeriod.status).toBe('open')
+      expect(payPeriod.status).toBe('pending')
       expect(payPeriod.verified).toBe(false)
     })
 
@@ -399,7 +399,7 @@ describe('Database Models - Blackbox Tests', () => {
       expect(payPeriod.userId).toBe(user.id)
       expect(payPeriod.startDate).toEqual(payPeriodData.startDate)
       expect(payPeriod.endDate).toEqual(payPeriodData.endDate)
-      expect(payPeriod.status).toBe('open')
+      expect(payPeriod.status).toBe('pending')
       expect(payPeriod.verified).toBe(false)
     })
 
@@ -415,7 +415,7 @@ describe('Database Models - Blackbox Tests', () => {
       expect(payPeriod.userId).toBe(user.id)
       expect(payPeriod.startDate).toEqual(payPeriodData.startDate)
       expect(payPeriod.endDate).toEqual(payPeriodData.endDate)
-      expect(payPeriod.status).toBe('open')
+      expect(payPeriod.status).toBe('pending')
       expect(payPeriod.verified).toBe(false)
     })
 

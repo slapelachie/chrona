@@ -59,7 +59,7 @@ export async function POST(_request: NextRequest) {
         await PayPeriodTaxService.calculatePayPeriodTax(p.id)
       }
 
-      // Finalize YTD from authoritative period sums (processing/paid/verified)
+      // Finalize YTD from authoritative period sums (pending/verified)
       const yearStart = getTaxYearStartDate(taxYear)
       const yearEnd = getTaxYearEndDate(taxYear)
       const agg = await prisma.payPeriod.findMany({
@@ -67,7 +67,7 @@ export async function POST(_request: NextRequest) {
           userId: user.id,
           startDate: { gte: yearStart },
           endDate: { lte: yearEnd },
-          status: { in: ['processing', 'paid', 'verified'] }
+          status: { in: ['pending', 'verified'] }
         },
         select: {
           totalPay: true,
@@ -124,4 +124,3 @@ function getTaxYearEndDate(taxYear: string): Date {
   const startYear = parseInt(taxYear.split('-')[0])
   return new Date(startYear + 1, 5, 30) // June 30
 }
-

@@ -44,10 +44,10 @@ export async function POST(
     }
 
     // Check if pay period is in correct status for tax calculation
-    if (payPeriod.status !== 'open' && payPeriod.status !== 'processing') {
+    if (payPeriod.status !== 'pending') {
       return NextResponse.json(
         {
-          errors: [{ field: 'status', message: 'Pay period must be open or processing to calculate taxes' }],
+          errors: [{ field: 'status', message: 'Pay period must be pending to calculate taxes' }],
           message: 'Invalid pay period status',
         } as ApiValidationResponse,
         { status: 400 }

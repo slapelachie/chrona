@@ -221,7 +221,7 @@ export async function findOrCreatePayPeriod(
         userId,
         startDate: periodStart,
         endDate: periodEnd,
-        status: 'open' as PayPeriodStatus,
+        status: 'pending' as PayPeriodStatus,
       },
     })
 

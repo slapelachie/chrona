@@ -22,6 +22,7 @@ import {
 import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 import { parseIncludeParams } from '@/lib/api-response-utils'
+import { PayPeriodLockedError, requirePayPeriodEditable } from '@/lib/pay-period-guards'
 
 interface RouteParams {
   params: Promise<{
@@ -228,6 +229,23 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Shift not found' }, { status: 404 })
     }
 
+    if (existingShift.payPeriodId) {
+      try {
+        await requirePayPeriodEditable(existingShift.payPeriodId)
+      } catch (error) {
+        if (error instanceof PayPeriodLockedError) {
+          return NextResponse.json(
+            {
+              errors: [{ field: 'payPeriodId', message: 'Reopen the pay period before editing this shift.' }],
+              message: 'Pay period locked',
+            } as ApiValidationResponse,
+            { status: 423 }
+          )
+        }
+        throw error
+      }
+    }
+
     // Store the previous pay period ID for sync later
     const previousPayPeriodId = existingShift.payPeriodId
 
@@ -303,6 +321,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         // Use timezone from new pay guide if provided, otherwise use existing shift's pay guide timezone
         const payGuideTimezone = newPayGuide ? newPayGuide.timezone : existingShift.payGuide.timezone
         const payPeriod = await findOrCreatePayPeriod(user.id, startTime, payGuideTimezone)
+        try {
+          await requirePayPeriodEditable(payPeriod.id)
+        } catch (error) {
+          if (error instanceof PayPeriodLockedError) {
+            return NextResponse.json(
+              {
+                errors: [{ field: 'payPeriodId', message: 'Target pay period is verified and locked.' }],
+                message: 'Pay period locked',
+              } as ApiValidationResponse,
+              { status: 423 }
+            )
+          }
+          throw error
+        }
         updateData.payPeriodId = payPeriod.id
       }
     }
@@ -428,6 +460,23 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     if (!existingShift) {
       return NextResponse.json({ error: 'Shift not found' }, { status: 404 })
+    }
+
+    if (existingShift.payPeriodId) {
+      try {
+        await requirePayPeriodEditable(existingShift.payPeriodId)
+      } catch (error) {
+        if (error instanceof PayPeriodLockedError) {
+          return NextResponse.json(
+            {
+              errors: [{ field: 'payPeriodId', message: 'Reopen the pay period before deleting this shift.' }],
+              message: 'Pay period locked',
+            } as ApiValidationResponse,
+            { status: 423 }
+          )
+        }
+        throw error
+      }
     }
 
     // Store the pay period ID for sync after deletion

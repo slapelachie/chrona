@@ -1,0 +1,99 @@
+.pay-period-detail {
+  &__sidebar {
+    display: grid;
+    gap: 1rem;
+  }
+
+  &__section-title {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  &__readiness-body {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  &__readiness-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  &__readiness-blockers {
+    flex: 1;
+    min-width: 160px;
+  }
+
+  &__readiness-blockers-title {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-warning);
+    margin-bottom: 0.25rem;
+  }
+
+  &__readiness-blockers-list {
+    margin: 0;
+    padding-left: 1.1rem;
+  }
+
+  &__actions-body {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  &__actions-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  &__actions-note {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+  }
+
+  &__actions-note--warning {
+    color: var(--color-warning);
+  }
+
+  &__verification-body {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  &__actual-input {
+    font-size: 0.875rem;
+  }
+
+  &__variance-text {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+  }
+
+  &__variance-text--success {
+    color: var(--color-success);
+  }
+
+  &__variance-text--warning {
+    color: var(--color-warning);
+  }
+}
+
+.pay-period-detail__readiness-description {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.pay-period-detail__readiness-description--success {
+  color: var(--color-success);
+}
+
+.pay-period-detail__readiness-description--warning {
+  color: var(--color-warning);
+}
+
+.pay-period-detail__readiness-description--info {
+  color: var(--color-info);
+}

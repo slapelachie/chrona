@@ -56,7 +56,7 @@ export const NotificationPreferences: React.FC = () => {
             />
             <SettingsToggle
               label="Pay period alerts"
-              hint="Notify me when a pay period needs processing"
+              hint="Notify me when a pay period is ready to verify"
               checked={prefs.payPeriodAlerts}
               onChange={(value) => update({ payPeriodAlerts: value })}
             />

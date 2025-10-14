@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
           userId: user.id,
           startDate,
           endDate,
-          status: 'open',
+          status: 'pending',
         }
       })
       if (s.payPeriodId !== target.id) {

@@ -63,7 +63,7 @@ describe('Shift API Automatic Sync Integration Tests', () => {
         userId,
         startDate: new Date('2024-09-01T00:00:00Z'),
         endDate: new Date('2024-09-14T23:59:59Z'),
-        status: 'open',
+        status: 'pending',
       },
     })
     payPeriodId = payPeriod.id
