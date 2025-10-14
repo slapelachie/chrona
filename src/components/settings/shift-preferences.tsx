@@ -33,7 +33,7 @@ const formatDuration = (minutes: number) => {
 }
 
 export const ShiftPreferences: React.FC = () => {
-  const { prefs, update } = usePreferences()
+  const { prefs, update, loading, error } = usePreferences()
   const storedMinutes = clampMinutes(prefs.defaultShiftLengthMinutes ?? 180)
 
   const [hoursValue, setHoursValue] = useState(() => minutesToHours(storedMinutes))
@@ -106,6 +106,7 @@ export const ShiftPreferences: React.FC = () => {
                   value={Number(hoursValue.toFixed(2))}
                   onChange={handleInputChange}
                   aria-describedby="default-shift-length-help"
+                  disabled={loading}
                 />
                 <span id="default-shift-length-help" className="settings-inline-help">
                   {friendlyLabel} · saved in 15-minute increments, max 24 hours.
@@ -134,12 +135,17 @@ export const ShiftPreferences: React.FC = () => {
                 type="button"
                 variant="primary"
                 size="sm"
-                disabled={!hasChanges}
+                disabled={!hasChanges || loading}
                 onClick={handleSave}
               >
                 Save default
               </Button>
-              {status === 'saved' && (
+              {error && (
+                <span className="settings-inline-feedback settings-inline-feedback--error" role="alert">
+                  {error}
+                </span>
+              )}
+              {status === 'saved' && !error && (
                 <span className="settings-inline-feedback settings-inline-feedback--success" role="status">
                   Default shift length updated
                 </span>

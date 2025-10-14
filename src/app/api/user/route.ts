@@ -38,6 +38,19 @@ export async function PUT(request: NextRequest) {
       const ok = ['WEEKLY', 'FORTNIGHTLY', 'MONTHLY'].includes(body.payPeriodType)
       if (!ok) validator.addError('payPeriodType', 'Must be WEEKLY, FORTNIGHTLY, or MONTHLY')
     }
+    if (body.defaultShiftLengthMinutes !== undefined) {
+      const minutes = Number(body.defaultShiftLengthMinutes)
+      if (!Number.isFinite(minutes)) {
+        validator.addError('defaultShiftLengthMinutes', 'Must be a number')
+      } else {
+        if (minutes < 15 || minutes > 24 * 60) {
+          validator.addError('defaultShiftLengthMinutes', 'Must be between 15 and 1440 minutes')
+        }
+        if (minutes % 15 !== 0) {
+          validator.addError('defaultShiftLengthMinutes', 'Must be in 15 minute increments')
+        }
+      }
+    }
 
     if (!validator.isValid()) {
       return NextResponse.json({ message: 'Invalid user data', errors: validator.getErrors() }, { status: 400 })
@@ -55,6 +68,10 @@ export async function PUT(request: NextRequest) {
         email: body.email ?? user.email,
         timezone: body.timezone ?? user.timezone,
         payPeriodType: body.payPeriodType ?? user.payPeriodType,
+        defaultShiftLengthMinutes:
+          body.defaultShiftLengthMinutes !== undefined
+            ? Number(body.defaultShiftLengthMinutes)
+            : user.defaultShiftLengthMinutes,
       },
     })
 
@@ -64,4 +81,3 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
   }
 }
-

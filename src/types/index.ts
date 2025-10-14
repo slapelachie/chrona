@@ -12,6 +12,7 @@ export interface User {
   email: string
   timezone: string
   payPeriodType: PayPeriodType
+  defaultShiftLengthMinutes: number
   createdAt: Date
   updatedAt: Date
 }
