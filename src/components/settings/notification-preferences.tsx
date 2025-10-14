@@ -1,32 +1,77 @@
 "use client"
 
 import React from 'react'
-import { Card } from '@/components/ui'
+import { Card, CardBody, CardHeader } from '@/components/ui'
 import { usePreferences } from '@/hooks/use-preferences'
+import './settings-section.scss'
+
+type ToggleProps = {
+  label: string
+  hint?: string
+  checked?: boolean
+  onChange: (value: boolean) => void
+}
+
+const SettingsToggle: React.FC<ToggleProps> = ({ label, hint, checked, onChange }) => (
+  <button
+    type="button"
+    className={`settings-toggle${checked ? ' settings-toggle--on' : ''}`}
+    role="switch"
+    aria-checked={!!checked}
+    onClick={() => onChange(!checked)}
+  >
+    <span className="settings-toggle__label">
+      <span className="settings-toggle__title">{label}</span>
+      {hint && <span className="settings-toggle__hint">{hint}</span>}
+    </span>
+    <span className="settings-toggle__control" aria-hidden>
+      <span className="settings-toggle__thumb" />
+    </span>
+  </button>
+)
 
 export const NotificationPreferences: React.FC = () => {
   const { prefs, update } = usePreferences()
 
-  const Toggle: React.FC<{ label: string; checked?: boolean; onChange: (v: boolean) => void }> = ({ label, checked, onChange }) => (
-    <div className="d-flex align-items-center justify-content-between p-2 rounded" style={{ background: '#121212', border: '1px solid #333' }}>
-      <div className="fw-semibold">{label}</div>
-      <div className="form-check form-switch m-0">
-        <input className="form-check-input" type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} />
-      </div>
+  return (
+    <div className="settings-section">
+      <Card className="settings-section__card" variant="outlined">
+        <CardHeader>
+          <div className="settings-section__header">
+            <div className="settings-section__heading">
+              <h3 className="settings-section__title">Notifications</h3>
+              <p className="settings-section__description">
+                Choose which reminders Chrona should send. These preferences are stored on this device.
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardBody>
+          <div className="settings-section__content" aria-label="Notification preferences">
+            <SettingsToggle
+              label="Email reminders"
+              hint="Weekly summary of shifts and pay period activity"
+              checked={prefs.emailReminders}
+              onChange={(value) => update({ emailReminders: value })}
+            />
+            <SettingsToggle
+              label="Pay period alerts"
+              hint="Notify me when a pay period needs processing"
+              checked={prefs.payPeriodAlerts}
+              onChange={(value) => update({ payPeriodAlerts: value })}
+            />
+            <SettingsToggle
+              label="Shift start reminders"
+              hint="Send reminders one hour before shifts start"
+              checked={prefs.shiftReminders}
+              onChange={(value) => update({ shiftReminders: value })}
+            />
+            <span className="settings-list__summary">
+              Notification preferences sync across browsers when you sign in with the same account.
+            </span>
+          </div>
+        </CardBody>
+      </Card>
     </div>
   )
-
-  return (
-    <Card>
-      <div className="d-flex flex-column gap-2" aria-label="Notification preferences">
-        <Toggle label="Email reminders" checked={prefs.emailReminders} onChange={(v) => update({ emailReminders: v })} />
-        <Toggle label="Pay period alerts" checked={prefs.payPeriodAlerts} onChange={(v) => update({ payPeriodAlerts: v })} />
-        <Toggle label="Shift start reminders" checked={prefs.shiftReminders} onChange={(v) => update({ shiftReminders: v })} />
-        <div className="text-secondary" style={{ fontSize: 13 }}>
-          Preferences are stored locally on this device.
-        </div>
-      </div>
-    </Card>
-  )
 }
-

@@ -1,14 +1,18 @@
 "use client"
 
-import React, { useEffect, useState } from 'react'
-import { Button, Input, Card } from '@/components/ui'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Loader } from 'lucide-react'
+import { Button, Card, CardBody, CardHeader, Input } from '@/components/ui'
+import './settings-section.scss'
+
+type PayPeriodType = 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY'
 
 type User = {
   id: string
   name: string
   email: string
   timezone: string
-  payPeriodType: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY'
+  payPeriodType: PayPeriodType
 }
 
 const AU_TIMEZONES = [
@@ -19,6 +23,12 @@ const AU_TIMEZONES = [
   'Australia/Adelaide',
   'Australia/Darwin',
   'Australia/Hobart',
+]
+
+const PAY_PERIOD_OPTIONS: Array<{ value: PayPeriodType; label: string; hint: string }> = [
+  { value: 'WEEKLY', label: 'Weekly', hint: '52 cycles per year' },
+  { value: 'FORTNIGHTLY', label: 'Fortnightly', hint: '26 cycles per year' },
+  { value: 'MONTHLY', label: 'Monthly', hint: '12 cycles per year' },
 ]
 
 export const PersonalInfoForm: React.FC = () => {
@@ -42,8 +52,21 @@ export const PersonalInfoForm: React.FC = () => {
         if (mounted) setLoading(false)
       }
     })()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [])
+
+  useEffect(() => {
+    if (!message) return
+    const id = window.setTimeout(() => setMessage(null), 4000)
+    return () => window.clearTimeout(id)
+  }, [message])
+
+  const timezoneOptions = useMemo(
+    () => AU_TIMEZONES.map((tz) => ({ value: tz, label: tz })),
+    []
+  )
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -64,7 +87,7 @@ export const PersonalInfoForm: React.FC = () => {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.message || json?.error || 'Failed to save')
-      setMessage('Saved successfully')
+      setMessage('Profile updated successfully')
       setUser(json.data)
     } catch (e: any) {
       setError(e.message)
@@ -73,66 +96,128 @@ export const PersonalInfoForm: React.FC = () => {
     }
   }
 
-  if (loading) return <div>Loading...</div>
-  if (error) return <div role="alert" aria-live="polite" style={{ color: '#F44336' }}>{error}</div>
+  if (loading) {
+    return (
+      <div className="settings-section">
+        <Card className="settings-section__card" variant="outlined">
+          <CardBody>
+            <div className="settings-section__spinner" role="status" aria-live="polite">
+              <Loader size={18} />
+              <span>Loading personal information...</span>
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+    )
+  }
+
+  if (error && !user) {
+    return (
+      <div className="settings-section">
+        <Card className="settings-section__card" variant="outlined">
+          <CardBody>
+            <div className="settings-inline-feedback settings-inline-feedback--error" role="alert">
+              {error}
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+    )
+  }
+
   if (!user) return null
 
   return (
-    <Card>
-      <form onSubmit={onSubmit} aria-label="Personal Information">
-        <div className="mb-3">
-          <label className="form-label">Name</label>
-          <Input
-            value={user.name}
-            onChange={(e) => setUser({ ...user, name: e.target.value })}
-            placeholder="Your full name"
-            required
-          />
-        </div>
-        <div className="mb-3">
-          <label className="form-label">Email</label>
-          <Input
-            type="email"
-            value={user.email}
-            onChange={(e) => setUser({ ...user, email: e.target.value })}
-            placeholder="you@example.com"
-            required
-          />
-        </div>
-        <div className="mb-3">
-          <label className="form-label">Timezone</label>
-          <select
-            className="form-select"
-            value={user.timezone}
-            onChange={(e) => setUser({ ...user, timezone: e.target.value })}
-          >
-            {AU_TIMEZONES.map(tz => (
-              <option key={tz} value={tz}>{tz}</option>
-            ))}
-          </select>
-        </div>
-        <div className="mb-4">
-          <label className="form-label">Pay Period Type</label>
-          <div className="d-flex gap-2 flex-wrap">
-            {(['WEEKLY','FORTNIGHTLY','MONTHLY'] as const).map(opt => (
-              <label key={opt} className="d-flex align-items-center gap-2">
-                <input
-                  type="radio"
-                  name="payPeriodType"
-                  checked={user.payPeriodType === opt}
-                  onChange={() => setUser({ ...user, payPeriodType: opt })}
-                />
-                <span>{opt}</span>
-              </label>
-            ))}
+    <div className="settings-section">
+      <Card className="settings-section__card" variant="outlined">
+        <CardHeader>
+          <div className="settings-section__header">
+            <div className="settings-section__heading">
+              <h3 className="settings-section__title">Personal details</h3>
+              <p className="settings-section__description">
+                Keep your contact details and default pay cycle up to date.
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="d-flex gap-2">
-          <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
-          {message && <span aria-live="polite" style={{ color: '#00E5FF' }}>{message}</span>}
-        </div>
-      </form>
-    </Card>
+        </CardHeader>
+        <CardBody>
+          <form onSubmit={onSubmit} className="settings-form" aria-label="Personal information">
+            {error && (
+              <div className="settings-inline-feedback settings-inline-feedback--error" role="alert">
+                {error}
+              </div>
+            )}
+            {message && (
+              <div className="settings-inline-feedback settings-inline-feedback--success" role="status">
+                {message}
+              </div>
+            )}
+
+            <div className="settings-form__grid">
+              <Input
+                label="Name"
+                placeholder="Your full name"
+                value={user.name}
+                onChange={(e) => setUser({ ...user, name: e.target.value })}
+                required
+              />
+              <Input
+                label="Email"
+                type="email"
+                placeholder="you@example.com"
+                value={user.email}
+                onChange={(e) => setUser({ ...user, email: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="settings-form__grid">
+              <div className="settings-field">
+                <label className="settings-label" htmlFor="timezone-select">
+                  Timezone
+                </label>
+                <select
+                  id="timezone-select"
+                  className="settings-select"
+                  value={user.timezone}
+                  onChange={(e) => setUser({ ...user, timezone: e.target.value })}
+                >
+                  {timezoneOptions.map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="settings-field">
+                <span className="settings-label">Pay period type</span>
+                <div className="settings-pill-group" role="radiogroup" aria-label="Pay period type">
+                  {PAY_PERIOD_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={user.payPeriodType === option.value}
+                      className={`settings-pill ${user.payPeriodType === option.value ? 'settings-pill--active' : ''}`}
+                      onClick={() => setUser({ ...user, payPeriodType: option.value })}
+                    >
+                      <span>{option.label}</span>
+                      <span className="settings-pill__hint">{option.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-section__footer">
+              <Button type="submit" isLoading={saving} loadingText="Saving">
+                Save changes
+              </Button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
+    </div>
   )
 }
-

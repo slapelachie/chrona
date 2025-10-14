@@ -63,6 +63,8 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   const [submitting, setSubmitting] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(mode === 'edit')
+  const [initialBreakPeriods, setInitialBreakPeriods] =
+    useState<BreakPeriodInput[]>([])
   const bannerRef = useRef<HTMLDivElement | null>(null)
 
   const router = useRouter()
@@ -94,6 +96,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       fetchShiftData()
     } else {
       setInitialLoading(false)
+      setInitialBreakPeriods([])
     }
   }, [mode, shiftId])
 
@@ -175,6 +178,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
           notes: shift.notes || '',
           breakPeriods,
         })
+        setInitialBreakPeriods(breakPeriods.map((bp) => ({ ...bp })))
       }
     } catch (error) {
       console.error('Failed to fetch shift data:', error)
@@ -367,11 +371,13 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   const createBreakPeriods = async (
     shiftId: string,
     breakPeriods: BreakPeriodInput[],
+    options: { throwOnError?: boolean } = {},
   ) => {
+    const { throwOnError = false } = options
     for (const breakPeriod of breakPeriods) {
       if (breakPeriod.startTime && breakPeriod.endTime) {
         try {
-          await fetch(`/api/shifts/${shiftId}/break-periods`, {
+          const response = await fetch(`/api/shifts/${shiftId}/break-periods`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -379,12 +385,112 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
               endTime: new Date(breakPeriod.endTime).toISOString(),
             }),
           })
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => null)
+            const message =
+              (errorData?.errors?.[0]?.message as string | undefined) ||
+              (errorData?.message as string | undefined) ||
+              'Failed to create break period'
+            if (throwOnError) {
+              throw new Error(message)
+            }
+            console.error('Failed to create break period:', message)
+          }
         } catch (error) {
           console.error('Failed to create break period:', error)
-          // Non-blocking error - shift creation should still succeed
+          if (throwOnError) {
+            throw error instanceof Error
+              ? error
+              : new Error('Failed to create break period')
+          }
         }
       }
     }
+  }
+
+  const syncBreakPeriods = async (
+    shiftId: string,
+    updatedBreakPeriods: BreakPeriodInput[],
+  ) => {
+    if (!shiftId) return
+
+    const initialMap = new Map(
+      initialBreakPeriods.map((bp) => [bp.id, { ...bp }]),
+    )
+    const updatedMap = new Map(
+      updatedBreakPeriods.map((bp) => [bp.id, { ...bp }]),
+    )
+
+    const normalizeTime = (value?: string) =>
+      value ? new Date(value).getTime() : null
+
+    // Handle deletions
+    for (const existing of initialBreakPeriods) {
+      if (!updatedMap.has(existing.id)) {
+        const response = await fetch(
+          `/api/shifts/${shiftId}/break-periods/${existing.id}`,
+          { method: 'DELETE' },
+        )
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null)
+          const message =
+            (errorData?.errors?.[0]?.message as string | undefined) ||
+            (errorData?.message as string | undefined) ||
+            'Failed to delete break period'
+          throw new Error(message)
+        }
+      }
+    }
+
+    // Handle updates
+    for (const current of updatedBreakPeriods) {
+      const baseline = initialMap.get(current.id)
+      if (!baseline) continue
+
+      const startChanged =
+        normalizeTime(current.startTime) !== normalizeTime(baseline.startTime)
+      const endChanged =
+        normalizeTime(current.endTime) !== normalizeTime(baseline.endTime)
+
+      if (!startChanged && !endChanged) continue
+
+      const payload: Record<string, string> = {}
+      if (current.startTime) {
+        payload.startTime = new Date(current.startTime).toISOString()
+      }
+      if (current.endTime) {
+        payload.endTime = new Date(current.endTime).toISOString()
+      }
+
+      const response = await fetch(
+        `/api/shifts/${shiftId}/break-periods/${current.id}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        const message =
+          (errorData?.errors?.[0]?.message as string | undefined) ||
+          (errorData?.message as string | undefined) ||
+          'Failed to update break period'
+        throw new Error(message)
+      }
+    }
+
+    // Handle creations
+    const newBreaks = updatedBreakPeriods.filter(
+      (bp) => !initialMap.has(bp.id),
+    )
+
+    if (newBreaks.length > 0) {
+      await createBreakPeriods(shiftId, newBreaks, { throwOnError: true })
+    }
+
+    setInitialBreakPeriods(updatedBreakPeriods.map((bp) => ({ ...bp })))
   }
 
   const resetForm = () => {
@@ -465,6 +571,18 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
           router.replace(query ? `${pathname}?${query}` : pathname)
           router.refresh()
         } else {
+          try {
+            await syncBreakPeriods(newShiftId, formData.breakPeriods)
+          } catch (error) {
+            console.error('Failed to sync break periods:', error)
+            const message =
+              error instanceof Error
+                ? error.message
+                : 'Failed to update break periods'
+            setErrors((prev) => ({ ...prev, breakPeriods: message }))
+            setBannerStatus('error')
+            return
+          }
           router.push(`/shifts/${newShiftId}`)
         }
       } else {

@@ -1,7 +1,9 @@
 "use client"
 
 import React, { useEffect, useState } from 'react'
-import { Button, Card, Input } from '@/components/ui'
+import { Loader } from 'lucide-react'
+import { Button, Card, CardBody, CardHeader } from '@/components/ui'
+import './settings-section.scss'
 
 type TaxSettings = {
   id: string
@@ -12,11 +14,34 @@ type TaxSettings = {
   hecsHelpRate?: string
 }
 
+const SettingsToggle: React.FC<{
+  label: string
+  hint?: string
+  checked: boolean
+  onChange: (value: boolean) => void
+}> = ({ label, hint, checked, onChange }) => (
+  <button
+    type="button"
+    className={`settings-toggle${checked ? ' settings-toggle--on' : ''}`}
+    role="switch"
+    aria-checked={checked}
+    onClick={() => onChange(!checked)}
+  >
+    <span className="settings-toggle__label">
+      <span className="settings-toggle__title">{label}</span>
+      {hint && <span className="settings-toggle__hint">{hint}</span>}
+    </span>
+    <span className="settings-toggle__control" aria-hidden>
+      <span className="settings-toggle__thumb" />
+    </span>
+  </button>
+)
+
 export const TaxSettingsForm: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-  const [msg, setMsg] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
   const [data, setData] = useState<TaxSettings | null>(null)
 
   useEffect(() => {
@@ -28,20 +53,28 @@ export const TaxSettingsForm: React.FC = () => {
         if (!res.ok) throw new Error(json?.error || 'Failed to load tax settings')
         if (mounted) setData(json.data)
       } catch (e: any) {
-        if (mounted) setErr(e.message)
+        if (mounted) setError(e.message)
       } finally {
         if (mounted) setLoading(false)
       }
     })()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [])
+
+  useEffect(() => {
+    if (!message) return
+    const id = window.setTimeout(() => setMessage(null), 4000)
+    return () => window.clearTimeout(id)
+  }, [message])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!data) return
     setSaving(true)
-    setErr(null)
-    setMsg(null)
+    setError(null)
+    setMessage(null)
     try {
       const res = await fetch('/api/tax-settings', {
         method: 'PUT',
@@ -51,57 +84,126 @@ export const TaxSettingsForm: React.FC = () => {
           isForeignResident: data.isForeignResident,
           hasTaxFileNumber: data.hasTaxFileNumber,
           medicareExemption: data.medicareExemption,
-          // hecsHelpRate is derived from ATO thresholds; not configurable here
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.message || json?.error || 'Failed to save')
-      setMsg('Saved successfully')
+      if (!res.ok) throw new Error(json?.message || json?.error || 'Failed to save settings')
+      setMessage('Tax settings updated')
       setData(json.data)
     } catch (e: any) {
-      setErr(e.message)
-    } finally { setSaving(false) }
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  if (loading) return <div>Loading…</div>
-  if (err) return <div role="alert" style={{ color: '#F44336' }}>{err}</div>
+  if (loading) {
+    return (
+      <div className="settings-section">
+        <Card className="settings-section__card" variant="outlined">
+          <CardBody>
+            <div className="settings-section__spinner" role="status" aria-live="polite">
+              <Loader size={18} />
+              <span>Loading tax settings...</span>
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+    )
+  }
+
+  if (error && !data) {
+    return (
+      <div className="settings-section">
+        <Card className="settings-section__card" variant="outlined">
+          <CardBody>
+            <div className="settings-inline-feedback settings-inline-feedback--error" role="alert">
+              {error}
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+    )
+  }
+
   if (!data) return null
 
   return (
-    <Card>
-      <form onSubmit={onSubmit} aria-label="Tax Settings">
-        <div className="mb-3">
-          <label className="form-label">Tax File Number provided</label>
-          <div className="form-check form-switch">
-            <input className="form-check-input" type="checkbox" checked={data.hasTaxFileNumber} onChange={e => setData({ ...data, hasTaxFileNumber: e.target.checked })} />
+    <div className="settings-section">
+      <Card className="settings-section__card" variant="outlined">
+        <CardHeader>
+          <div className="settings-section__header">
+            <div className="settings-section__heading">
+              <h3 className="settings-section__title">PAYG settings</h3>
+              <p className="settings-section__description">
+                These options are used when calculating PAYG and Medicare withholding for each pay period.
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="mb-3">
-          <label className="form-label">Claim tax-free threshold</label>
-          <div className="form-check form-switch">
-            <input className="form-check-input" type="checkbox" checked={data.claimedTaxFreeThreshold} onChange={e => setData({ ...data, claimedTaxFreeThreshold: e.target.checked })} />
-          </div>
-        </div>
-        <div className="mb-3">
-          <label className="form-label">Foreign resident</label>
-          <div className="form-check form-switch">
-            <input className="form-check-input" type="checkbox" checked={data.isForeignResident} onChange={e => setData({ ...data, isForeignResident: e.target.checked })} />
-          </div>
-        </div>
-        <div className="mb-3">
-          <label className="form-label">Medicare exemption</label>
-          <select className="form-select" value={data.medicareExemption} onChange={e => setData({ ...data, medicareExemption: e.target.value as any })}>
-            <option value="none">None</option>
-            <option value="half">Half</option>
-            <option value="full">Full</option>
-          </select>
-        </div>
-        {/* HECS-HELP rate is not user-configurable; applied per pay period thresholds */}
-        <div className="d-flex gap-2">
-          <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
-          {msg && <span aria-live="polite" style={{ color: '#00E5FF' }}>{msg}</span>}
-        </div>
-      </form>
-    </Card>
+        </CardHeader>
+        <CardBody>
+          <form onSubmit={onSubmit} className="settings-form" aria-label="Tax settings">
+            {error && (
+              <div className="settings-inline-feedback settings-inline-feedback--error" role="alert">
+                {error}
+              </div>
+            )}
+            {message && (
+              <div className="settings-inline-feedback settings-inline-feedback--success" role="status">
+                {message}
+              </div>
+            )}
+
+            <div className="settings-section__content">
+              <SettingsToggle
+                label="Tax file number provided"
+                checked={data.hasTaxFileNumber}
+                onChange={(value) => setData({ ...data, hasTaxFileNumber: value })}
+              />
+              <SettingsToggle
+                label="Claim tax-free threshold"
+                hint="Reduces PAYG withholding if eligible"
+                checked={data.claimedTaxFreeThreshold}
+                onChange={(value) => setData({ ...data, claimedTaxFreeThreshold: value })}
+              />
+              <SettingsToggle
+                label="Foreign resident"
+                hint="Applies non-resident PAYG rates"
+                checked={data.isForeignResident}
+                onChange={(value) => setData({ ...data, isForeignResident: value })}
+              />
+
+              <div className="settings-field">
+                <label className="settings-label" htmlFor="medicare-exemption">
+                  Medicare exemption
+                </label>
+                <select
+                  id="medicare-exemption"
+                  className="settings-select"
+                  value={data.medicareExemption}
+                  onChange={(e) => setData({ ...data, medicareExemption: e.target.value as TaxSettings['medicareExemption'] })}
+                >
+                  <option value="none">None</option>
+                  <option value="half">Half</option>
+                  <option value="full">Full</option>
+                </select>
+              </div>
+
+              {data.hecsHelpRate && (
+                <div className="settings-inline-feedback settings-inline-feedback--info">
+                  HECS-HELP repayment rate: {Number(data.hecsHelpRate).toFixed(2)}%
+                </div>
+              )}
+            </div>
+
+            <div className="settings-section__footer">
+              <Button type="submit" isLoading={saving} loadingText="Saving">
+                Save settings
+              </Button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
+    </div>
   )
 }

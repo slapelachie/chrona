@@ -1,8 +1,10 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Input } from '@/components/ui'
+import { Loader } from 'lucide-react'
+import { Button, Card, CardBody, CardHeader, Input } from '@/components/ui'
 import { usePreferences } from '@/hooks/use-preferences'
+import './settings-section.scss'
 
 type PayGuide = { id: string; name: string; baseRate: string }
 
@@ -28,53 +30,102 @@ export const PayGuideSelector: React.FC = () => {
         if (mounted) setLoading(false)
       }
     })()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [])
 
-  const filtered = useMemo(() =>
-    items.filter(i => i.name.toLowerCase().includes(query.toLowerCase())),
+  const filtered = useMemo(
+    () => items.filter((i) => i.name.toLowerCase().includes(query.toLowerCase())),
     [items, query]
   )
 
-  if (loading) return <div>Loading…</div>
-  if (error) return <div role="alert" style={{ color: '#F44336' }}>{error}</div>
+  const currentGuide = useMemo(
+    () => items.find((i) => i.id === prefs.defaultPayGuideId),
+    [items, prefs.defaultPayGuideId]
+  )
+
+  if (loading) {
+    return (
+      <div className="settings-section">
+        <Card className="settings-section__card" variant="outlined">
+          <CardBody>
+            <div className="settings-section__spinner" role="status" aria-live="polite">
+              <Loader size={18} />
+              <span>Loading pay guides...</span>
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+    )
+  }
 
   return (
-    <Card>
-      <div className="mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <div>
-          <div className="fw-semibold">Default Pay Guide</div>
-          <div className="text-secondary" style={{ fontSize: 13 }}>Used to prefill new shifts</div>
-        </div>
-        {prefs.defaultPayGuideId && (
-          <span className="badge bg-info">Current: {items.find(i => i.id === prefs.defaultPayGuideId)?.name || 'Unknown'}</span>
-        )}
-      </div>
-      <div className="mb-3">
-        <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search pay guides…" />
-      </div>
-      <div className="d-flex flex-column gap-2" role="list" aria-label="Pay guides">
-        {filtered.map(pg => (
-          <div key={pg.id} role="listitem" className="d-flex align-items-center justify-content-between p-2 rounded" style={{ background: '#121212', border: '1px solid #333' }}>
-            <div>
-              <div className="fw-semibold">{pg.name}</div>
-              <div className="text-secondary" style={{ fontSize: 13 }}>Base rate: ${Number(pg.baseRate).toFixed(2)}/hr</div>
+    <div className="settings-section">
+      <Card className="settings-section__card" variant="outlined">
+        <CardHeader>
+          <div className="settings-section__header">
+            <div className="settings-section__heading">
+              <h3 className="settings-section__title">Default pay guide</h3>
+              <p className="settings-section__description">
+                Choose the pay guide Chrona should use when pre-filling new shifts.
+              </p>
             </div>
-            <div className="d-flex gap-2">
-              <Button
-                variant={prefs.defaultPayGuideId === pg.id ? 'secondary' : 'primary'}
-                onClick={() => update({ defaultPayGuideId: pg.id })}
-              >
-                {prefs.defaultPayGuideId === pg.id ? 'Selected' : 'Set Default'}
-              </Button>
+            {currentGuide && (
+              <span className="settings-section__badge" aria-live="polite">
+                Current: {currentGuide.name}
+              </span>
+            )}
+          </div>
+        </CardHeader>
+        <CardBody>
+          <div className="settings-section__content">
+            {error && (
+              <div className="settings-inline-feedback settings-inline-feedback--error" role="alert">
+                {error}
+              </div>
+            )}
+
+            <div className="settings-search">
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search pay guides"
+                aria-label="Search pay guides"
+              />
+            </div>
+
+            <div className="settings-list" role="list" aria-label="Pay guides">
+              {filtered.map((pg) => {
+                const isSelected = prefs.defaultPayGuideId === pg.id
+                return (
+                  <div key={pg.id} role="listitem" className="settings-list__item">
+                    <div className="settings-list__row">
+                      <div className="settings-list__meta">
+                        <span className="settings-list__title">{pg.name}</span>
+                        <span className="settings-list__description">Base rate ${Number(pg.baseRate).toFixed(2)}/hr</span>
+                      </div>
+                      <div className="settings-list__actions">
+                        <Button
+                          variant={isSelected ? 'secondary' : 'primary'}
+                          size="sm"
+                          onClick={() => update({ defaultPayGuideId: pg.id })}
+                        >
+                          {isSelected ? 'Selected' : 'Set default'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {filtered.length === 0 && (
+                <div className="settings-list__empty">No pay guides match that search.</div>
+              )}
             </div>
           </div>
-        ))}
-        {filtered.length === 0 && (
-          <div className="text-secondary">No pay guides match that search.</div>
-        )}
-      </div>
-    </Card>
+        </CardBody>
+      </Card>
+    </div>
   )
 }
-
