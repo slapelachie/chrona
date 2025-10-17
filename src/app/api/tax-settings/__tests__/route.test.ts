@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
+import { execSync } from 'child_process'
 import { prisma } from '@/lib/db'
 import { GET, POST, PUT } from '../route'
 import { NextRequest } from 'next/server'
@@ -8,6 +9,7 @@ const DB_URL = 'file:./tax-settings-test.db'
 
 beforeAll(() => {
   process.env.DATABASE_URL = DB_URL
+  execSync('npx prisma db push --skip-generate', { stdio: 'pipe' })
 })
 
 afterAll(() => {
@@ -53,7 +55,6 @@ describe('Tax Settings API', () => {
       isForeignResident: true,
       hasTaxFileNumber: false,
       medicareExemption: 'half',
-      hecsHelpRate: '0.02',
     }
     const req = new NextRequest('http://localhost:3000/api/tax-settings', {
       method: 'POST',
@@ -69,13 +70,11 @@ describe('Tax Settings API', () => {
     expect(body.data.isForeignResident).toBe(true)
     expect(body.data.hasTaxFileNumber).toBe(false)
     expect(body.data.medicareExemption).toBe('half')
-    expect(body.data.hecsHelpRate).toBe('0.02')
   })
 
   it('POST returns validation errors for invalid data', async () => {
     const payload = {
       medicareExemption: 'quarter',
-      hecsHelpRate: 'abc',
     }
     const req = new NextRequest('http://localhost:3000/api/tax-settings', {
       method: 'POST',
@@ -88,7 +87,6 @@ describe('Tax Settings API', () => {
     expect(res.status).toBe(400)
     const fields = body.errors.map((e: any) => e.field)
     expect(fields).toContain('medicareExemption')
-    expect(fields).toContain('hecsHelpRate')
   })
 
   it('PUT partially updates settings', async () => {

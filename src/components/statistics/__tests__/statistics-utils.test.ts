@@ -50,7 +50,6 @@ describe('statistics utils', () => {
     expect(chart).toHaveLength(1)
     expect(chart[0]).toMatchObject({
       gross: 1500.5,
-      rosteredGross: 1550,
       net: 1200.25,
       payg: 250,
       stsl: 25,

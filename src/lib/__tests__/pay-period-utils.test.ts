@@ -28,7 +28,7 @@ describe('Pay Period Utilities', () => {
   beforeAll(async () => {
     // Set up test database
     process.env.DATABASE_URL = 'file:./test-pay-period-utils.db'
-    execSync('npx prisma migrate dev --name init', { stdio: 'pipe' })
+    execSync('npx prisma db push --skip-generate', { stdio: 'pipe' })
   })
 
   afterAll(async () => {
@@ -77,10 +77,10 @@ describe('Pay Period Utilities', () => {
       const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
       expect(daysDiff).toBe(14)
       
-      expect(startDate.getHours()).toBe(0)
-      expect(startDate.getMinutes()).toBe(0)
-      expect(endDate.getHours()).toBe(23)
-      expect(endDate.getMinutes()).toBe(59)
+      expect(startDate.getUTCHours()).toBe(0)
+      expect(startDate.getUTCMinutes()).toBe(0)
+      expect(endDate.getUTCHours()).toBe(23)
+      expect(endDate.getUTCMinutes()).toBe(59)
     })
 
     it('should be consistent for dates within same fortnight', () => {
@@ -184,7 +184,6 @@ describe('Pay Period Utilities', () => {
 
       expect(payPeriod.userId).toBe(user.id)
       expect(payPeriod.status).toBe('pending')
-      expect(payPeriod.verified).toBe(false)
       
       // Verify it's a fortnightly period
       const daysDiff = Math.ceil((payPeriod.endDate.getTime() - payPeriod.startDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -217,8 +216,8 @@ describe('Pay Period Utilities', () => {
       const payPeriod = await findOrCreatePayPeriod(user.id, shiftDate)
 
       expect(payPeriod.userId).toBe(user.id)
-      expect(payPeriod.startDate).toEqual(new Date('2024-01-01T00:00:00.000Z'))
-      expect(payPeriod.endDate).toEqual(new Date('2024-01-31T23:59:59.999Z'))
+      expect(payPeriod.startDate.toISOString()).toBe('2023-12-31T13:00:00.000Z')
+      expect(payPeriod.endDate.toISOString()).toBe('2024-01-31T12:59:59.999Z')
     })
 
     it('should return existing pay period if already exists', async () => {

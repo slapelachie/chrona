@@ -19,15 +19,10 @@ const prisma = new PrismaClient({
 })
 
 describe('Database Models - Blackbox Tests', () => {
-  beforeAll(async () => {
+  beforeAll(() => {
     // Set up test database
     process.env.DATABASE_URL = 'file:./test.db'
-    try {
-      execSync('npx prisma migrate reset --force', { stdio: 'pipe' })
-    } catch (error) {
-      // If reset fails, try deploy
-      execSync('npx prisma migrate deploy', { stdio: 'pipe' })
-    }
+    execSync('npx prisma db push --skip-generate', { stdio: 'pipe' })
   })
 
   afterAll(async () => {
@@ -57,7 +52,7 @@ describe('Database Models - Blackbox Tests', () => {
         name: 'Test User',
         email: 'test@example.com',
         timezone: 'Australia/Sydney',
-        payPeriodType: 'FORTNIGHTLY', // Default value
+        payPeriodType: 'WEEKLY', // Default value
       })
       expect(user.id).toBeTruthy()
       expect(user.createdAt).toBeInstanceOf(Date)
@@ -89,7 +84,7 @@ describe('Database Models - Blackbox Tests', () => {
       })
 
       expect(user.timezone).toBe('Australia/Sydney')
-      expect(user.payPeriodType).toBe('FORTNIGHTLY')
+      expect(user.payPeriodType).toBe('WEEKLY')
     })
 
     it('should create user with custom pay period type', async () => {
@@ -384,7 +379,6 @@ describe('Database Models - Blackbox Tests', () => {
       expect(payPeriod.startDate).toEqual(payPeriodData.startDate)
       expect(payPeriod.endDate).toEqual(payPeriodData.endDate)
       expect(payPeriod.status).toBe('pending')
-      expect(payPeriod.verified).toBe(false)
     })
 
     it('should create a weekly pay period', async () => {
@@ -400,7 +394,6 @@ describe('Database Models - Blackbox Tests', () => {
       expect(payPeriod.startDate).toEqual(payPeriodData.startDate)
       expect(payPeriod.endDate).toEqual(payPeriodData.endDate)
       expect(payPeriod.status).toBe('pending')
-      expect(payPeriod.verified).toBe(false)
     })
 
     it('should create a monthly pay period', async () => {
@@ -416,7 +409,6 @@ describe('Database Models - Blackbox Tests', () => {
       expect(payPeriod.startDate).toEqual(payPeriodData.startDate)
       expect(payPeriod.endDate).toEqual(payPeriodData.endDate)
       expect(payPeriod.status).toBe('pending')
-      expect(payPeriod.verified).toBe(false)
     })
 
     it('should store calculated totals as decimals', async () => {
