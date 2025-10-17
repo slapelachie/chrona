@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
+import type { Route } from 'next'
 import { BottomNavigation } from './bottom-navigation'
 import { TopAppBar } from './top-app-bar'
 import './app-shell.scss'
@@ -35,7 +36,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     if (onBackClick) {
       onBackClick()
     } else if (backButtonHref) {
-      router.push(backButtonHref)
+      router.push(backButtonHref as Route)
     } else {
       router.back()
     }

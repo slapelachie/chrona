@@ -7,16 +7,11 @@ export async function seedTaxConfigForYear(prisma: PrismaClient, taxYear = '2024
   await prisma.taxRateConfig.upsert({
     where: { taxYear },
     update: {
-      medicareRate: new Decimal(0.02),
-      medicareLowIncomeThreshold: new Decimal(26000),
-      medicareHighIncomeThreshold: new Decimal(32500),
       isActive: true,
+      description: 'Test seed config',
     },
     create: {
       taxYear,
-      medicareRate: new Decimal(0.02),
-      medicareLowIncomeThreshold: new Decimal(26000),
-      medicareHighIncomeThreshold: new Decimal(32500),
       isActive: true,
       description: 'Test seed config',
     },
@@ -70,19 +65,49 @@ export async function seedTaxConfigForYear(prisma: PrismaClient, taxYear = '2024
     })
   }
 
-  // Minimal HECS threshold
-  await prisma.hecsThreshold.upsert({
-    where: { taxYear_incomeFrom: { taxYear, incomeFrom: new Decimal(51550) } },
-    update: { incomeTo: new Decimal(59518), rate: new Decimal(0.01), isActive: true },
-    create: {
+  // Minimal STSL component rates to satisfy calculators expecting Schedule 8 data
+  const stslRates = [
+    {
       taxYear,
-      incomeFrom: new Decimal(51550),
-      incomeTo: new Decimal(59518),
-      rate: new Decimal(0.01),
+      scale: 'WITH_TFT_OR_FR',
+      earningsFrom: new Decimal(0),
+      earningsTo: new Decimal(770),
+      coefficientA: new Decimal(0.02),
+      coefficientB: new Decimal(0),
+      description: 'Test STSL lower bracket',
       isActive: true,
-      description: 'Test seed HECS',
     },
-  })
+    {
+      taxYear,
+      scale: 'WITH_TFT_OR_FR',
+      earningsFrom: new Decimal(770),
+      earningsTo: null,
+      coefficientA: new Decimal(0.03),
+      coefficientB: new Decimal(5),
+      description: 'Test STSL upper bracket',
+      isActive: true,
+    },
+  ]
+
+  for (const rate of stslRates) {
+    await prisma.stslRate.upsert({
+      where: {
+        taxYear_scale_earningsFrom: {
+          taxYear: rate.taxYear,
+          scale: rate.scale,
+          earningsFrom: rate.earningsFrom,
+        },
+      },
+      update: {
+        earningsTo: rate.earningsTo,
+        coefficientA: rate.coefficientA,
+        coefficientB: rate.coefficientB,
+        description: rate.description,
+        isActive: rate.isActive,
+      },
+      create: rate as any,
+    })
+  }
 
   // Clear service caches to ensure fresh reads
   TaxCoefficientService.clearCacheForTaxYear(taxYear)
@@ -90,8 +115,7 @@ export async function seedTaxConfigForYear(prisma: PrismaClient, taxYear = '2024
 
 export async function clearTaxConfig(prisma: PrismaClient, taxYear = '2024-25') {
   await prisma.taxCoefficient.deleteMany({ where: { taxYear } })
-  await prisma.hecsThreshold.deleteMany({ where: { taxYear } })
+  await prisma.stslRate.deleteMany({ where: { taxYear } })
   await prisma.taxRateConfig.deleteMany({ where: { taxYear } })
   TaxCoefficientService.clearCacheForTaxYear(taxYear)
 }
-

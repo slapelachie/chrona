@@ -659,41 +659,45 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                             )}
                           </div>
                         </div>
-                        {tax.status === 'loading' && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.5rem',
-                            }}
-                          >
-                            <Loader2 size={16} className="loading-pulse" />
-                            <span
-                              style={{
-                                fontSize: '0.75rem',
-                                color: 'var(--color-text-secondary)',
-                              }}
-                            >
-                              Loading...
-                            </span>
-                          </div>
-                        )}
-                        {tax.status === 'error' && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.5rem',
-                              color: 'var(--color-text-secondary)',
-                            }}
-                          >
-                            <TriangleAlert size={14} />
-                            <span style={{ fontSize: '0.75rem' }}>
-                              Tax calculation error
-                            </span>
-                          </div>
-                        )}
                       </div>
+                    </div>
+                  )}
+
+                  {tax.status === 'loading' && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        paddingTop: '1rem',
+                      }}
+                    >
+                      <Loader2 size={16} className="loading-pulse" />
+                      <span
+                        style={{
+                          fontSize: '0.75rem',
+                          color: 'var(--color-text-secondary)',
+                        }}
+                      >
+                        Loading...
+                      </span>
+                    </div>
+                  )}
+
+                  {tax.status === 'error' && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        color: 'var(--color-text-secondary)',
+                        paddingTop: '1rem',
+                      }}
+                    >
+                      <TriangleAlert size={14} />
+                      <span style={{ fontSize: '0.75rem' }}>
+                        Tax calculation error
+                      </span>
                     </div>
                   )}
                 </CardBody>

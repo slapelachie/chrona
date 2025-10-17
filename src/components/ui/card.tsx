@@ -63,29 +63,74 @@ export const Card: React.FC<CardProps> = ({
 }
 
 // Card sub-components for better composition
-export const CardHeader: React.FC<{ children: React.ReactNode; className?: string }> = ({
+type CardSectionPadding = 'none' | 'sm' | 'md' | 'lg'
+
+type SectionProps = React.HTMLAttributes<HTMLDivElement> & {
+  children: React.ReactNode
+  className?: string
+  padding?: CardSectionPadding
+}
+
+const paddingValueMap: Record<CardSectionPadding, string> = {
+  none: '0',
+  sm: 'var(--spacing-sm)',
+  md: 'var(--spacing-md)',
+  lg: 'var(--spacing-lg)'
+}
+
+const resolveSectionProps = (
+  base: string,
+  className: string,
+  padding: CardSectionPadding | undefined,
+  style: React.CSSProperties | undefined
+) => {
+  const paddingStyle = padding ? { padding: paddingValueMap[padding] } : undefined
+  const mergedStyle = paddingStyle ? { ...paddingStyle, ...style } : style
+  const mergedClassName = [base, className].filter(Boolean).join(' ')
+  return { className: mergedClassName, style: mergedStyle }
+}
+
+export const CardHeader: React.FC<SectionProps> = ({
   children,
-  className = ''
+  className = '',
+  padding,
+  style,
+  ...rest
 }) => (
-  <BSCard.Header className={`chrona-card__header ${className}`}>
+  <BSCard.Header
+    {...resolveSectionProps('chrona-card__header', className, padding, style)}
+    {...rest}
+  >
     {children}
   </BSCard.Header>
 )
 
-export const CardBody: React.FC<{ children: React.ReactNode; className?: string }> = ({
+export const CardBody: React.FC<SectionProps> = ({
   children,
-  className = ''
+  className = '',
+  padding,
+  style,
+  ...rest
 }) => (
-  <BSCard.Body className={`chrona-card__body ${className}`}>
+  <BSCard.Body
+    {...resolveSectionProps('chrona-card__body', className, padding, style)}
+    {...rest}
+  >
     {children}
   </BSCard.Body>
 )
 
-export const CardFooter: React.FC<{ children: React.ReactNode; className?: string }> = ({
+export const CardFooter: React.FC<SectionProps> = ({
   children,
-  className = ''
+  className = '',
+  padding,
+  style,
+  ...rest
 }) => (
-  <BSCard.Footer className={`chrona-card__footer ${className}`}>
+  <BSCard.Footer
+    {...resolveSectionProps('chrona-card__footer', className, padding, style)}
+    {...rest}
+  >
     {children}
   </BSCard.Footer>
 )

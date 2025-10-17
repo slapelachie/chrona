@@ -190,17 +190,26 @@ export const OvertimeFramesEditor: React.FC<Props> = ({ payGuideId }) => {
                   <div>{r.endTime || '—'}</div>
                   <div className="d-flex gap-2 justify-content-end">
                     <Button size="sm" variant="outline" onClick={() => save(r.id, { isActive: !r.isActive })}>{r.isActive ? 'Deactivate' : 'Activate'}</Button>
-                    <Button size="sm" variant="secondary" onClick={() => setEditId(r.id) || setEdit({
-                      name: r.name,
-                      firstThreeHoursMult: r.firstThreeHoursMult.toString(),
-                      afterThreeHoursMult: r.afterThreeHoursMult.toString(),
-                      dayOfWeek: (r.dayOfWeek ?? undefined) as number | undefined,
-                      startTime: r.startTime || undefined,
-                      endTime: r.endTime || undefined,
-                      isPublicHoliday: r.isPublicHoliday ?? false,
-                      description: r.description || undefined,
-                      isActive: r.isActive,
-                    })}>Edit</Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setEditId(r.id)
+                        setEdit({
+                          name: r.name,
+                          firstThreeHoursMult: r.firstThreeHoursMult.toString(),
+                          afterThreeHoursMult: r.afterThreeHoursMult.toString(),
+                          dayOfWeek: (r.dayOfWeek ?? undefined) as number | undefined,
+                          startTime: r.startTime || undefined,
+                          endTime: r.endTime || undefined,
+                          isPublicHoliday: r.isPublicHoliday ?? false,
+                          description: r.description || undefined,
+                          isActive: r.isActive,
+                        })
+                      }}
+                    >
+                      Edit
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => remove(r.id)}>Delete</Button>
                   </div>
                 </CardBody>

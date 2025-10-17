@@ -85,7 +85,14 @@ export async function PUT(request: NextRequest) {
     }
 
     // Validate each coefficient
-    const validatedCoefficients = []
+    const validatedCoefficients: Array<{
+      scale: string
+      earningsFrom: Decimal
+      earningsTo: Decimal | null
+      coefficientA: Decimal
+      coefficientB: Decimal
+      description: string | null
+    }> = []
     for (let i = 0; i < coefficients.length; i++) {
       const coeff = coefficients[i]
       const coeffValidator = ValidationResult.create()

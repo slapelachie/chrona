@@ -4,7 +4,8 @@ import React, { forwardRef } from 'react'
 import { Form } from 'react-bootstrap'
 import './input.scss'
 
-export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
+export interface InputProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size' | 'value'> {
   label?: string
   helpText?: string
   error?: string
@@ -13,6 +14,7 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   size?: 'sm' | 'md' | 'lg'
   variant?: 'default' | 'filled'
   isLoading?: boolean
+  value?: string | number | string[]
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(({

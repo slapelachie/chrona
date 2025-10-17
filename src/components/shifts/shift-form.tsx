@@ -12,11 +12,12 @@ import {
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Form } from 'react-bootstrap'
-import { PayCalculationResult, PayPeriodType } from '@/types'
+import { PayCalculationResult, PayPeriodType, ShiftResponse, BreakPeriodResponse } from '@/types'
 import { BreakPeriodsInput, BreakPeriodInput } from './break-periods-input'
 import { PayBreakdown } from './pay-breakdown'
 import { usePreferences } from '@/hooks/use-preferences'
 import { calculatePayPeriodRange } from '@/lib/pay-period-range'
+import type { Route } from 'next'
 
 interface PayGuide {
   id: string
@@ -152,7 +153,8 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     const params = new URLSearchParams(entries)
     params.delete('status')
     const query = params.toString()
-    router.replace(query ? `${pathname}?${query}` : pathname)
+    const nextPath = query ? `${pathname}?${query}` : pathname
+    router.replace(nextPath as Route)
   }
 
   const fetchPayGuides = async () => {
@@ -214,13 +216,13 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       const response = await fetch(`/api/shifts/${shiftId}`)
       if (response.ok) {
         const data = await response.json()
-        const shift = data.data
+        const shift = data.data as ShiftResponse
 
         // Convert UTC dates to local datetime-local format
         const startTime = new Date(shift.startTime)
         const endTime = new Date(shift.endTime)
 
-        const breakPeriods = (shift.breakPeriods || []).map((bp: any) => ({
+        const breakPeriods = (shift.breakPeriods || []).map((bp: BreakPeriodResponse) => ({
           id: bp.id,
           startTime: bp.startTime,
           endTime: bp.endTime,
@@ -673,7 +675,8 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
           const cleared = new URLSearchParams(Array.from(searchParams.entries()))
           cleared.delete('status')
           const clearedQuery = cleared.toString()
-          router.replace(clearedQuery ? `${pathname}?${clearedQuery}` : pathname)
+          const target = clearedQuery ? `${pathname}?${clearedQuery}` : pathname
+          router.replace(target as Route)
         }
         setBannerStatus(null)
       }
@@ -726,7 +729,8 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
           const params = new URLSearchParams(Array.from(searchParams.entries()))
           params.set('status', 'success')
           const query = params.toString()
-          router.replace(query ? `${pathname}?${query}` : pathname)
+          const targetPath = query ? `${pathname}?${query}` : pathname
+          router.replace(targetPath as Route)
           router.refresh()
         } else {
           try {
@@ -741,7 +745,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
             setBannerStatus('error')
             return
           }
-          router.push(`/shifts/${newShiftId}`)
+      router.push(`/shifts/${newShiftId}` as Route)
         }
       } else {
         const errorData = await response.json()
@@ -765,9 +769,9 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
 
   const handleCancel = () => {
     if (mode === 'edit' && shiftId) {
-      router.push(`/shifts/${shiftId}`)
+      router.push(`/shifts/${shiftId}` as Route)
     } else {
-      router.push('/timeline')
+      router.push('/timeline' as Route)
     }
   }
 

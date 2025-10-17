@@ -85,7 +85,7 @@ export interface Shift {
   penaltyPay?: Decimal
   totalPay?: Decimal
   notes?: string | null
-  payPeriodId: string // Required - auto-created if doesn't exist
+  payPeriodId?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -744,12 +744,19 @@ export interface ShiftListItem {
   id: string
   userId: string
   payGuideId: string
-  payPeriodId: string // Required - auto-created if doesn't exist
+  payPeriodId?: string | null
   startTime: Date
   endTime: Date
-  totalHours?: string
-  totalPay?: string
-  notes?: string
+  totalHours?: string | null
+  totalPay?: string | null
+  notes?: string | null
+  payGuide?: {
+    id: string
+    name: string
+    baseRate?: string
+    minimumShiftHours?: number | null
+    maximumShiftHours?: number | null
+  }
 }
 
 export interface PayGuideListItem {

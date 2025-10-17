@@ -42,14 +42,15 @@ export class TimeRuleEngine {
 
     // Add penalty timeframes
     for (const timeFrame of penaltyTimeFrames) {
-      const periods = this.findRulePeriods(startTime, endTime, timeFrame)
+      const periods = this.findRulePeriods(startTime, endTime, this.toRuleTimeFrame(timeFrame))
       for (const period of periods) {
-        allRateRules.push({
+        const penaltyRule: PenaltyRateRule = {
           type: 'penalty',
           period,
           timeFrame,
           multiplier: timeFrame.multiplier,
-        } as PenaltyRateRule)
+        }
+        allRateRules.push(penaltyRule)
       }
     }
 
@@ -64,12 +65,14 @@ export class TimeRuleEngine {
             this.payGuide.maximumShiftHours || 11
           )
 
-          allRateRules.push({
+          const overtimeRule: OvertimeRateRule = {
             type: 'overtime',
             period: { start: overtimeStart, end: endTime },
             timeFrame,
             multiplier: timeFrame.firstThreeHoursMult,
-          } as OvertimeRateRule)
+          }
+
+          allRateRules.push(overtimeRule)
         }
       }
     }
@@ -153,12 +156,23 @@ export class TimeRuleEngine {
     if (existingRule) {
       existingRule.period.end = segmentEnd
     } else {
-      selectedRules.push({
-        period: { start: segmentStart, end: segmentEnd },
-        type: rule.type,
-        timeFrame: rule.timeFrame,
-        multiplier: rule.multiplier,
-      })
+      if (rule.type === 'penalty') {
+        const nextRule: PenaltyRateRule = {
+          type: 'penalty',
+          period: { start: segmentStart, end: segmentEnd },
+          timeFrame: rule.timeFrame,
+          multiplier: rule.multiplier,
+        }
+        selectedRules.push(nextRule)
+      } else {
+        const nextRule: OvertimeRateRule = {
+          type: 'overtime',
+          period: { start: segmentStart, end: segmentEnd },
+          timeFrame: rule.timeFrame,
+          multiplier: rule.multiplier,
+        }
+        selectedRules.push(nextRule)
+      }
     }
   }
 
@@ -332,6 +346,19 @@ export class TimeRuleEngine {
     }
 
     return [{ start: shiftStart, end: shiftEnd }]
+  }
+
+  private toRuleTimeFrame(
+    timeFrame: PenaltyTimeFrame | OvertimeTimeFrame
+  ): RuleTimeFrame {
+    return {
+      id: timeFrame.id,
+      name: timeFrame.name,
+      dayOfWeek: timeFrame.dayOfWeek ?? undefined,
+      startTime: timeFrame.startTime ?? undefined,
+      endTime: timeFrame.endTime ?? undefined,
+      isPublicHoliday: timeFrame.isPublicHoliday ?? undefined,
+    }
   }
 
   findLocalRulePeriods(

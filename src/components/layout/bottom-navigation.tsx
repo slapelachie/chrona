@@ -3,6 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import type { Route } from 'next'
 import {
   Home,
   Calendar,
@@ -12,7 +13,7 @@ import {
 import './bottom-navigation.scss'
 
 interface NavigationItem {
-  href: string
+  href: Route
   icon: React.ReactNode
   label: string
   badge?: number
@@ -20,22 +21,22 @@ interface NavigationItem {
 
 const navigationItems: NavigationItem[] = [
   {
-    href: '/',
+    href: '/' as Route,
     icon: <Home size={24} />,
     label: 'Dashboard'
   },
   {
-    href: '/timeline',
+    href: '/timeline' as Route,
     icon: <Calendar size={24} />,
     label: 'Timeline'
   },
   {
-    href: '/statistics',
+    href: '/statistics' as Route,
     icon: <BarChart4 size={24} />,
     label: 'Statistics'
   },
   {
-    href: '/settings',
+    href: '/settings' as Route,
     icon: <Settings size={24} />,
     label: 'Settings'
   }

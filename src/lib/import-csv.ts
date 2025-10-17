@@ -6,7 +6,8 @@ import {
   ImportPreferencesRequest,
   ImportShiftsRequest,
   ImportTaxDataRequest,
-  PayPeriodStatus
+  PayPeriodStatus,
+  PayPeriodType,
 } from '@/types'
 
 const normalizeConflictResolution = (value?: string | null): ConflictResolution => {
@@ -387,11 +388,21 @@ export const parsePreferencesJson = (json: string): ImportPreferencesRequest => 
     if (parsed && typeof parsed === 'object') {
       if (parsed.user && typeof parsed.user === 'object') {
         const user = parsed.user as Record<string, unknown>
+        const rawPayPeriodType =
+          typeof user.payPeriodType === 'string' ? user.payPeriodType.toUpperCase() : undefined
+        const payPeriodType: PayPeriodType | undefined =
+          rawPayPeriodType &&
+          (['WEEKLY', 'FORTNIGHTLY', 'MONTHLY'] as readonly PayPeriodType[]).includes(
+            rawPayPeriodType as PayPeriodType
+          )
+            ? (rawPayPeriodType as PayPeriodType)
+            : undefined
+
         preferences.user = {
           name: typeof user.name === 'string' ? user.name : undefined,
           email: typeof user.email === 'string' ? user.email : undefined,
           timezone: typeof user.timezone === 'string' ? user.timezone : undefined,
-          payPeriodType: typeof user.payPeriodType === 'string' ? user.payPeriodType : undefined,
+          payPeriodType,
           defaultShiftLengthMinutes:
             typeof user.defaultShiftLengthMinutes === 'number'
               ? user.defaultShiftLengthMinutes

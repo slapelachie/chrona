@@ -43,8 +43,8 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
     })
   }
 
-  const formatDuration = (hours: string | number | undefined) => {
-    if (!hours) return 'N/A'
+  const formatDuration = (hours: string | number | null | undefined) => {
+    if (hours === null || hours === undefined || hours === '') return 'N/A'
     const h = typeof hours === 'string' ? parseFloat(hours) : hours
     const wholeHours = Math.floor(h)
     const minutes = Math.round((h - wholeHours) * 60)
@@ -56,8 +56,8 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
     }
   }
 
-  const formatCurrency = (amount: string | number | undefined) => {
-    if (!amount) return '$0.00'
+  const formatCurrency = (amount: string | number | null | undefined) => {
+    if (amount === null || amount === undefined || amount === '') return '$0.00'
     const value = typeof amount === 'string' ? parseFloat(amount) : amount
     return value.toLocaleString('en-AU', {
       style: 'currency',

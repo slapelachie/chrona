@@ -56,14 +56,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ errors: validator.getErrors(), message: 'Invalid request data' }, { status: 400 })
     }
 
-    const parsed = [] as Array<{
+    const parsed: Array<{
       scale: string
       earningsFrom: Decimal
       earningsTo: Decimal | null
       coefficientA: Decimal
       coefficientB: Decimal
       description: string | null
-    }>
+    }> = []
 
     for (let i = 0; i < rates.length; i++) {
       const r = rates[i]
@@ -100,7 +100,10 @@ export async function PUT(request: NextRequest) {
 
     const affected = await prisma.$transaction(async (tx) => {
       const existing = await tx.stslRate.findMany({ where: { taxYear } })
-      const map = new Map(existing.map(e => [`${e.scale}|${e.earningsFrom.toString()}`, e] as const))
+      const map = new Map<string, (typeof existing)[number]>()
+      for (const entry of existing) {
+        map.set(`${entry.scale}|${entry.earningsFrom.toString()}`, entry)
+      }
       const desired = new Set<string>()
       const affectedIds: string[] = []
 

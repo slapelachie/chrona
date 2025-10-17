@@ -38,13 +38,26 @@ export const validateBoolean = (value: any, field: string, validator: Validation
   return true
 }
 
-export const validateString = (value: any, field: string, validator: ValidationResult, options?: {
-  minLength?: number
-  maxLength?: number
-  pattern?: RegExp
-}) => {
+export const validateString = (
+  value: any,
+  field: string,
+  validator: ValidationResult,
+  options?: {
+    minLength?: number
+    maxLength?: number
+    pattern?: RegExp
+    required?: boolean
+  }
+) => {
+  const isRequired = options?.required ?? true
+  const isEmpty = value === undefined || value === null || value === ''
+
+  if (!isRequired && isEmpty) {
+    return true
+  }
+
   if (!validateRequired(value, field, validator)) return false
-  
+
   if (typeof value !== 'string') {
     validator.addError(field, `${field} must be a string`)
     return false
@@ -68,13 +81,26 @@ export const validateString = (value: any, field: string, validator: ValidationR
   return true
 }
 
-export const validateNumber = (value: any, field: string, validator: ValidationResult, options?: {
-  min?: number
-  max?: number
-  integer?: boolean
-}) => {
+export const validateNumber = (
+  value: any,
+  field: string,
+  validator: ValidationResult,
+  options?: {
+    min?: number
+    max?: number
+    integer?: boolean
+    required?: boolean
+  }
+) => {
+  const isRequired = options?.required ?? true
+  const isEmpty = value === undefined || value === null || value === ''
+
+  if (!isRequired && isEmpty) {
+    return true
+  }
+
   if (!validateRequired(value, field, validator)) return false
-  
+
   const num = Number(value)
   if (isNaN(num)) {
     validator.addError(field, `${field} must be a valid number`)
@@ -99,12 +125,25 @@ export const validateNumber = (value: any, field: string, validator: ValidationR
   return true
 }
 
-export const validateDecimal = (value: any, field: string, validator: ValidationResult, options?: {
-  min?: Decimal
-  max?: Decimal
-}) => {
+export const validateDecimal = (
+  value: any,
+  field: string,
+  validator: ValidationResult,
+  options?: {
+    min?: Decimal.Value
+    max?: Decimal.Value
+    required?: boolean
+  }
+) => {
+  const isRequired = options?.required ?? true
+  const isEmpty = value === undefined || value === null || value === ''
+
+  if (!isRequired && isEmpty) {
+    return true
+  }
+
   if (!validateRequired(value, field, validator)) return false
-  
+
   let decimal: Decimal
   try {
     decimal = new Decimal(value)
@@ -113,14 +152,20 @@ export const validateDecimal = (value: any, field: string, validator: Validation
     return false
   }
 
-  if (options?.min && decimal.lessThan(options.min)) {
-    validator.addError(field, `${field} must be at least ${options.min.toString()}`)
-    return false
+  if (options?.min !== undefined) {
+    const min = options.min instanceof Decimal ? options.min : new Decimal(options.min)
+    if (decimal.lessThan(min)) {
+      validator.addError(field, `${field} must be at least ${min.toString()}`)
+      return false
+    }
   }
 
-  if (options?.max && decimal.greaterThan(options.max)) {
-    validator.addError(field, `${field} must be at most ${options.max.toString()}`)
-    return false
+  if (options?.max !== undefined) {
+    const max = options.max instanceof Decimal ? options.max : new Decimal(options.max)
+    if (decimal.greaterThan(max)) {
+      validator.addError(field, `${field} must be at most ${max.toString()}`)
+      return false
+    }
   }
 
   return true

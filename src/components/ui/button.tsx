@@ -4,7 +4,7 @@ import React from 'react'
 import { Button as BSButton, ButtonProps as BSButtonProps } from 'react-bootstrap'
 import './button.scss'
 
-export interface ButtonProps extends Omit<BSButtonProps, 'variant'> {
+export interface ButtonProps extends Omit<BSButtonProps, 'variant' | 'size'> {
   variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'outline' | 'ghost'
   size?: 'sm' | 'md' | 'lg'
   isLoading?: boolean
@@ -67,12 +67,15 @@ export const Button: React.FC<ButtonProps> = ({
     </>
   )
 
+  const bootstrapSize = size === 'md' ? undefined : size
+
   return (
     <BSButton
       {...props}
       className={combinedClassName}
       disabled={disabled || isLoading}
       aria-disabled={disabled || isLoading}
+      size={bootstrapSize}
     >
       {buttonContent}
     </BSButton>

@@ -4,10 +4,10 @@ import { PayGuide, BreakPeriod } from '@/types'
 
 export class ValidationHelpers {
   static validatePositiveValue(
-    value: number | undefined,
+    value: number | null | undefined,
     fieldName: string
   ): void {
-    if (value !== undefined && value < 0) {
+    if (value != null && value < 0) {
       throw new Error(`${fieldName} cannot be negative`)
     }
   }
@@ -22,14 +22,14 @@ export class ValidationHelpers {
   }
 
   static validateRange(
-    min: number | undefined,
-    max: number | undefined,
+    min: number | null | undefined,
+    max: number | null | undefined,
     minFieldName: string,
     maxFieldName: string
   ): void {
     if (
-      min !== undefined &&
-      max !== undefined &&
+      min != null &&
+      max != null &&
       min > max
     ) {
       throw new Error(`${minFieldName} cannot exceed ${maxFieldName}`)
