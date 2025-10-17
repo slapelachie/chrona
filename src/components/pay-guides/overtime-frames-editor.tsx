@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Input } from '@/components/ui'
+import { Button, Card, CardBody, Input, Select, Toggle, Alert } from '@/components/ui'
+import './pay-guides.scss'
 import { CreateOvertimeTimeFrameRequest, OvertimeTimeFrameResponse } from '@/types'
 
 interface Props { payGuideId: string }
@@ -119,49 +120,68 @@ export const OvertimeFramesEditor: React.FC<Props> = ({ payGuideId }) => {
       </div>
 
       {/* Create form */}
-      <Card>
-        <div className="p-3 d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-          <Input label="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-          <Input label="First 3h Mult" type="number" min={1} step={0.05} value={form.firstThreeHoursMult} onChange={e => setForm({ ...form, firstThreeHoursMult: e.target.value })} />
-          <Input label=">3h Mult" type="number" min={1} step={0.05} value={form.afterThreeHoursMult} onChange={e => setForm({ ...form, afterThreeHoursMult: e.target.value })} />
-          <div>
-            <label className="form-label">Day</label>
-            <select className="form-select" value={form.dayOfWeek ?? ''} onChange={e => setForm({ ...form, dayOfWeek: e.target.value === '' ? undefined : Number(e.target.value) })}>
-              {dayOptions.map(d => <option key={d.label} value={d.value ?? ''}>{d.label}</option>)}
-            </select>
-          </div>
+      <Card variant="elevated">
+        <CardBody>
+          <div className="d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+            <Input label="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            <Input label="First 3h Mult" type="number" min={1} step={0.05} value={form.firstThreeHoursMult} onChange={e => setForm({ ...form, firstThreeHoursMult: e.target.value })} />
+            <Input label=">3h Mult" type="number" min={1} step={0.05} value={form.afterThreeHoursMult} onChange={e => setForm({ ...form, afterThreeHoursMult: e.target.value })} />
+            <Select
+              label="Day"
+              value={form.dayOfWeek ?? ''}
+            onChange={e => setForm({ ...form, dayOfWeek: e.target.value === '' ? undefined : Number(e.target.value) })}
+          >
+            {dayOptions.map(d => (
+              <option key={d.label} value={d.value ?? ''}>
+                {d.label}
+              </option>
+            ))}
+          </Select>
           <Input label="Start (HH:MM)" placeholder="18:00" value={form.startTime || ''} onChange={e => setForm({ ...form, startTime: e.target.value })} />
           <Input label="End (HH:MM)" placeholder="06:00" value={form.endTime || ''} onChange={e => setForm({ ...form, endTime: e.target.value })} />
           <Input label="Description" value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} />
-          <div className="form-check form-switch align-self-end">
-            <input className="form-check-input" type="checkbox" id="ot-active" checked={form.isActive ?? true} onChange={e => setForm({ ...form, isActive: e.target.checked })} />
-            <label htmlFor="ot-active" className="form-check-label">Active</label>
-          </div>
-          <div className="form-check form-switch align-self-end">
-            <input className="form-check-input" type="checkbox" id="ot-ph" checked={form.isPublicHoliday ?? false} onChange={e => setForm({ ...form, isPublicHoliday: e.target.checked })} />
-            <label htmlFor="ot-ph" className="form-check-label">Public holiday</label>
-          </div>
+          <Toggle
+            className="align-self-end"
+            label="Active"
+            checked={form.isActive ?? true}
+            onChange={e => setForm({ ...form, isActive: e.target.checked })}
+          />
+          <Toggle
+            className="align-self-end"
+            label="Public holiday"
+            checked={form.isPublicHoliday ?? false}
+            onChange={e => setForm({ ...form, isPublicHoliday: e.target.checked })}
+          />
           <div className="align-self-end">
             <Button onClick={create} disabled={saving || !form.name || !form.firstThreeHoursMult || !form.afterThreeHoursMult}>{saving ? 'Saving…' : 'Add'}</Button>
           </div>
-        </div>
+          </div>
+        </CardBody>
       </Card>
 
       {loading && <div>Loading…</div>}
-      {error && <div role="alert" style={{ color: '#F44336' }}>{error}</div>}
+      {error && (
+        <Alert tone="danger" role="alert">
+          {error}
+        </Alert>
+      )}
 
       {/* List */}
       <div className="d-flex flex-column gap-2">
         {filtered.map(r => {
           const isEditing = editId === r.id
           return (
-            <Card key={r.id}>
+            <Card key={r.id} variant="elevated">
               {!isEditing ? (
-                <div className="p-3 d-grid" style={{ gridTemplateColumns: '1.2fr 0.8fr 0.8fr 0.8fr 0.6fr 0.6fr auto', gap: '0.75rem', alignItems: 'center' }}>
+                <CardBody className="d-grid" style={{ gridTemplateColumns: '1.2fr 0.8fr 0.8fr 0.8fr 0.6fr 0.6fr auto', gap: '0.75rem', alignItems: 'center' }}>
                   <div className="fw-semibold" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {r.name}
-                    <span style={{ fontSize: 12, padding: '2px 6px', borderRadius: 999, background: r.isActive ? 'rgba(0,229,255,0.15)' : 'rgba(244,67,54,0.15)', color: r.isActive ? '#00E5FF' : '#F44336' }}>{r.isActive ? 'Active' : 'Inactive'}</span>
-                    {r.isPublicHoliday && <span style={{ fontSize: 12, padding: '2px 6px', borderRadius: 999, background: 'rgba(0,188,212,0.15)', color: '#00BCD4' }}>Public holiday</span>}
+                    <span className={`pay-guides__chip ${r.isActive ? 'pay-guides__chip--positive' : 'pay-guides__chip--neutral'}`}>
+                      {r.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                    {r.isPublicHoliday && (
+                      <span className="pay-guides__chip pay-guides__chip--info">Public holiday</span>
+                    )}
                   </div>
                   <div>{`1st3h x${Number(r.firstThreeHoursMult).toFixed(2)}`}</div>
                   <div>{`>3h x${Number(r.afterThreeHoursMult).toFixed(2)}`}</div>
@@ -183,34 +203,43 @@ export const OvertimeFramesEditor: React.FC<Props> = ({ payGuideId }) => {
                     })}>Edit</Button>
                     <Button size="sm" variant="ghost" onClick={() => remove(r.id)}>Delete</Button>
                   </div>
-                </div>
+                </CardBody>
               ) : (
-                <div className="p-3 d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                <CardBody className="d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                   <Input label="Name" value={edit?.name || ''} onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), name: e.target.value })} />
                   <Input label="First 3h Mult" type="number" min={1} step={0.05} value={edit?.firstThreeHoursMult || ''} onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), firstThreeHoursMult: e.target.value })} />
                   <Input label=">3h Mult" type="number" min={1} step={0.05} value={edit?.afterThreeHoursMult || ''} onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), afterThreeHoursMult: e.target.value })} />
-                  <div>
-                    <label className="form-label">Day</label>
-                    <select className="form-select" value={edit?.dayOfWeek ?? ''} onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), dayOfWeek: e.target.value === '' ? undefined : Number(e.target.value) })}>
-                      {dayOptions.map(d => <option key={d.label} value={d.value ?? ''}>{d.label}</option>)}
-                    </select>
-                  </div>
+                  <Select
+                    label="Day"
+                    value={edit?.dayOfWeek ?? ''}
+                    onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), dayOfWeek: e.target.value === '' ? undefined : Number(e.target.value) })}
+                  >
+                    {dayOptions.map(d => (
+                      <option key={d.label} value={d.value ?? ''}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </Select>
                   <Input label="Start (HH:MM)" value={edit?.startTime || ''} onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), startTime: e.target.value })} />
                   <Input label="End (HH:MM)" value={edit?.endTime || ''} onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), endTime: e.target.value })} />
                   <Input label="Description" value={edit?.description || ''} onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), description: e.target.value })} />
-                  <div className="form-check form-switch align-self-end">
-                    <input className="form-check-input" type="checkbox" id={`ot-active-${r.id}`} checked={edit?.isActive ?? true} onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), isActive: e.target.checked })} />
-                    <label htmlFor={`ot-active-${r.id}`} className="form-check-label">Active</label>
-                  </div>
-                  <div className="form-check form-switch align-self-end">
-                    <input className="form-check-input" type="checkbox" id={`ot-ph-${r.id}`} checked={edit?.isPublicHoliday ?? false} onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), isPublicHoliday: e.target.checked })} />
-                    <label htmlFor={`ot-ph-${r.id}`} className="form-check-label">Public holiday</label>
-                  </div>
+                  <Toggle
+                    className="align-self-end"
+                    label="Active"
+                    checked={edit?.isActive ?? true}
+                    onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), isActive: e.target.checked })}
+                  />
+                  <Toggle
+                    className="align-self-end"
+                    label="Public holiday"
+                    checked={edit?.isPublicHoliday ?? false}
+                    onChange={e => setEdit({ ...(edit as CreateOvertimeTimeFrameRequest), isPublicHoliday: e.target.checked })}
+                  />
                   <div className="align-self-end d-flex gap-2">
                     <Button size="sm" onClick={() => save(r.id, edit as Partial<CreateOvertimeTimeFrameRequest>)}>Save</Button>
                     <Button size="sm" variant="ghost" onClick={() => { setEditId(null); setEdit(null) }}>Cancel</Button>
                   </div>
-                </div>
+                </CardBody>
               )}
             </Card>
           )

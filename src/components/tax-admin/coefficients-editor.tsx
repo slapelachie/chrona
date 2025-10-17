@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Input } from '@/components/ui'
+import { Button, Card, Input, Alert } from '@/components/ui'
+import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import './tax-admin.scss'
 
 type Coeff = {
@@ -22,25 +23,23 @@ const SCALES = ['scale1','scale2','scale3','scale4','scale5','scale6']
 
 function ScalePicker({ value, onChange }: { value: string; onChange: (s: string) => void }) {
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-      {SCALES.map((s) => (
-        <button
-          key={s}
-          type="button"
-          onClick={() => onChange(s)}
-          className="btn btn-sm"
-          style={{
-            padding: '4px 8px',
-            borderRadius: 999,
-            border: '1px solid var(--color-border)',
-            background: value === s ? 'rgba(0,229,255,0.15)' : 'transparent',
-            color: value === s ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-          }}
-          aria-pressed={value === s}
-        >
-          {s.replace('scale','Scale ')}
-        </button>
-      ))}
+    <div className="tax-admin__scale-picker">
+      {SCALES.map((s) => {
+        const isActive = value === s
+        return (
+          <Button
+            key={s}
+            type="button"
+            size="sm"
+            variant={isActive ? 'primary' : 'ghost'}
+            onClick={() => onChange(s)}
+            aria-pressed={isActive}
+            className="tax-admin__scale-option"
+          >
+            {s.replace('scale', 'Scale ')}
+          </Button>
+        )
+      })}
     </div>
   )
 }
@@ -202,8 +201,16 @@ export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurren
         </div>
       </div>
 
-      {err && <div role="alert" style={{ color: '#F44336' }}>{err}</div>}
-      {msg && <div aria-live="polite" style={{ color: '#00E5FF' }}>{msg}</div>}
+      {err && (
+        <Alert tone="danger" role="alert">
+          {err}
+        </Alert>
+      )}
+      {msg && (
+        <Alert tone="success" role="status">
+          {msg}
+        </Alert>
+      )}
       {loading && <div>Loading…</div>}
 
       {SCALES.map((scale) => {
@@ -213,15 +220,17 @@ export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurren
           <Card key={scale}>
             <div className="tax-admin__section-header">
               <div className="d-flex align-items-center gap-2">
-                <button
+                <Button
                   type="button"
-                  className="btn btn-sm btn-outline-secondary"
+                  variant="ghost"
+                  size="sm"
+                  className="tax-admin__collapse"
                   onClick={() => setExpanded(prev => ({ ...prev, [scale]: !prev[scale] }))}
                   aria-expanded={open}
                 >
-                  {open ? '▾' : '▸'}
-                </button>
-                <div className="tax-admin__title" style={{ color: currentScale === scale ? 'var(--color-primary)' : 'var(--color-text-primary)' }}>
+                  {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </Button>
+                <div className={`tax-admin__title ${currentScale === scale ? 'tax-admin__title--active' : ''}`}>
                   <span>{scale.replace('scale','Scale ')}</span>
                   <span className="tax-admin__chip">{list.length} bracket{list.length === 1 ? '' : 's'}</span>
                   {currentScale === scale && (
@@ -259,22 +268,36 @@ export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurren
                       <div className="d-flex justify-content-end gap-1">
                         {r.earningsTo !== null && r.earningsTo !== '' && (
                           <>
-                            <Button variant="outline" size="sm" onClick={() => {
-                              const idxs = rows
-                                .map((rr, i) => ({ rr, i }))
-                                .filter(x => x.rr.scale === scale && x.rr.earningsTo !== null && x.rr.earningsTo !== '')
-                                .map(x => x.i)
-                              const pos = idxs.indexOf(idx)
-                              if (pos > 0) setRows(prev => { const copy = [...prev]; const a = idxs[pos-1], b = idxs[pos]; const t = copy[a]; copy[a] = copy[b]; copy[b] = t; return copy })
-                            }}>↑</Button>
-                            <Button variant="outline" size="sm" onClick={() => {
-                              const idxs = rows
-                                .map((rr, i) => ({ rr, i }))
-                                .filter(x => x.rr.scale === scale && x.rr.earningsTo !== null && x.rr.earningsTo !== '')
-                                .map(x => x.i)
-                              const pos = idxs.indexOf(idx)
-                              if (pos < idxs.length - 1) setRows(prev => { const copy = [...prev]; const a = idxs[pos], b = idxs[pos+1]; const t = copy[a]; copy[a] = copy[b]; copy[b] = t; return copy })
-                            }}>↓</Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              aria-label="Move bracket up"
+                              onClick={() => {
+                                const idxs = rows
+                                  .map((rr, i) => ({ rr, i }))
+                                  .filter(x => x.rr.scale === scale && x.rr.earningsTo !== null && x.rr.earningsTo !== '')
+                                  .map(x => x.i)
+                                const pos = idxs.indexOf(idx)
+                                if (pos > 0) setRows(prev => { const copy = [...prev]; const a = idxs[pos-1], b = idxs[pos]; const t = copy[a]; copy[a] = copy[b]; copy[b] = t; return copy })
+                            }}
+                            >
+                              <ChevronUp size={16} />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              aria-label="Move bracket down"
+                              onClick={() => {
+                                const idxs = rows
+                                  .map((rr, i) => ({ rr, i }))
+                                  .filter(x => x.rr.scale === scale && x.rr.earningsTo !== null && x.rr.earningsTo !== '')
+                                  .map(x => x.i)
+                                const pos = idxs.indexOf(idx)
+                                if (pos < idxs.length - 1) setRows(prev => { const copy = [...prev]; const a = idxs[pos], b = idxs[pos+1]; const t = copy[a]; copy[a] = copy[b]; copy[b] = t; return copy })
+                            }}
+                            >
+                              <ChevronDown size={16} />
+                            </Button>
                           </>
                         )}
                         <Button variant="ghost" size="sm" onClick={() => removeRow(idx)}>Delete</Button>

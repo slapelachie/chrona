@@ -1,8 +1,9 @@
 "use client"
 
 import React, { useEffect, useState } from 'react'
-import { Button, Card, Input } from '@/components/ui'
+import { Button, Card, CardBody, Input, Select, Toggle, Alert } from '@/components/ui'
 import { CreatePayGuideRequest, PayGuideResponse, UpdatePayGuideRequest } from '@/types'
+import './pay-guide-form.scss'
 
 const AU_TIMEZONES = [
   'Australia/Sydney',
@@ -111,46 +112,76 @@ export const PayGuideForm: React.FC<Props> = ({ mode, payGuideId, onSaved }) => 
   if (loading) return <div>Loading…</div>
 
   return (
-    <Card>
-      <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
-        {err && <div role="alert" style={{ color: '#F44336' }}>{err}</div>}
-        {msg && <div aria-live="polite" style={{ color: '#00E5FF' }}>{msg}</div>}
+    <Card variant="elevated" className="pay-guide-form">
+      <CardBody>
+        <form onSubmit={handleSubmit} className="pay-guide-form__form">
+          {(err || msg) && (
+            <div className="pay-guide-form__message">
+              {err && (
+                <Alert tone="danger" role="alert">
+                  {err}
+                </Alert>
+              )}
+              {msg && (
+                <Alert tone="success" role="status">
+                  {msg}
+                </Alert>
+              )}
+            </div>
+          )}
 
-        <div className="d-grid" style={{ gridTemplateColumns: '1fr', gap: '1rem' }}>
-          <Input label="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
-          <Input label="Base Rate ($/hr)" type="number" min={0} step={0.01} value={form.baseRate} onChange={e => setForm({ ...form, baseRate: e.target.value })} required />
-          <Input label="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          <div className="d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
-            <div>
-              <label className="form-label">Effective From</label>
-              <input className="form-control" type="date" value={form.effectiveFrom} onChange={e => setForm({ ...form, effectiveFrom: e.target.value })} required />
-            </div>
-            <div>
-              <label className="form-label">Effective To</label>
-              <input className="form-control" type="date" value={form.effectiveTo} onChange={e => setForm({ ...form, effectiveTo: e.target.value })} />
-            </div>
+          <div className="pay-guide-form__grid">
+            <Input label="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+            <Input label="Base Rate ($/hr)" type="number" min={0} step={0.01} value={form.baseRate} onChange={e => setForm({ ...form, baseRate: e.target.value })} required />
+            <Input label="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
           </div>
-          <div className="d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+
+          <div className="pay-guide-form__split">
+            <Input
+              type="date"
+              label="Effective From"
+              value={form.effectiveFrom}
+              onChange={e => setForm({ ...form, effectiveFrom: e.target.value })}
+              required
+            />
+            <Input
+              type="date"
+              label="Effective To"
+              value={form.effectiveTo}
+              onChange={e => setForm({ ...form, effectiveTo: e.target.value })}
+            />
+          </div>
+
+          <div className="pay-guide-form__split">
             <Input label="Min Shift Hours" type="number" min={0} step={0.5} value={form.minimumShiftHours} onChange={e => setForm({ ...form, minimumShiftHours: e.target.value })} />
             <Input label="Max Shift Hours" type="number" min={0} step={0.5} value={form.maximumShiftHours} onChange={e => setForm({ ...form, maximumShiftHours: e.target.value })} />
           </div>
-          <div>
-            <label className="form-label">Timezone</label>
-            <select className="form-select" value={form.timezone} onChange={e => setForm({ ...form, timezone: e.target.value })}>
-              {AU_TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
-            </select>
-          </div>
-          <div className="form-check form-switch">
-            <input className="form-check-input" type="checkbox" id="pg-active" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />
-            <label htmlFor="pg-active" className="form-check-label">Active</label>
-          </div>
-        </div>
 
-        <div className="d-flex gap-2">
-          <Button type="submit" disabled={saving}>{saving ? 'Saving…' : (mode === 'create' ? 'Create' : 'Save')}</Button>
-        </div>
-      </form>
+          <Select
+            label="Timezone"
+            value={form.timezone}
+            onChange={e => setForm({ ...form, timezone: e.target.value })}
+          >
+            {AU_TIMEZONES.map(tz => (
+              <option key={tz} value={tz}>
+                {tz}
+              </option>
+            ))}
+          </Select>
+
+          <div className="pay-guide-form__toggles">
+            <Toggle
+              label="Active"
+              checked={form.isActive}
+              onChange={e => setForm({ ...form, isActive: e.target.checked })}
+            />
+          </div>
+
+          <div className="pay-guide-form__actions">
+            <Button type="submit" disabled={saving}>{saving ? 'Saving…' : (mode === 'create' ? 'Create' : 'Save')}</Button>
+          </div>
+        </form>
+      </CardBody>
     </Card>
   )
 }
-

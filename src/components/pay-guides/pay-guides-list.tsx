@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Button, Card, Input } from '@/components/ui'
+import { Button, Card, Input, Toggle, Alert } from '@/components/ui'
 import { PayGuideListItem, PayGuidesListResponse } from '@/types'
 
 export const PayGuidesList: React.FC = () => {
@@ -75,15 +75,23 @@ export const PayGuidesList: React.FC = () => {
     <div className="d-flex flex-column gap-3">
       <div className="d-flex gap-2 align-items-center flex-wrap">
         <Input placeholder="Search pay guides…" value={query} onChange={e => setQuery(e.target.value)} />
-        <div className="form-check form-switch">
-          <input className="form-check-input" type="checkbox" id="pg-active-only" checked={activeOnly} onChange={e => setActiveOnly(e.target.checked)} />
-          <label className="form-check-label" htmlFor="pg-active-only">Active only</label>
-        </div>
-        <Link href="/pay-guides/new" className="btn btn-primary">Add Pay Guide</Link>
+        <Toggle
+          id="pg-active-only"
+          label="Active only"
+          checked={activeOnly}
+          onChange={e => setActiveOnly(e.target.checked)}
+        />
+        <Button variant="primary" onClick={() => router.push('/pay-guides/new')}>
+          Add Pay Guide
+        </Button>
       </div>
 
       {loading && <div>Loading…</div>}
-      {error && <div role="alert" style={{ color: '#F44336' }}>{error}</div>}
+      {error && (
+        <Alert tone="danger" role="alert">
+          {error}
+        </Alert>
+      )}
 
       {!loading && filtered.length === 0 && (
         <Card>
@@ -103,14 +111,22 @@ export const PayGuidesList: React.FC = () => {
                 </div>
               </div>
               <div className="d-flex gap-2 flex-wrap">
-                <Link href={`/pay-guides/${pg.id}/edit`} className="btn btn-secondary btn-sm">Edit</Link>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => router.push(`/pay-guides/${pg.id}/edit`)}
+                >
+                  Edit
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => toggleActive(pg.id, pg.isActive)}>
                   {pg.isActive ? 'Deactivate' : 'Activate'}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => duplicate(pg.id)}>
                   Duplicate
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => remove(pg.id)}>Delete</Button>
+                <Button size="sm" variant="ghost" onClick={() => remove(pg.id)}>
+                  Delete
+                </Button>
               </div>
             </div>
           </Card>

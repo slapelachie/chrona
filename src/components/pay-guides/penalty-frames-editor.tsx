@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Input } from '@/components/ui'
+import { Button, Card, CardBody, Input, Select, Toggle, Alert } from '@/components/ui'
+import './pay-guides.scss'
 import { CreatePenaltyTimeFrameRequest, PenaltyTimeFrameResponse } from '@/types'
 
 interface Props { payGuideId: string }
@@ -121,48 +122,67 @@ export const PenaltyFramesEditor: React.FC<Props> = ({ payGuideId }) => {
       </div>
 
       {/* Create form */}
-      <Card>
-        <div className="p-3 d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-          <Input label="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-          <Input label="Multiplier" type="number" min={1} step={0.05} value={form.multiplier} onChange={e => setForm({ ...form, multiplier: e.target.value })} />
-          <div>
-            <label className="form-label">Day</label>
-            <select className="form-select" value={form.dayOfWeek ?? ''} onChange={e => setForm({ ...form, dayOfWeek: e.target.value === '' ? undefined : Number(e.target.value) })}>
-              {dayOptions.map(d => <option key={d.label} value={d.value ?? ''}>{d.label}</option>)}
-            </select>
-          </div>
+      <Card variant="elevated">
+        <CardBody>
+          <div className="d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+            <Input label="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            <Input label="Multiplier" type="number" min={1} step={0.05} value={form.multiplier} onChange={e => setForm({ ...form, multiplier: e.target.value })} />
+            <Select
+              label="Day"
+              value={form.dayOfWeek ?? ''}
+            onChange={e => setForm({ ...form, dayOfWeek: e.target.value === '' ? undefined : Number(e.target.value) })}
+          >
+            {dayOptions.map(d => (
+              <option key={d.label} value={d.value ?? ''}>
+                {d.label}
+              </option>
+            ))}
+          </Select>
           <Input label="Start (HH:MM)" placeholder="18:00" value={form.startTime || ''} onChange={e => setForm({ ...form, startTime: e.target.value })} />
-          <Input label="End (HH:MM)" placeholder="06:00" value={form.endTime || ''} onChange={e => setForm({ ...form, endTime: e.target.value })} />
+          <Input label="End (HH:MM)" value={form.endTime || ''} onChange={e => setForm({ ...form, endTime: e.target.value })} />
           <Input label="Description" value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} />
-          <div className="form-check form-switch align-self-end">
-            <input className="form-check-input" type="checkbox" id="pf-active" checked={form.isActive ?? true} onChange={e => setForm({ ...form, isActive: e.target.checked })} />
-            <label htmlFor="pf-active" className="form-check-label">Active</label>
-          </div>
-          <div className="form-check form-switch align-self-end">
-            <input className="form-check-input" type="checkbox" id="pf-ph" checked={form.isPublicHoliday ?? false} onChange={e => setForm({ ...form, isPublicHoliday: e.target.checked })} />
-            <label htmlFor="pf-ph" className="form-check-label">Public holiday</label>
-          </div>
+          <Toggle
+            className="align-self-end"
+            label="Active"
+            checked={form.isActive ?? true}
+            onChange={e => setForm({ ...form, isActive: e.target.checked })}
+          />
+          <Toggle
+            className="align-self-end"
+            label="Public holiday"
+            checked={form.isPublicHoliday ?? false}
+            onChange={e => setForm({ ...form, isPublicHoliday: e.target.checked })}
+          />
           <div className="align-self-end">
             <Button onClick={create} disabled={saving || !form.name || !form.multiplier}>{saving ? 'Saving…' : 'Add'}</Button>
           </div>
-        </div>
+          </div>
+        </CardBody>
       </Card>
 
       {loading && <div>Loading…</div>}
-      {error && <div role="alert" style={{ color: '#F44336' }}>{error}</div>}
+      {error && (
+        <Alert tone="danger" role="alert">
+          {error}
+        </Alert>
+      )}
 
       {/* List */}
       <div className="d-flex flex-column gap-2">
         {filtered.map(r => {
           const isEditing = editId === r.id
           return (
-            <Card key={r.id}>
+            <Card key={r.id} variant="elevated">
               {!isEditing ? (
-                <div className="p-3 d-grid" style={{ gridTemplateColumns: '1.2fr 0.6fr 0.8fr 0.6fr 0.6fr 1fr auto', gap: '0.75rem', alignItems: 'center' }}>
+                <CardBody className="d-grid" style={{ gridTemplateColumns: '1.2fr 0.6fr 0.8fr 0.6fr 0.6fr 1fr auto', gap: '0.75rem', alignItems: 'center' }}>
                   <div className="fw-semibold" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {r.name}
-                    <span style={{ fontSize: 12, padding: '2px 6px', borderRadius: 999, background: r.isActive ? 'rgba(0,229,255,0.15)' : 'rgba(244,67,54,0.15)', color: r.isActive ? '#00E5FF' : '#F44336' }}>{r.isActive ? 'Active' : 'Inactive'}</span>
-                    {r.isPublicHoliday && <span style={{ fontSize: 12, padding: '2px 6px', borderRadius: 999, background: 'rgba(0,188,212,0.15)', color: '#00BCD4' }}>Public holiday</span>}
+                    <span className={`pay-guides__chip ${r.isActive ? 'pay-guides__chip--positive' : 'pay-guides__chip--neutral'}`}>
+                      {r.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                    {r.isPublicHoliday && (
+                      <span className="pay-guides__chip pay-guides__chip--info">Public holiday</span>
+                    )}
                   </div>
                   <div>x{Number(r.multiplier).toFixed(2)}</div>
                   <div>{r.dayOfWeek === null || r.dayOfWeek === undefined ? 'All days' : dayOptions.find(d => d.value === r.dayOfWeek)?.label}</div>
@@ -183,33 +203,42 @@ export const PenaltyFramesEditor: React.FC<Props> = ({ payGuideId }) => {
                     }) }}>Edit</Button>
                     <Button size="sm" variant="ghost" onClick={() => remove(r.id)}>Delete</Button>
                   </div>
-                </div>
+                </CardBody>
               ) : (
-                <div className="p-3 d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                <CardBody className="d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                   <Input label="Name" value={edit?.name || ''} onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), name: e.target.value })} />
                   <Input label="Multiplier" type="number" min={1} step={0.05} value={edit?.multiplier || ''} onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), multiplier: e.target.value })} />
-                  <div>
-                    <label className="form-label">Day</label>
-                    <select className="form-select" value={edit?.dayOfWeek ?? ''} onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), dayOfWeek: e.target.value === '' ? undefined : Number(e.target.value) })}>
-                      {dayOptions.map(d => <option key={d.label} value={d.value ?? ''}>{d.label}</option>)}
-                    </select>
-                  </div>
+                  <Select
+                    label="Day"
+                    value={edit?.dayOfWeek ?? ''}
+                    onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), dayOfWeek: e.target.value === '' ? undefined : Number(e.target.value) })}
+                  >
+                    {dayOptions.map(d => (
+                      <option key={d.label} value={d.value ?? ''}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </Select>
                   <Input label="Start (HH:MM)" value={edit?.startTime || ''} onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), startTime: e.target.value })} />
                   <Input label="End (HH:MM)" value={edit?.endTime || ''} onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), endTime: e.target.value })} />
                   <Input label="Description" value={edit?.description || ''} onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), description: e.target.value })} />
-                  <div className="form-check form-switch align-self-end">
-                    <input className="form-check-input" type="checkbox" id={`pf-active-${r.id}`} checked={edit?.isActive ?? true} onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), isActive: e.target.checked })} />
-                    <label htmlFor={`pf-active-${r.id}`} className="form-check-label">Active</label>
-                  </div>
-                  <div className="form-check form-switch align-self-end">
-                    <input className="form-check-input" type="checkbox" id={`pf-ph-${r.id}`} checked={edit?.isPublicHoliday ?? false} onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), isPublicHoliday: e.target.checked })} />
-                    <label htmlFor={`pf-ph-${r.id}`} className="form-check-label">Public holiday</label>
-                  </div>
+                  <Toggle
+                    className="align-self-end"
+                    label="Active"
+                    checked={edit?.isActive ?? true}
+                    onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), isActive: e.target.checked })}
+                  />
+                  <Toggle
+                    className="align-self-end"
+                    label="Public holiday"
+                    checked={edit?.isPublicHoliday ?? false}
+                    onChange={e => setEdit({ ...(edit as CreatePenaltyTimeFrameRequest), isPublicHoliday: e.target.checked })}
+                  />
                   <div className="align-self-end d-flex gap-2">
                     <Button size="sm" onClick={() => save(r.id, edit as Partial<CreatePenaltyTimeFrameRequest>)}>Save</Button>
                     <Button size="sm" variant="ghost" onClick={() => { setEditId(null); setEdit(null) }}>Cancel</Button>
                   </div>
-                </div>
+                </CardBody>
               )}
             </Card>
           )

@@ -1,0 +1,41 @@
+.pay-guide-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.pay-guide-form__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.pay-guide-form__grid {
+  display: grid;
+  gap: var(--spacing-lg);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.pay-guide-form__split {
+  display: grid;
+  gap: var(--spacing-md);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.pay-guide-form__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  align-items: flex-start;
+}
+
+.pay-guide-form__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.pay-guide-form__message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}

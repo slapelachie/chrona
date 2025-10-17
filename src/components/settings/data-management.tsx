@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import JSZip from 'jszip'
-import { Button, Card, CardHeader, CardBody, CardFooter } from '@/components/ui'
+import { Button, Card, CardHeader, CardBody, CardFooter, Input, Select, Toggle, Alert } from '@/components/ui'
 import { usePreferences } from '@/hooks/use-preferences'
 import { ImportResult, ConflictResolution } from '@/types'
 import {
@@ -13,6 +13,7 @@ import {
   parsePreferencesJson
 } from '@/lib/import-csv'
 import { ImportPayPeriodsRequest, ImportPreferencesRequest } from '@/types'
+import './data-management.scss'
 
 async function downloadFromEndpoint(url: string, filename: string) {
   const response = await fetch(url, {
@@ -119,6 +120,9 @@ export const DataManagement: React.FC = () => {
   const [newType, setNewType] = useState<'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY'>('WEEKLY')
   const [reprocessBusy, setReprocessBusy] = useState(false)
   const [transforming, setTransforming] = useState(false)
+
+  const archiveInputRef = useRef<HTMLInputElement | null>(null)
+  const preferencesInputRef = useRef<HTMLInputElement | null>(null)
 
   const selectedExportTypes = useMemo(
     () => (Object.entries(exportSelections) as [DataTypeKey, boolean][]) 
@@ -363,19 +367,24 @@ export const DataManagement: React.FC = () => {
           </Button>
         </div>
       </div>
-      <div className="d-flex flex-wrap gap-3">
-        {(Object.keys(exportSelections) as DataTypeKey[]).map(type => (
-          <label key={type} className="form-check form-check-inline m-0">
-            <input
-              type="checkbox"
-              className="form-check-input"
-              checked={exportSelections[type]}
-              onChange={(e) => setExportSelections(prev => ({ ...prev, [type]: e.target.checked }))}
+      <div className="d-flex flex-wrap gap-2">
+        {(Object.keys(exportSelections) as DataTypeKey[]).map(type => {
+          const isSelected = exportSelections[type]
+          return (
+            <Button
+              key={type}
+              type="button"
+              size="sm"
+              variant={isSelected ? 'secondary' : 'ghost'}
+              className="data-management__pill"
+              onClick={() => setExportSelections(prev => ({ ...prev, [type]: !prev[type] }))}
+              aria-pressed={isSelected}
               disabled={exporting}
-            />
-            <span className="form-check-label">{formatTypeLabel(type)}</span>
-          </label>
-        ))}
+            >
+              {formatTypeLabel(type)}
+            </Button>
+          )
+        })}
       </div>
     </div>
   )
@@ -456,14 +465,14 @@ export const DataManagement: React.FC = () => {
   return (
     <div className="d-flex flex-column gap-4">
       {err && (
-        <div className="alert alert-danger" role="alert">
+        <Alert tone="danger" role="alert">
           {err}
-        </div>
+        </Alert>
       )}
       {msg && (
-        <div className="alert alert-info" role="status">
+        <Alert tone="info" role="status">
           {msg}
-        </div>
+        </Alert>
       )}
 
       <Card variant="elevated">
@@ -476,42 +485,35 @@ export const DataManagement: React.FC = () => {
         <CardBody className="d-flex flex-column gap-4">
           <ExportSelections />
 
-          <div className="row gy-3">
-            <div className="col-md-6">
-              <label className="form-label mb-1">Start date (optional)</label>
-              <input
-                type="date"
-                className="form-control"
-                value={exportStartDate}
-                onChange={(e) => setExportStartDate(e.target.value)}
-                disabled={exporting}
-              />
-            </div>
-            <div className="col-md-6">
-              <label className="form-label mb-1">End date (optional)</label>
-              <input
-                type="date"
-                className="form-control"
-                value={exportEndDate}
-                onChange={(e) => setExportEndDate(e.target.value)}
-                disabled={exporting}
-              />
-            </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '1rem',
+            }}
+          >
+            <Input
+              type="date"
+              label="Start date (optional)"
+              value={exportStartDate}
+              onChange={(e) => setExportStartDate(e.target.value)}
+              disabled={exporting}
+            />
+            <Input
+              type="date"
+              label="End date (optional)"
+              value={exportEndDate}
+              onChange={(e) => setExportEndDate(e.target.value)}
+              disabled={exporting}
+            />
           </div>
 
-          <div className="form-check form-switch">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              checked={includeInactive}
-              onChange={(e) => setIncludeInactive(e.target.checked)}
-              disabled={exporting}
-              id="includeInactiveGuides"
-            />
-            <label className="form-check-label" htmlFor="includeInactiveGuides">
-              Include inactive pay guides
-            </label>
-          </div>
+          <Toggle
+            label="Include inactive pay guides"
+            checked={includeInactive}
+            onChange={(e) => setIncludeInactive(e.target.checked)}
+            disabled={exporting}
+          />
 
           <div className="d-flex flex-wrap align-items-center gap-3">
             <Button
@@ -523,7 +525,7 @@ export const DataManagement: React.FC = () => {
             >
               Download export
             </Button>
-            <span className="text-secondary small">
+            <span className="data-management__hint">
               Your browser will download a ZIP file containing one CSV per data type.
             </span>
           </div>
@@ -541,18 +543,26 @@ export const DataManagement: React.FC = () => {
           <div className="d-flex flex-column gap-2">
             <span className="fw-semibold">Upload archive</span>
             <div className="d-flex align-items-center gap-2 flex-wrap">
-              <label className="btn btn-outline-primary btn-sm mb-0" style={{ cursor: preparingImport ? 'wait' : 'pointer' }}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => !preparingImport && !importing && archiveInputRef.current?.click()}
+                disabled={preparingImport || importing}
+                className="data-management__pill"
+              >
                 {preparingImport ? 'Processing…' : 'Choose ZIP'}
-                <input
-                  type="file"
-                  accept="application/zip,.zip"
-                  onChange={(e) => e.target.files?.[0] && handleArchiveSelection(e.target.files[0])}
-                  style={{ display: 'none' }}
-                  disabled={preparingImport || importing}
-                />
-              </label>
+              </Button>
+              <input
+                ref={archiveInputRef}
+                type="file"
+                accept="application/zip,.zip"
+                onChange={(e) => e.target.files?.[0] && handleArchiveSelection(e.target.files[0])}
+                style={{ display: 'none' }}
+                disabled={preparingImport || importing}
+              />
               {importArchiveName && (
-                <span className="badge bg-dark text-light py-2 px-3">{importArchiveName}</span>
+                <span className="data-management__tag">{importArchiveName}</span>
               )}
               {pendingImport && (
                 <Button
@@ -566,7 +576,7 @@ export const DataManagement: React.FC = () => {
                 </Button>
               )}
             </div>
-            <span className="text-secondary small">
+            <span className="data-management__hint">
               Expecting a Chrona export ZIP containing <code>shifts.csv</code>, <code>pay-guides.csv</code>, tax data CSVs, optional <code>pay-periods.csv</code> with extras, and <code>preferences.json</code> when exporting settings.
             </span>
           </div>
@@ -580,15 +590,15 @@ export const DataManagement: React.FC = () => {
                     type="button"
                     size="sm"
                     variant="ghost"
-                  disabled={importing}
-                  onClick={() => setImportSelections({
-                    shifts: pendingImport.availableTypes.includes('shifts'),
-                    payPeriods: pendingImport.availableTypes.includes('payPeriods'),
-                    payGuides: pendingImport.availableTypes.includes('payGuides'),
-                    taxData: pendingImport.availableTypes.includes('taxData'),
-                    preferences: pendingImport.availableTypes.includes('preferences')
-                  })}
-                >
+                    disabled={importing}
+                    onClick={() => setImportSelections({
+                      shifts: pendingImport.availableTypes.includes('shifts'),
+                      payPeriods: pendingImport.availableTypes.includes('payPeriods'),
+                      payGuides: pendingImport.availableTypes.includes('payGuides'),
+                      taxData: pendingImport.availableTypes.includes('taxData'),
+                      preferences: pendingImport.availableTypes.includes('preferences')
+                    })}
+                  >
                     Select all found
                   </Button>
                   <Button
@@ -603,21 +613,26 @@ export const DataManagement: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="d-flex flex-wrap gap-3">
+            <div className="d-flex flex-wrap gap-2">
               {(Object.keys(importSelections) as DataTypeKey[]).map(type => {
                 const available = pendingImport?.availableTypes.includes(type) ?? false
-                const disabled = !available || importing
+                const isSelected = importSelections[type] && available
                 return (
-                  <label key={type} className={`form-check form-check-inline m-0 ${!available ? 'text-secondary' : ''}`}>
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      checked={importSelections[type] && available}
-                      disabled={disabled}
-                      onChange={(e) => setImportSelections(prev => ({ ...prev, [type]: e.target.checked }))}
-                    />
-                    <span className="form-check-label">{formatTypeLabel(type)}</span>
-                  </label>
+                  <Button
+                    key={type}
+                    type="button"
+                    size="sm"
+                    variant={isSelected ? 'secondary' : 'ghost'}
+                    className={`data-management__pill ${!available ? 'data-management__pill--disabled' : ''}`}
+                    onClick={() => {
+                      if (!available || importing) return
+                      setImportSelections(prev => ({ ...prev, [type]: !prev[type] }))
+                    }}
+                    aria-pressed={isSelected}
+                    disabled={!available || importing}
+                  >
+                    {formatTypeLabel(type)}
+                  </Button>
                 )
               })}
             </div>
@@ -639,7 +654,7 @@ export const DataManagement: React.FC = () => {
                 </Button>
               ))}
             </div>
-            <span className="text-secondary small">
+            <span className="data-management__hint">
               Choose how Chrona should react when a matching record already exists.
             </span>
           </div>
@@ -654,7 +669,7 @@ export const DataManagement: React.FC = () => {
             >
               Import selected data
             </Button>
-            <span className="text-secondary small">
+            <span className="data-management__hint">
               Shifts automatically create pay periods if necessary. Double-check default pay-period extras afterwards.
             </span>
           </div>
@@ -687,17 +702,24 @@ export const DataManagement: React.FC = () => {
             >
               Clear local preferences
             </Button>
-            <label className="btn btn-outline-secondary btn-sm mb-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => preferencesInputRef.current?.click()}
+              className="data-management__pill"
+            >
               Import preferences
-              <input
-                type="file"
-                accept="application/json"
-                onChange={(e) => e.target.files?.[0] && importPreferences(e.target.files[0])}
-                style={{ display: 'none' }}
-              />
-            </label>
+            </Button>
+            <input
+              ref={preferencesInputRef}
+              type="file"
+              accept="application/json"
+              onChange={(e) => e.target.files?.[0] && importPreferences(e.target.files[0])}
+              style={{ display: 'none' }}
+            />
           </div>
-          <span className="text-secondary small">
+          <span className="data-management__hint">
             These options only affect cached settings in your browser; they never modify your account data.
           </span>
         </CardBody>
@@ -711,7 +733,7 @@ export const DataManagement: React.FC = () => {
           </p>
         </CardHeader>
         <CardBody className="d-flex flex-column gap-3">
-          <div className="text-secondary small">
+          <div className="data-management__hint">
             This operation recalculates pay periods, taxes, and YTD figures. It can take a few minutes for large datasets.
           </div>
           <Button
@@ -754,19 +776,16 @@ export const DataManagement: React.FC = () => {
         </CardHeader>
         <CardBody className="d-flex flex-column gap-3">
           <div className="d-flex align-items-center gap-3 flex-wrap">
-            <div className="d-flex flex-column">
-              <label className="form-label mb-1">New pay period type</label>
-              <select
-                className="form-select"
-                value={newType}
-                onChange={(e) => setNewType(e.target.value as typeof newType)}
-                disabled={transforming}
-              >
-                <option value="WEEKLY">Weekly</option>
-                <option value="FORTNIGHTLY">Fortnightly</option>
-                <option value="MONTHLY">Monthly</option>
-              </select>
-            </div>
+            <Select
+              label="New pay period type"
+              value={newType}
+              onChange={(e) => setNewType(e.target.value as typeof newType)}
+              disabled={transforming}
+            >
+              <option value="WEEKLY">Weekly</option>
+              <option value="FORTNIGHTLY">Fortnightly</option>
+              <option value="MONTHLY">Monthly</option>
+            </Select>
             <Button
               type="button"
               variant="primary"
@@ -797,7 +816,7 @@ export const DataManagement: React.FC = () => {
               Transform
             </Button>
           </div>
-          <div className="text-warning small">
+          <div className="data-management__hint data-management__hint--warning">
             Tip: Export a backup before transforming to keep a snapshot of your current schedule.
           </div>
         </CardBody>

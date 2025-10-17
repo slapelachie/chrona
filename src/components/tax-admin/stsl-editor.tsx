@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Input } from '@/components/ui'
+import { Button, Card, Input, Alert } from '@/components/ui'
+import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import './tax-admin.scss'
 
 type Rate = {
@@ -129,8 +130,16 @@ export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYe
         </div>
       </div>
 
-      {err && <div role="alert" style={{ color: '#F44336' }}>{err}</div>}
-      {msg && <div aria-live="polite" style={{ color: '#00E5FF' }}>{msg}</div>}
+      {err && (
+        <Alert tone="danger" role="alert">
+          {err}
+        </Alert>
+      )}
+      {msg && (
+        <Alert tone="success" role="status">
+          {msg}
+        </Alert>
+      )}
       {loading && <div>Loading…</div>}
 
       {SCALES.map(({ key, label, desc }) => {
@@ -140,9 +149,16 @@ export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYe
           <Card key={key}>
             <div className="tax-admin__section-header">
               <div className="d-flex align-items-center gap-2">
-                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))} aria-expanded={open}>
-                  {open ? '▾' : '▸'}
-                </button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="tax-admin__collapse"
+                  onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))}
+                  aria-expanded={open}
+                >
+                  {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </Button>
                 <div className="tax-admin__title">
                   <span>{label}</span>
                   <span className="tax-admin__chip">{list.length} bracket{list.length === 1 ? '' : 's'}</span>
@@ -177,22 +193,36 @@ export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYe
                       <div className="d-flex justify-content-end gap-1">
                         {r.earningsTo !== null && r.earningsTo !== '' && (
                           <>
-                            <Button variant="outline" size="sm" onClick={() => {
-                              const idxs = rows
-                                .map((rr, i) => ({ rr, i }))
-                                .filter(x => x.rr.scale === key && x.rr.earningsTo !== null && x.rr.earningsTo !== '')
-                                .map(x => x.i)
-                              const pos = idxs.indexOf(idx)
-                              if (pos > 0) setRows(prev => { const copy = [...prev]; const a = idxs[pos-1], b = idxs[pos]; const t = copy[a]; copy[a] = copy[b]; copy[b] = t; return copy })
-                            }}>↑</Button>
-                            <Button variant="outline" size="sm" onClick={() => {
-                              const idxs = rows
-                                .map((rr, i) => ({ rr, i }))
-                                .filter(x => x.rr.scale === key && x.rr.earningsTo !== null && x.rr.earningsTo !== '')
-                                .map(x => x.i)
-                              const pos = idxs.indexOf(idx)
-                              if (pos < idxs.length - 1) setRows(prev => { const copy = [...prev]; const a = idxs[pos], b = idxs[pos+1]; const t = copy[a]; copy[a] = copy[b]; copy[b] = t; return copy })
-                            }}>↓</Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              aria-label="Move bracket up"
+                              onClick={() => {
+                                const idxs = rows
+                                  .map((rr, i) => ({ rr, i }))
+                                  .filter(x => x.rr.scale === key && x.rr.earningsTo !== null && x.rr.earningsTo !== '')
+                                  .map(x => x.i)
+                                const pos = idxs.indexOf(idx)
+                                if (pos > 0) setRows(prev => { const copy = [...prev]; const a = idxs[pos-1], b = idxs[pos]; const t = copy[a]; copy[a] = copy[b]; copy[b] = t; return copy })
+                            }}
+                            >
+                              <ChevronUp size={16} />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              aria-label="Move bracket down"
+                              onClick={() => {
+                                const idxs = rows
+                                  .map((rr, i) => ({ rr, i }))
+                                  .filter(x => x.rr.scale === key && x.rr.earningsTo !== null && x.rr.earningsTo !== '')
+                                  .map(x => x.i)
+                                const pos = idxs.indexOf(idx)
+                                if (pos < idxs.length - 1) setRows(prev => { const copy = [...prev]; const a = idxs[pos], b = idxs[pos+1]; const t = copy[a]; copy[a] = copy[b]; copy[b] = t; return copy })
+                            }}
+                            >
+                              <ChevronDown size={16} />
+                            </Button>
                           </>
                         )}
                         <Button variant="ghost" size="sm" onClick={() => removeRow(idx)}>Delete</Button>
@@ -201,7 +231,7 @@ export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYe
                   )
                 })}
                 {violations[key] && (
-                  <div className="text-warning" style={{ color: '#FFC107' }}>{violations[key]}</div>
+                  <div className="tax-admin__validation">{violations[key]}</div>
                 )}
                 <div className="d-flex justify-content-end gap-2">
                   <Button variant="secondary" size="sm" onClick={() => {

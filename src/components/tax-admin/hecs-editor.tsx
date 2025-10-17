@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Input } from '@/components/ui'
+import { Button, Card, Input, Alert } from '@/components/ui'
 import './tax-admin.scss'
 
 type Hecs = {
@@ -78,8 +78,16 @@ export const HecsEditor: React.FC<Props> = ({ initialTaxYear = getCurrentAuTaxYe
         </div>
       </div>
 
-      {err && <div role="alert" style={{ color: '#F44336' }}>{err}</div>}
-      {msg && <div aria-live="polite" style={{ color: '#00E5FF' }}>{msg}</div>}
+      {err && (
+        <Alert tone="danger" role="alert">
+          {err}
+        </Alert>
+      )}
+      {msg && (
+        <Alert tone="success" role="status">
+          {msg}
+        </Alert>
+      )}
       {loading && <div>Loading…</div>}
 
       <Card>
