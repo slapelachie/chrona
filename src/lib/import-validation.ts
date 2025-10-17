@@ -4,9 +4,19 @@ import {
   ImportValidationError,
   ImportShiftsRequest,
   ImportPayGuidesRequest,
+  ImportPayPeriodsRequest,
+  ImportPreferencesRequest,
   ImportTaxDataRequest
 } from '@/types'
-import { ValidationResult, validateString, validateDecimal, validateDateRange } from '@/lib/validation'
+import {
+  ValidationResult,
+  validateString,
+  validateDecimal,
+  validateDateRange,
+  validateBoolean,
+  validateDate,
+  validateNumber
+} from '@/lib/validation'
 
 export class ImportValidator {
   private errors: ImportValidationError[] = []
@@ -226,6 +236,211 @@ export async function validatePayGuidesImport(request: ImportPayGuidesRequest): 
         }
       })
     }
+  }
+
+  return validator
+}
+
+export async function validatePayPeriodsImport(request: ImportPayPeriodsRequest): Promise<ImportValidator> {
+  const validator = new ImportValidator()
+
+  if (!Array.isArray(request.payPeriods)) {
+    validator.addError('validation', 'payPeriods', 'Pay periods must be an array')
+    return validator
+  }
+
+  if (request.payPeriods.length === 0) {
+    validator.addError('validation', 'payPeriods', 'No pay periods provided for import')
+    return validator
+  }
+
+  const existingPeriods = await prisma.payPeriod.findMany({
+    select: { startDate: true }
+  })
+  const existingStartDates = new Set(existingPeriods.map(period => period.startDate.toISOString()))
+  const importStartDates = new Set<string>()
+
+  for (let i = 0; i < request.payPeriods.length; i++) {
+    const payPeriod = request.payPeriods[i]
+    const fieldValidator = ValidationResult.create()
+
+    const hasStart = validateString(payPeriod.startDate, 'startDate', fieldValidator)
+    const hasEnd = validateString(payPeriod.endDate, 'endDate', fieldValidator)
+
+    let normalizedStart: string | null = null
+
+    if (hasStart) {
+      if (!validateDate(payPeriod.startDate, 'startDate', fieldValidator)) {
+        normalizedStart = null
+      } else {
+        normalizedStart = new Date(payPeriod.startDate).toISOString()
+      }
+    }
+
+    if (hasEnd) {
+      validateDate(payPeriod.endDate, 'endDate', fieldValidator)
+    }
+
+    if (hasStart && hasEnd && !fieldValidator.getErrors().some(error => error.field === 'startDate' || error.field === 'endDate')) {
+      const start = new Date(payPeriod.startDate)
+      const end = new Date(payPeriod.endDate)
+      if (end <= start) {
+        fieldValidator.addError('endDate', 'End date must be after start date')
+      }
+    }
+
+    if (payPeriod.status !== 'pending' && payPeriod.status !== 'verified') {
+      fieldValidator.addError('status', 'Status must be either "pending" or "verified"')
+    }
+
+    const decimalFields: Array<[keyof typeof payPeriod, string | undefined]> = [
+      ['totalHours', payPeriod.totalHours],
+      ['totalPay', payPeriod.totalPay],
+      ['paygWithholding', payPeriod.paygWithholding],
+      ['stslAmount', payPeriod.stslAmount],
+      ['totalWithholdings', payPeriod.totalWithholdings],
+      ['netPay', payPeriod.netPay],
+      ['actualPay', payPeriod.actualPay]
+    ]
+
+    decimalFields.forEach(([field, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        validateDecimal(value, field as string, fieldValidator)
+      }
+    })
+
+    if (!fieldValidator.isValid()) {
+      fieldValidator.getErrors().forEach(error => {
+        validator.addError('validation', `${error.field}`, error.message, i)
+      })
+    }
+
+    if (normalizedStart) {
+      if (importStartDates.has(normalizedStart)) {
+        validator.addError('conflict', 'startDate', `Duplicate pay period starting on ${payPeriod.startDate} in import`, i, normalizedStart)
+      } else {
+        importStartDates.add(normalizedStart)
+      }
+
+      if (existingStartDates.has(normalizedStart)) {
+        if (request.options.conflictResolution === 'skip' || request.options.conflictResolution === 'rename') {
+          validator.addWarning('conflict', 'startDate', `Pay period starting on ${payPeriod.startDate} already exists and will be skipped`, i, normalizedStart)
+        } else if (request.options.conflictResolution === 'overwrite') {
+          validator.addWarning('conflict', 'startDate', `Pay period starting on ${payPeriod.startDate} already exists and will be overwritten`, i, normalizedStart)
+        }
+      }
+    }
+  }
+
+  if (request.extras) {
+    request.extras.forEach((extra, index) => {
+      const extraValidator = ValidationResult.create()
+
+      const hasPeriodStart = validateString(extra.periodStartDate, 'periodStartDate', extraValidator)
+      if (hasPeriodStart) {
+        validateDate(extra.periodStartDate, 'periodStartDate', extraValidator)
+      }
+
+      if (extra.periodEndDate) {
+        validateDate(extra.periodEndDate, 'periodEndDate', extraValidator)
+      }
+
+      validateString(extra.type, 'type', extraValidator)
+
+      if (extra.description && typeof extra.description !== 'string') {
+        extraValidator.addError('description', 'Description must be a string')
+      }
+
+      validateDecimal(extra.amount, 'amount', extraValidator)
+      validateBoolean(extra.taxable, 'taxable', extraValidator)
+
+      if (!extraValidator.isValid()) {
+        extraValidator.getErrors().forEach(error => {
+          validator.addError('validation', `extras.${error.field}`, error.message, index)
+        })
+      }
+
+      if (hasPeriodStart && !extraValidator.getErrors().some(error => error.field === 'periodStartDate')) {
+        const normalizedStart = new Date(extra.periodStartDate).toISOString()
+        if (!importStartDates.has(normalizedStart) && !existingStartDates.has(normalizedStart)) {
+          validator.addWarning('dependency', 'extras', `No matching pay period found for extra on ${extra.periodStartDate}`, index, normalizedStart)
+        }
+      }
+    })
+  }
+
+  return validator
+}
+
+export async function validatePreferencesImport(request: ImportPreferencesRequest): Promise<ImportValidator> {
+  const validator = new ImportValidator()
+
+  if (request.user) {
+    const fieldValidator = ValidationResult.create()
+
+    if (request.user.name !== undefined) {
+      validateString(request.user.name, 'name', fieldValidator, { minLength: 2, maxLength: 200 })
+    }
+
+    if (request.user.email !== undefined) {
+      validateString(request.user.email, 'email', fieldValidator, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ })
+    }
+
+    if (request.user.timezone !== undefined && typeof request.user.timezone !== 'string') {
+      fieldValidator.addError('timezone', 'Timezone must be a string')
+    }
+
+    if (request.user.payPeriodType !== undefined) {
+      const ok = ['WEEKLY', 'FORTNIGHTLY', 'MONTHLY'].includes(request.user.payPeriodType)
+      if (!ok) fieldValidator.addError('payPeriodType', 'Must be WEEKLY, FORTNIGHTLY, or MONTHLY')
+    }
+
+    if (request.user.defaultShiftLengthMinutes !== undefined) {
+      validateNumber(request.user.defaultShiftLengthMinutes, 'defaultShiftLengthMinutes', fieldValidator, {
+        min: 15,
+        max: 24 * 60,
+        integer: true
+      })
+
+      if (request.user.defaultShiftLengthMinutes % 15 !== 0) {
+        fieldValidator.addError('defaultShiftLengthMinutes', 'Must be in 15 minute increments')
+      }
+    }
+
+    if (!fieldValidator.isValid()) {
+      fieldValidator.getErrors().forEach(error => {
+        validator.addError('validation', error.field, error.message)
+      })
+    }
+  }
+
+  if (request.defaultExtras) {
+    request.defaultExtras.forEach((extra, index) => {
+      const extraValidator = ValidationResult.create()
+
+      validateString(extra.label, 'label', extraValidator, { minLength: 1, maxLength: 200 })
+
+      if (extra.description !== undefined && extra.description !== null && typeof extra.description !== 'string') {
+        extraValidator.addError('description', 'Description must be a string')
+      }
+
+      validateDecimal(extra.amount, 'amount', extraValidator)
+      validateBoolean(extra.taxable, 'taxable', extraValidator)
+
+      if (extra.active !== undefined) {
+        validateBoolean(extra.active, 'active', extraValidator)
+      }
+
+      if (extra.sortOrder !== undefined) {
+        validateNumber(extra.sortOrder, 'sortOrder', extraValidator, { integer: true })
+      }
+
+      if (!extraValidator.isValid()) {
+        extraValidator.getErrors().forEach(error => {
+          validator.addError('validation', `defaultExtras.${error.field}`, error.message, index)
+        })
+      }
+    })
   }
 
   return validator

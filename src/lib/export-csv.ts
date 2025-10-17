@@ -66,6 +66,28 @@ interface PayGuideExportRecord {
   publicHolidays: PublicHolidayExport[]
 }
 
+interface PayPeriodExportRecord {
+  startDate: Date
+  endDate: Date
+  status: string
+  totalHours?: MaybeDecimal
+  totalPay?: MaybeDecimal
+  paygWithholding?: MaybeDecimal
+  stslAmount?: MaybeDecimal
+  totalWithholdings?: MaybeDecimal
+  netPay?: MaybeDecimal
+  actualPay?: MaybeDecimal
+}
+
+interface PayPeriodExtraExportRecord {
+  payPeriodStartDate: Date
+  payPeriodEndDate: Date
+  type: string
+  description?: string | null
+  amount: DecimalLike
+  taxable: boolean
+}
+
 interface TaxSettingsExport {
   claimedTaxFreeThreshold: boolean | null
   isForeignResident: boolean | null
@@ -353,6 +375,60 @@ export const buildStslTaxCsv = (stslRates: TaxCoefficientExport[]): string => {
     rate.coefficientB.toString(),
     rate.description ?? '',
     rate.isActive ? 'true' : 'false'
+  ]))
+
+  return serializeCsv([header, ...rows])
+}
+
+const decimalToString = (value: MaybeDecimal): string => (value ? value.toString() : '')
+
+export const buildPayPeriodsCsv = (payPeriods: PayPeriodExportRecord[]): string => {
+  const header = [
+    'start_date',
+    'end_date',
+    'status',
+    'total_hours',
+    'total_pay',
+    'payg_withholding',
+    'stsl_amount',
+    'total_withholdings',
+    'net_pay',
+    'actual_pay'
+  ]
+
+  const rows = payPeriods.map(period => ([
+    period.startDate.toISOString(),
+    period.endDate.toISOString(),
+    period.status,
+    decimalToString(period.totalHours),
+    decimalToString(period.totalPay),
+    decimalToString(period.paygWithholding),
+    decimalToString(period.stslAmount),
+    decimalToString(period.totalWithholdings),
+    decimalToString(period.netPay),
+    decimalToString(period.actualPay)
+  ]))
+
+  return serializeCsv([header, ...rows])
+}
+
+export const buildPayPeriodExtrasCsv = (extras: PayPeriodExtraExportRecord[]): string => {
+  const header = [
+    'pay_period_start_date',
+    'pay_period_end_date',
+    'type',
+    'description',
+    'amount',
+    'taxable'
+  ]
+
+  const rows = extras.map(extra => ([
+    extra.payPeriodStartDate.toISOString(),
+    extra.payPeriodEndDate.toISOString(),
+    extra.type,
+    extra.description ?? '',
+    extra.amount.toString(),
+    extra.taxable ? 'true' : 'false'
   ]))
 
   return serializeCsv([header, ...rows])

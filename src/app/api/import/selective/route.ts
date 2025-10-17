@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { ImportResult, ConflictResolution, ImportTaxDataRequest } from '@/types'
-import { validateShiftsImport, validatePayGuidesImport, validateTaxDataImport } from '@/lib/import-validation'
+import {
+  ImportResult,
+  ConflictResolution,
+  ImportTaxDataRequest,
+  ImportPayPeriodsRequest,
+  ImportPreferencesRequest
+} from '@/types'
+import {
+  validateShiftsImport,
+  validatePayGuidesImport,
+  validatePayPeriodsImport,
+  validatePreferencesImport,
+  validateTaxDataImport
+} from '@/lib/import-validation'
 import { calculateAndUpdateShift, fetchShiftBreakPeriods, updateShiftWithCalculation } from '@/lib/shift-calculation'
 import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
@@ -200,6 +212,229 @@ export async function POST(request: NextRequest) {
           type: 'validation',
           field: 'payGuides',
           message: `Failed to import pay guides: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+        result.success = false
+      }
+    }
+
+    if (selectedTypes.includes('preferences') && data.preferences) {
+      try {
+        const preferencesRequest: ImportPreferencesRequest = {
+          user: data.preferences.user,
+          defaultExtras: data.preferences.defaultExtras,
+          options: {
+            conflictResolution
+          }
+        }
+
+        const validator = await validatePreferencesImport(preferencesRequest)
+        if (validator.hasErrors()) {
+          result.errors.push(...validator.getErrors())
+          result.summary.failed += 1
+        } else {
+          const user = await prisma.user.findFirst()
+          if (!user) {
+            result.errors.push({
+              type: 'validation',
+              field: 'preferences',
+              message: 'No user found. Please seed the database first.'
+            })
+            result.success = false
+          } else {
+            if (preferencesRequest.user) {
+              const updatePayload: Record<string, unknown> = {}
+              const source = preferencesRequest.user
+
+              if (source.name !== undefined) updatePayload.name = source.name
+              if (source.email !== undefined) updatePayload.email = source.email
+              if (source.timezone !== undefined) updatePayload.timezone = source.timezone
+              if (source.payPeriodType !== undefined) updatePayload.payPeriodType = source.payPeriodType
+              if (source.defaultShiftLengthMinutes !== undefined) {
+                updatePayload.defaultShiftLengthMinutes = Number(source.defaultShiftLengthMinutes)
+              }
+
+              if (Object.keys(updatePayload).length > 0) {
+                await prisma.user.update({
+                  where: { id: user.id },
+                  data: updatePayload
+                })
+                result.updated.push('User preferences')
+                result.summary.totalProcessed++
+                result.summary.successful++
+              }
+            }
+
+            if (preferencesRequest.defaultExtras) {
+              const existingExtras = await prisma.payPeriodExtraTemplate.findMany({
+                where: { userId: user.id },
+                select: { id: true }
+              })
+
+              if (existingExtras.length > 0 && conflictResolution !== 'overwrite') {
+                result.skipped.push('Default pay period extras: existing templates preserved (use overwrite to replace)')
+                result.summary.totalProcessed += preferencesRequest.defaultExtras.length
+                result.summary.skipped += preferencesRequest.defaultExtras.length
+              } else {
+                if (existingExtras.length > 0) {
+                  await prisma.payPeriodExtraTemplate.deleteMany({ where: { userId: user.id } })
+                }
+
+                if (preferencesRequest.defaultExtras.length > 0) {
+                  await prisma.payPeriodExtraTemplate.createMany({
+                    data: preferencesRequest.defaultExtras.map((extra, index) => ({
+                      userId: user.id,
+                      label: extra.label,
+                      description: extra.description ?? null,
+                      amount: new Decimal(extra.amount),
+                      taxable: extra.taxable,
+                      active: extra.active ?? true,
+                      sortOrder: extra.sortOrder ?? index
+                    }))
+                  })
+                  result.summary.totalProcessed += preferencesRequest.defaultExtras.length
+                  result.summary.successful += preferencesRequest.defaultExtras.length
+                  result.created.push(`Default pay period extras (${preferencesRequest.defaultExtras.length})`)
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error importing preferences:', error)
+        result.errors.push({
+          type: 'validation',
+          field: 'preferences',
+          message: `Failed to import preferences: ${error instanceof Error ? error.message : 'Unknown error'}`
+        })
+        result.success = false
+      }
+    }
+
+    // Import pay periods before shifts so totals and extras exist
+    if (selectedTypes.includes('payPeriods') && data.payPeriods?.payPeriods) {
+      try {
+        const payPeriodsRequest = {
+          payPeriods: data.payPeriods.payPeriods,
+          extras: data.payPeriods.extras,
+          options: {
+            conflictResolution
+          }
+        }
+
+        const validator = await validatePayPeriodsImport(payPeriodsRequest)
+        if (validator.hasErrors()) {
+          result.errors.push(...validator.getErrors())
+          result.summary.failed += payPeriodsRequest.payPeriods.length
+        } else {
+          type PayPeriodExtraImport = NonNullable<ImportPayPeriodsRequest['extras']>[number]
+          const extrasByStart = new Map<string, PayPeriodExtraImport[]>()
+
+          if (payPeriodsRequest.extras) {
+            payPeriodsRequest.extras.forEach((extra: PayPeriodExtraImport) => {
+              const normalized = new Date(extra.periodStartDate).toISOString()
+              const group = extrasByStart.get(normalized) ?? []
+              group.push(extra)
+              extrasByStart.set(normalized, group)
+            })
+          }
+
+          for (const payPeriodData of payPeriodsRequest.payPeriods) {
+            result.summary.totalProcessed++
+
+            let startDate: Date
+            let endDate: Date
+            try {
+              startDate = new Date(payPeriodData.startDate)
+              endDate = new Date(payPeriodData.endDate)
+              if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                throw new Error('Invalid date')
+              }
+            } catch (error) {
+              result.errors.push({
+                type: 'validation',
+                field: 'payPeriods',
+                message: `Invalid dates for pay period starting ${payPeriodData.startDate}`
+              })
+              result.summary.failed++
+              continue
+            }
+
+            const normalizedStart = startDate.toISOString()
+            const existing = await prisma.payPeriod.findUnique({
+              where: {
+                userId_startDate: {
+                  userId: user.id,
+                  startDate
+                }
+              },
+              include: { extras: true }
+            })
+
+            if (existing && conflictResolution !== 'overwrite') {
+              const reason = conflictResolution === 'rename'
+                ? 'Rename is not supported for pay periods; skipping existing period'
+                : 'Pay period already exists and will be skipped'
+              result.skipped.push(`Pay period starting ${payPeriodData.startDate}: ${reason}`)
+              result.summary.skipped++
+              continue
+            }
+
+            const payload = {
+              startDate,
+              endDate,
+              status: payPeriodData.status,
+              totalHours: payPeriodData.totalHours ? new Decimal(payPeriodData.totalHours) : null,
+              totalPay: payPeriodData.totalPay ? new Decimal(payPeriodData.totalPay) : null,
+              paygWithholding: payPeriodData.paygWithholding ? new Decimal(payPeriodData.paygWithholding) : null,
+              stslAmount: payPeriodData.stslAmount ? new Decimal(payPeriodData.stslAmount) : null,
+              totalWithholdings: payPeriodData.totalWithholdings ? new Decimal(payPeriodData.totalWithholdings) : null,
+              netPay: payPeriodData.netPay ? new Decimal(payPeriodData.netPay) : null,
+              actualPay: payPeriodData.actualPay ? new Decimal(payPeriodData.actualPay) : null
+            }
+
+            let payPeriodId: string
+
+            if (existing) {
+              const updated = await prisma.payPeriod.update({
+                where: { id: existing.id },
+                data: payload
+              })
+              payPeriodId = updated.id
+              result.updated.push(`Pay period starting ${payPeriodData.startDate}`)
+              await prisma.payPeriodExtra.deleteMany({ where: { payPeriodId } })
+            } else {
+              const created = await prisma.payPeriod.create({
+                data: {
+                  userId: user.id,
+                  ...payload
+                }
+              })
+              payPeriodId = created.id
+              result.created.push(`Pay period starting ${payPeriodData.startDate}`)
+            }
+
+            const extrasForPeriod = extrasByStart.get(normalizedStart)
+            if (extrasForPeriod && extrasForPeriod.length > 0) {
+              await prisma.payPeriodExtra.createMany({
+                data: extrasForPeriod.map(extra => ({
+                  payPeriodId,
+                  type: extra.type,
+                  description: extra.description ?? null,
+                  amount: new Decimal(extra.amount),
+                  taxable: !!extra.taxable
+                }))
+              })
+            }
+
+            result.summary.successful++
+          }
+        }
+      } catch (error) {
+        console.error('Error importing pay periods:', error)
+        result.errors.push({
+          type: 'validation',
+          field: 'payPeriods',
+          message: `Failed to import pay periods: ${error instanceof Error ? error.message : 'Unknown error'}`
         })
         result.success = false
       }

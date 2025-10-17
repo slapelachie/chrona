@@ -981,6 +981,53 @@ export interface ImportPayGuidesRequest {
   }
 }
 
+export interface ImportPayPeriodsRequest {
+  payPeriods: Array<{
+    startDate: string
+    endDate: string
+    status: PayPeriodStatus
+    totalHours?: string
+    totalPay?: string
+    paygWithholding?: string
+    stslAmount?: string
+    totalWithholdings?: string
+    netPay?: string
+    actualPay?: string
+  }>
+  extras?: Array<{
+    periodStartDate: string
+    periodEndDate?: string
+    type: string
+    description?: string
+    amount: string
+    taxable: boolean
+  }>
+  options: {
+    conflictResolution: ConflictResolution
+  }
+}
+
+export interface ImportPreferencesRequest {
+  user?: {
+    name?: string
+    email?: string
+    timezone?: string
+    payPeriodType?: PayPeriodType
+    defaultShiftLengthMinutes?: number
+  }
+  defaultExtras?: Array<{
+    label: string
+    description?: string
+    amount: string
+    taxable: boolean
+    active?: boolean
+    sortOrder?: number
+  }>
+  options: {
+    conflictResolution: ConflictResolution
+  }
+}
+
 export interface ImportTaxDataRequest {
   taxSettings?: {
     claimedTaxFreeThreshold?: boolean

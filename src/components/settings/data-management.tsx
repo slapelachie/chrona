@@ -8,8 +8,11 @@ import { ImportResult, ConflictResolution } from '@/types'
 import {
   parseShiftsCsv,
   parsePayGuidesCsv,
-  parseTaxDataFiles
+  parseTaxDataFiles,
+  parsePayPeriodsFiles,
+  parsePreferencesJson
 } from '@/lib/import-csv'
+import { ImportPayPeriodsRequest, ImportPreferencesRequest } from '@/types'
 
 async function downloadFromEndpoint(url: string, filename: string) {
   const response = await fetch(url, {
@@ -37,19 +40,23 @@ async function downloadFromEndpoint(url: string, filename: string) {
   URL.revokeObjectURL(downloadUrl)
 }
 
-type DataTypeKey = 'shifts' | 'payGuides' | 'taxData'
+type DataTypeKey = 'shifts' | 'payPeriods' | 'payGuides' | 'taxData' | 'preferences'
 
 type DataSelectionState = Record<DataTypeKey, boolean>
 
 type ShiftsPayload = ReturnType<typeof parseShiftsCsv>['shifts']
 type PayGuidesPayload = ReturnType<typeof parsePayGuidesCsv>['payGuides']
 type TaxDataPayload = ReturnType<typeof parseTaxDataFiles>
+type PayPeriodsPayload = ImportPayPeriodsRequest
+type PreferencesPayload = ImportPreferencesRequest
 
 type PendingSelectiveImport = {
   data: {
     shifts?: { shifts: ShiftsPayload }
     payGuides?: { payGuides: PayGuidesPayload }
     taxData?: TaxDataPayload
+    payPeriods?: PayPeriodsPayload
+    preferences?: PreferencesPayload
   }
   availableTypes: DataTypeKey[]
 }
@@ -58,8 +65,12 @@ const formatTypeLabel = (type: DataTypeKey) => {
   switch (type) {
     case 'payGuides':
       return 'Pay Guides'
+    case 'payPeriods':
+      return 'Pay Periods'
     case 'taxData':
       return 'Tax Data'
+    case 'preferences':
+      return 'Preferences'
     default:
       return 'Shifts'
   }
@@ -73,8 +84,10 @@ const conflictLabels: Record<ConflictResolution, string> = {
 
 const createEmptySelections = (): DataSelectionState => ({
   shifts: false,
+  payPeriods: false,
   payGuides: false,
-  taxData: false
+  taxData: false,
+  preferences: false
 })
 
 export const DataManagement: React.FC = () => {
@@ -82,8 +95,10 @@ export const DataManagement: React.FC = () => {
 
   const [exportSelections, setExportSelections] = useState<DataSelectionState>({
     shifts: true,
+    payPeriods: true,
     payGuides: true,
-    taxData: true
+    taxData: true,
+    preferences: true
   })
   const [exportStartDate, setExportStartDate] = useState('')
   const [exportEndDate, setExportEndDate] = useState('')
@@ -180,6 +195,18 @@ export const DataManagement: React.FC = () => {
         }
       }
 
+      const payPeriodsMatch = zip.file(/pay-periods\.csv$/i)
+      if (payPeriodsMatch.length > 0) {
+        const payPeriodsCsv = await payPeriodsMatch[0].async('string')
+        const extrasMatch = zip.file(/pay-period-extras\.csv$/i)
+        const extrasCsv = extrasMatch.length > 0 ? await extrasMatch[0].async('string') : undefined
+        const parsed = parsePayPeriodsFiles({ payPeriodsCsv, extrasCsv })
+        if (parsed.payPeriods.length > 0) {
+          data.payPeriods = parsed
+          availableTypes.push('payPeriods')
+        }
+      }
+
       if (zip.files['pay-guides.csv']) {
         const text = await zip.files['pay-guides.csv'].async('string')
         const parsed = parsePayGuidesCsv(text)
@@ -201,6 +228,16 @@ export const DataManagement: React.FC = () => {
         }
       }
 
+      const preferencesMatch = zip.file(/preferences\.json$/i)
+      if (preferencesMatch.length > 0) {
+        const json = await preferencesMatch[0].async('string')
+        const parsed = parsePreferencesJson(json)
+        if (parsed.user || (parsed.defaultExtras && parsed.defaultExtras.length > 0)) {
+          data.preferences = parsed
+          availableTypes.push('preferences')
+        }
+      }
+
       if (availableTypes.length === 0) {
         throw new Error('No recognized data types found in the archive.')
       }
@@ -208,8 +245,10 @@ export const DataManagement: React.FC = () => {
       setPendingImport({ data, availableTypes })
       setImportSelections({
         shifts: availableTypes.includes('shifts'),
+        payPeriods: availableTypes.includes('payPeriods'),
         payGuides: availableTypes.includes('payGuides'),
-        taxData: availableTypes.includes('taxData')
+        taxData: availableTypes.includes('taxData'),
+        preferences: availableTypes.includes('preferences')
       })
       setImportArchiveName(file.name)
       setMsg('Archive ready. Review the selections and start the import when you are ready.')
@@ -309,7 +348,7 @@ export const DataManagement: React.FC = () => {
             size="sm"
             variant="ghost"
             disabled={exporting}
-            onClick={() => setExportSelections({ shifts: true, payGuides: true, taxData: true })}
+            onClick={() => setExportSelections({ shifts: true, payPeriods: true, payGuides: true, taxData: true, preferences: true })}
           >
             Select all
           </Button>
@@ -528,7 +567,7 @@ export const DataManagement: React.FC = () => {
               )}
             </div>
             <span className="text-secondary small">
-              Expecting a Chrona export ZIP containing <code>shifts.csv</code>, <code>pay-guides.csv</code>, and tax data CSVs.
+              Expecting a Chrona export ZIP containing <code>shifts.csv</code>, <code>pay-guides.csv</code>, tax data CSVs, optional <code>pay-periods.csv</code> with extras, and <code>preferences.json</code> when exporting settings.
             </span>
           </div>
 
@@ -541,13 +580,15 @@ export const DataManagement: React.FC = () => {
                     type="button"
                     size="sm"
                     variant="ghost"
-                    disabled={importing}
-                    onClick={() => setImportSelections({
-                      shifts: pendingImport.availableTypes.includes('shifts'),
-                      payGuides: pendingImport.availableTypes.includes('payGuides'),
-                      taxData: pendingImport.availableTypes.includes('taxData')
-                    })}
-                  >
+                  disabled={importing}
+                  onClick={() => setImportSelections({
+                    shifts: pendingImport.availableTypes.includes('shifts'),
+                    payPeriods: pendingImport.availableTypes.includes('payPeriods'),
+                    payGuides: pendingImport.availableTypes.includes('payGuides'),
+                    taxData: pendingImport.availableTypes.includes('taxData'),
+                    preferences: pendingImport.availableTypes.includes('preferences')
+                  })}
+                >
                     Select all found
                   </Button>
                   <Button
