@@ -1,0 +1,46 @@
+.chrona-alert {
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  border: 1px solid transparent;
+  background-color: rgba(0, 188, 212, 0.08);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: flex-start;
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  &__title {
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+  }
+
+  &__body {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  &--info {
+    background-color: rgba(0, 188, 212, 0.08);
+    border-color: rgba(0, 188, 212, 0.3);
+  }
+
+  &--success {
+    background-color: rgba(0, 229, 255, 0.08);
+    border-color: rgba(0, 229, 255, 0.3);
+  }
+
+  &--warning {
+    background-color: rgba(255, 193, 7, 0.08);
+    border-color: rgba(255, 193, 7, 0.3);
+  }
+
+  &--danger {
+    background-color: rgba(244, 67, 54, 0.08);
+    border-color: rgba(244, 67, 54, 0.3);
+  }
+}
+

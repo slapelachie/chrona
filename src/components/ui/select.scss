@@ -1,0 +1,92 @@
+.chrona-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  width: 100%;
+
+  &__label {
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    margin-bottom: 0;
+  }
+
+  &__required {
+    color: var(--color-danger);
+    margin-left: var(--spacing-xs);
+  }
+
+  &__wrapper {
+    position: relative;
+  }
+
+  &__field {
+    background-color: var(--color-input-bg);
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base);
+    min-height: 44px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    transition: all 0.2s ease-in-out;
+
+    &.form-select {
+      background-color: var(--color-input-bg);
+      border: 1px solid var(--color-border-primary);
+      color: var(--color-text-primary);
+    }
+
+    &:focus {
+      background-color: var(--color-input-bg);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.2);
+      color: var(--color-text-primary);
+    }
+
+    &:disabled {
+      background-color: var(--color-bg-tertiary);
+      border-color: var(--color-border-primary);
+      color: var(--color-text-disabled);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  &--sm {
+    .chrona-select__field {
+      min-height: 36px;
+      font-size: var(--font-size-sm);
+      padding: var(--spacing-xs) var(--spacing-sm);
+    }
+  }
+
+  &--lg {
+    .chrona-select__field {
+      min-height: 52px;
+      font-size: var(--font-size-lg);
+      padding: var(--spacing-md) var(--spacing-lg);
+    }
+  }
+
+  &--error {
+    .chrona-select__field {
+      border-color: var(--color-danger);
+
+      &:focus {
+        border-color: var(--color-danger);
+        box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.2);
+      }
+    }
+  }
+
+  &__help {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  &__error {
+    font-size: var(--font-size-sm);
+    color: var(--color-danger);
+  }
+}
+

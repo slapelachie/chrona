@@ -1,0 +1,281 @@
+// Chrona Input Component Styles
+
+.chrona-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  width: 100%;
+
+  // Label styles
+  &__label {
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    margin-bottom: 0;
+    
+    &.form-label {
+      margin-bottom: 0;
+      color: var(--color-text-primary);
+    }
+  }
+  
+  &__required {
+    color: var(--color-danger);
+    margin-left: var(--spacing-xs);
+  }
+
+  // Input wrapper
+  &__wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  // Main input field
+  &__field {
+    flex: 1;
+    background-color: var(--color-input-bg);
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base);
+    transition: all 0.2s ease-in-out;
+    min-height: 44px; // Touch target
+    
+    // Remove Bootstrap default styles
+    &.form-control {
+      background-color: var(--color-input-bg);
+      border: 1px solid var(--color-border-primary);
+      color: var(--color-text-primary);
+    }
+    
+    &::placeholder {
+      color: var(--color-text-tertiary);
+      opacity: 1;
+    }
+    
+    &:focus {
+      background-color: var(--color-input-bg);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.2);
+      color: var(--color-text-primary);
+      outline: none;
+    }
+    
+    &:disabled {
+      background-color: var(--color-bg-tertiary);
+      border-color: var(--color-border-primary);
+      color: var(--color-text-disabled);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  // Size variants
+  &--sm {
+    .chrona-input__field {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      font-size: var(--font-size-sm);
+      min-height: 36px;
+    }
+    
+    .chrona-input__icon {
+      font-size: var(--font-size-sm);
+    }
+  }
+  
+  &--md {
+    .chrona-input__field {
+      padding: var(--spacing-sm) var(--spacing-md);
+      font-size: var(--font-size-base);
+    }
+  }
+  
+  &--lg {
+    .chrona-input__field {
+      padding: var(--spacing-md) var(--spacing-lg);
+      font-size: var(--font-size-lg);
+      min-height: 52px;
+    }
+    
+    .chrona-input__icon {
+      font-size: var(--font-size-lg);
+    }
+  }
+
+  // Variant styles
+  &--filled {
+    .chrona-input__field {
+      background-color: var(--color-bg-elevated);
+      border-color: transparent;
+      
+      &:focus {
+        background-color: var(--color-input-bg);
+        border-color: var(--color-primary);
+      }
+    }
+  }
+
+  // Icon handling
+  &--with-icons {
+    .chrona-input__field {
+      &.form-control {
+        // Adjust padding when icons are present
+      }
+    }
+  }
+  
+  &__icon {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-tertiary);
+    pointer-events: none;
+    z-index: 2;
+    
+    &--left {
+      left: var(--spacing-md);
+      
+      ~ .chrona-input__field {
+        padding-left: calc(var(--spacing-md) * 2.5);
+      }
+    }
+    
+    &--right {
+      right: var(--spacing-md);
+      
+      ~ .chrona-input__field {
+        padding-right: calc(var(--spacing-md) * 2.5);
+      }
+    }
+    
+    svg {
+      width: 1.2em;
+      height: 1.2em;
+    }
+  }
+
+  // Loading state
+  &--loading {
+    .chrona-input__field {
+      padding-right: calc(var(--spacing-md) * 2.5);
+    }
+  }
+  
+  &__loading {
+    position: absolute;
+    right: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary);
+    
+    .spinner-border-sm {
+      width: 1rem;
+      height: 1rem;
+      border-width: 0.125em;
+      color: var(--color-primary);
+    }
+  }
+
+  // Error state
+  &--error {
+    .chrona-input__field {
+      border-color: var(--color-danger);
+      
+      &:focus {
+        border-color: var(--color-danger);
+        box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.2);
+      }
+    }
+    
+    .chrona-input__icon {
+      color: var(--color-danger);
+    }
+  }
+
+  // Help text
+  &__help {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin-top: 0;
+    
+    &.form-text {
+      color: var(--color-text-secondary);
+      margin-top: 0;
+    }
+  }
+
+  // Error message
+  &__error {
+    font-size: var(--font-size-sm);
+    color: var(--color-danger);
+    font-weight: 500;
+  }
+}
+
+// Special input types
+.chrona-input {
+  // Number inputs
+  input[type="number"] {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  
+  // Time inputs
+  input[type="time"],
+  input[type="datetime-local"] {
+    font-family: var(--font-family-mono);
+  }
+  
+  // Currency inputs
+  input[inputmode="decimal"] {
+    font-family: var(--font-family-mono);
+    text-align: right;
+  }
+}
+
+// Mobile optimizations
+@media (max-width: 576px) {
+  .chrona-input {
+    &__field {
+      min-height: 48px; // Larger touch target on mobile
+      font-size: 16px; // Prevent zoom on iOS
+    }
+    
+    &--sm .chrona-input__field {
+      min-height: 40px;
+    }
+    
+    &--lg .chrona-input__field {
+      min-height: 56px;
+    }
+  }
+}
+
+// High contrast mode
+@media (prefers-contrast: high) {
+  .chrona-input {
+    &__field {
+      border-width: 2px;
+      
+      &:focus {
+        border-width: 2px;
+      }
+    }
+    
+    &--error .chrona-input__field {
+      border-width: 2px;
+    }
+  }
+}
+
+// Reduced motion
+@media (prefers-reduced-motion: reduce) {
+  .chrona-input {
+    &__field {
+      transition: none;
+    }
+  }
+}

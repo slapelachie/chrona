@@ -80,3 +80,9 @@ tmp/
 temp/
 
 /generated/prisma
+
+/generated/prisma
+
+*.db
+
+.code/

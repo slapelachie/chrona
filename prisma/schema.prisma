@@ -1,0 +1,398 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Pay period types enumeration
+enum PayPeriodType {
+  WEEKLY
+  FORTNIGHTLY
+  MONTHLY
+}
+
+// Pay period lifecycle status
+enum PayPeriodStatus {
+  pending @map("PENDING")
+  verified @map("VERIFIED")
+}
+
+// Single user app - basic user information
+model User {
+  id             String        @id @default(cuid())
+  name           String
+  email          String        @unique
+  timezone       String        @default("Australia/Sydney")
+  payPeriodType  PayPeriodType @default(WEEKLY)
+  defaultShiftLengthMinutes Int @default(180)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  shifts                  Shift[]
+  payPeriods              PayPeriod[]
+  taxSettings             TaxSettings?
+  yearToDateTax           YearToDateTax[]
+  payPeriodExtraTemplates PayPeriodExtraTemplate[]
+
+  @@map("users")
+}
+
+// Australian pay guides (retail award, hospitality award, etc.)
+model PayGuide {
+  id                 String  @id @default(cuid())
+  name               String  @unique
+  baseRate           Decimal // $25.4123 per hour precision  
+  minimumShiftHours  Int?    // e.g., 3 for 3-hour minimum
+  maximumShiftHours  Int?    // e.g., 11 for overtime threshold
+  timezone           String  @default("Australia/Sydney") // IANA timezone
+  description        String?
+  effectiveFrom      DateTime
+  effectiveTo        DateTime?
+  isActive           Boolean @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations  
+  shifts             Shift[]
+  penaltyTimeFrames  PenaltyTimeFrame[]
+  overtimeTimeFrames OvertimeTimeFrame[]
+  publicHolidays     PublicHoliday[]
+
+  @@map("pay_guides")
+}
+
+// Flexible penalty system (weekends, evenings, nights, public holidays)
+model PenaltyTimeFrame {
+  id          String   @id @default(cuid())
+  payGuideId  String
+  name        String   // "Weekend", "Evening", "Night", "Public Holiday"
+  multiplier  Decimal  // 1.5 for 150%, 2.0 for 200%
+  
+  // Day-based penalties (null = applies to all days)
+  dayOfWeek   Int?     // 0=Sunday, 1=Monday, ..., 6=Saturday
+  
+  // Time-based penalties (null = all day)
+  startTime   String?  // "18:00" for evening penalty start
+  endTime     String?  // "06:00" for night penalty end
+  
+  // Special penalties
+  isPublicHoliday Boolean @default(false)
+  description String?
+  
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  payGuide    PayGuide @relation(fields: [payGuideId], references: [id], onDelete: Cascade)
+  shiftSegments ShiftPenaltySegment[] @relation("PenaltyTimeFrame_ShiftPenaltySegments")
+
+  @@map("penalty_time_frames")
+}
+
+// Core shift tracking
+model Shift {
+  id           String    @id @default(cuid())
+  userId       String
+  payGuideId   String
+  
+  // Shift timing (stored in UTC)
+  startTime    DateTime
+  endTime      DateTime
+  
+  // Calculated fields (cached for performance)
+  totalHours   Decimal?  // 8.5 hours
+  basePay      Decimal?  // $215.50
+  overtimePay  Decimal?  // $45.75
+  penaltyPay   Decimal?  // $102.25
+  totalPay     Decimal?  // $417.38
+  
+  // Optional fields
+  notes        String?
+  payPeriodId  String?
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payGuide     PayGuide  @relation(fields: [payGuideId], references: [id])
+  payPeriod    PayPeriod? @relation(fields: [payPeriodId], references: [id], onDelete: Cascade)
+  breakPeriods BreakPeriod[]
+  penaltySegments ShiftPenaltySegment[]
+  overtimeSegments ShiftOvertimeSegment[]
+
+  @@map("shifts")
+}
+
+// Persisted penalty segments applied to a shift
+model ShiftPenaltySegment {
+  id         String   @id @default(cuid())
+  shiftId    String
+  timeFrameId String? // optional reference to the originating penalty rule
+  name       String
+  multiplier Decimal
+  hours      Decimal
+  pay        Decimal
+  startTime  DateTime
+  endTime    DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  shift      Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  // Keep a soft link to PenaltyTimeFrame if it still exists; allow SetNull when removed
+  timeFrame  PenaltyTimeFrame? @relation("PenaltyTimeFrame_ShiftPenaltySegments", fields: [timeFrameId], references: [id], onDelete: SetNull)
+
+  @@index([shiftId])
+  @@index([startTime])
+  @@map("shift_penalty_segments")
+}
+
+// Persisted overtime segments applied to a shift
+model ShiftOvertimeSegment {
+  id         String   @id @default(cuid())
+  shiftId    String
+  timeFrameId String? // optional reference to the originating overtime rule
+  name       String
+  multiplier Decimal
+  hours      Decimal
+  pay        Decimal
+  startTime  DateTime
+  endTime    DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  shift      Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  timeFrame  OvertimeTimeFrame? @relation("OvertimeTimeFrame_ShiftOvertimeSegments", fields: [timeFrameId], references: [id], onDelete: SetNull)
+
+  @@index([shiftId])
+  @@index([startTime])
+  @@map("shift_overtime_segments")
+}
+
+// Break periods for shifts - source of truth for break timing
+model BreakPeriod {
+  id        String   @id @default(cuid())
+  shiftId   String
+  startTime DateTime
+  endTime   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@map("break_periods")
+}
+
+// Structured overtime rules with tiered multipliers
+model OvertimeTimeFrame {
+  id                    String   @id @default(cuid())
+  payGuideId            String
+  name                  String   // "Daily Overtime", "Sunday Overtime", etc.
+  firstThreeHoursMult   Decimal  // e.g., 1.75 for first 3 overtime hours
+  afterThreeHoursMult   Decimal  // e.g., 2.25 for hours beyond first 3
+  
+  // Conditions (null = applies to all)
+  dayOfWeek             Int?     // 0=Sunday, 1=Monday, ..., 6=Saturday
+  startTime             String?  // "HH:MM" local time
+  endTime               String?  // "HH:MM" local time
+  isPublicHoliday       Boolean  @default(false)
+  description           String?
+  
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  payGuide              PayGuide @relation(fields: [payGuideId], references: [id], onDelete: Cascade)
+  shiftSegments         ShiftOvertimeSegment[] @relation("OvertimeTimeFrame_ShiftOvertimeSegments")
+
+  @@map("overtime_time_frames")
+}
+
+// Public holidays for pay calculations
+model PublicHoliday {
+  id         String   @id @default(cuid())
+  payGuideId String
+  name       String   // "Christmas Day", "Boxing Day", etc.
+  date       DateTime // Date only (time ignored)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  payGuide   PayGuide @relation(fields: [payGuideId], references: [id], onDelete: Cascade)
+
+  @@map("public_holidays")
+}
+
+// Pay period management (fortnightly Australian standard)
+model PayPeriod {
+  id          String   @id @default(cuid())
+  userId      String
+  startDate   DateTime // Start of pay period (midnight UTC)
+  endDate     DateTime // End of pay period (23:59:59 UTC)
+  
+  // Status tracking
+  status      PayPeriodStatus @default(pending)
+  
+  // Calculated totals (cached)
+  totalHours  Decimal? // 76.5 hours
+  totalPay    Decimal? // $2,145.75 (gross pay)
+  
+  // Tax calculations (added for tax engine)
+  paygWithholding  Decimal? // PAYG tax withheld
+  stslAmount   Decimal? // HECS-HELP repayment amount
+  totalWithholdings Decimal? // Total tax withholdings
+  netPay           Decimal? // Net pay after tax
+  
+  // Verification against actual pay
+  actualPay   Decimal? // What was actually paid
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shifts      Shift[]
+  extras      PayPeriodExtra[]
+
+  @@unique([userId, startDate]) // Prevent duplicate pay periods
+  @@map("pay_periods")
+}
+
+// Additional taxable/non-taxable amounts applied to a pay period
+model PayPeriodExtra {
+  id           String   @id @default(cuid())
+  payPeriodId  String
+  type         String   // e.g., "uniform", "laundry", "allowance"
+  description  String?
+  amount       Decimal  // Positive numbers; use negative for deductions if needed
+  taxable      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  payPeriod    PayPeriod @relation(fields: [payPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([payPeriodId])
+  @@map("pay_period_extras")
+}
+
+// Default extras applied when creating new pay periods
+model PayPeriodExtraTemplate {
+  id          String   @id @default(cuid())
+  userId      String
+  label       String
+  description String?
+  amount      Decimal
+  taxable     Boolean  @default(true)
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("pay_period_extra_templates")
+}
+
+// User tax settings for PAYG withholding calculations
+model TaxSettings {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique // One tax setting per user
+  claimedTaxFreeThreshold Boolean  @default(true) // Most employees claim tax-free threshold
+  isForeignResident       Boolean  @default(false)
+  hasTaxFileNumber        Boolean  @default(true)
+  medicareExemption       String   @default("none") // "none", "half", "full"
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  // Relations
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tax_settings")
+}
+
+// Year-to-date tax tracking for accurate annual calculations
+model YearToDateTax {
+  id                String   @id @default(cuid())
+  userId            String
+  taxYear           String   // "2024-25" format
+  grossIncome       Decimal  @default(0)
+  payGWithholding   Decimal  @default(0)
+  stslAmount        Decimal  @default(0)
+  totalWithholdings Decimal  @default(0)
+  lastUpdated       DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taxYear]) // One record per user per tax year
+  @@map("year_to_date_tax")
+}
+
+// Tax coefficients for PAYG withholding calculations (ATO Schedule 1)
+model TaxCoefficient {
+  id            String   @id @default(cuid())
+  taxYear       String   // "2024-25" format
+  scale         String   // "scale1", "scale2", "scale3", "scale4", "scale5", "scale6"
+  earningsFrom  Decimal  // Weekly earnings threshold (lower bound)
+  earningsTo    Decimal? // Weekly earnings threshold (upper bound, null for highest bracket)
+  coefficientA  Decimal  // Multiplier in formula: (a × weekly earnings) - b
+  coefficientB  Decimal  // Constant adjustment in formula
+  description   String?  // Optional description of the bracket
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([taxYear, scale, earningsFrom]) // Prevent duplicate brackets
+  @@index([taxYear, scale, isActive])
+  @@map("tax_coefficients")
+}
+
+// Study and training support loans (STSL) component rates (Schedule 8)
+model StslRate {
+  id          String   @id @default(cuid())
+  taxYear     String
+  // Two groups per ATO Schedule 8: with tax‑free threshold (or foreign resident) vs no tax‑free threshold
+  // We'll use values: "WITH_TFT_OR_FR" and "NO_TFT"
+  scale       String
+  earningsFrom Decimal
+  earningsTo   Decimal?
+  coefficientA  Decimal // 'a' in y = a*x - b
+  coefficientB  Decimal // 'b' in y = a*x - b
+  description  String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([taxYear, scale, earningsFrom])
+  @@index([taxYear, scale, isActive])
+  @@map("stsl_rates")
+}
+
+// Tax rate configuration metadata (Medicare rates, thresholds, etc.)
+model TaxRateConfig {
+  id                           String   @id @default(cuid())
+  taxYear                      String   @unique // "2024-25" format
+  description                  String?
+  isActive                     Boolean  @default(true)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@map("tax_rate_configs")
+}

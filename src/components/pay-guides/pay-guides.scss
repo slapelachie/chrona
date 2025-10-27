@@ -1,0 +1,27 @@
+.pay-guides__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  border: 1px solid var(--color-border-secondary);
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+}
+
+.pay-guides__chip--positive {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.pay-guides__chip--neutral {
+  border-color: var(--color-border-secondary);
+  color: var(--color-text-secondary);
+}
+
+.pay-guides__chip--info {
+  border-color: var(--color-info);
+  color: var(--color-info);
+}
+

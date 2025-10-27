@@ -1,0 +1,5 @@
+Update the shifts API to use the new layout for the interfaces. It should do the   │
+│   calculations for the rates. There is also no more casualLoading variable as it is  │
+│   now calculated under penalties. It needs to follow CRUD and DRY and should have    │
+│   tests created to ensure basic functionality works. When returning the shift, the   │
+│   break periods should also be returned nested in the shift object. Remove the previously used breakMinutes from the schema and any calls.

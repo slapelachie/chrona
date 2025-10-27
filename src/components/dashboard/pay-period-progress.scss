@@ -1,0 +1,214 @@
+// Pay Period Progress Component Styles
+
+.pay-period-progress {
+  &__title {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-md);
+    margin-top: 0;
+  }
+  
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+  }
+  
+  &__dates {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: var(--color-text-primary);
+    font-weight: 600;
+    font-size: var(--font-size-base);
+    
+    svg {
+      color: var(--color-primary);
+    }
+  }
+  
+  &__remaining {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+  }
+  
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+  }
+}
+
+// Progress Section
+.progress-section {
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  &__label {
+    font-weight: 600;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base);
+  }
+  
+  &__value {
+    font-weight: 700;
+    color: var(--color-primary);
+    font-size: var(--font-size-lg);
+    font-family: var(--font-family-mono);
+  }
+}
+
+// Progress Bar
+.progress-bar {
+  width: 100%;
+  height: 12px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  position: relative;
+  
+  &__fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    border-radius: var(--radius-xl);
+    transition: width 0.6s ease-in-out;
+    position: relative;
+  }
+}
+
+// Pay Period Stats
+.pay-period-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  
+  @media (max-width: 576px) {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+}
+
+.pay-period-stat {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-primary);
+  
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    background-color: var(--color-primary);
+    color: var(--color-bg-primary);
+    flex-shrink: 0;
+    
+    @media (max-width: 576px) {
+      width: 32px;
+      height: 32px;
+      
+      svg {
+        width: 16px;
+        height: 16px;
+      }
+    }
+  }
+  
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    flex: 1;
+    min-width: 0;
+  }
+  
+  &__value {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: var(--line-height-tight);
+    
+    @media (max-width: 576px) {
+      font-size: var(--font-size-base);
+    }
+  }
+  
+  &__label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: var(--line-height-tight);
+    
+    @media (max-width: 576px) {
+      font-size: var(--font-size-xs);
+    }
+  }
+}
+
+// Mini Progress Bar
+.mini-progress-bar {
+  width: 100%;
+  height: 4px;
+  background-color: var(--color-bg-elevated);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-top: var(--spacing-xs);
+  
+  &__fill {
+    height: 100%;
+    background-color: var(--color-primary);
+    border-radius: var(--radius-sm);
+    transition: width 0.4s ease-in-out;
+  }
+}
+
+// Mobile optimizations
+@media (max-width: 576px) {
+  .pay-period-progress {
+    &__header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--spacing-xs);
+    }
+    
+    &__dates {
+      font-size: var(--font-size-sm);
+    }
+    
+    &__remaining {
+      font-size: var(--font-size-xs);
+    }
+  }
+  
+  .progress-section {
+    &__value {
+      font-size: var(--font-size-base);
+    }
+  }
+}
+
+// Reduced motion support
+@media (prefers-reduced-motion: reduce) {
+  .progress-bar__fill {
+    transition: none;
+    
+    &::after {
+      animation: none;
+    }
+  }
+  
+  .mini-progress-bar__fill {
+    transition: none;
+  }
+}
