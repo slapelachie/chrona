@@ -1,12 +1,18 @@
 # syntax=docker.io/docker/dockerfile:1
 
+ARG NODE_ENV=production
+ARG NEXT_TELEMETRY_DISABLED=1
+ARG PORT=3000
+ARG TZ=UTC
+
 FROM node:20-alpine AS base
+ARG TZ
+ENV TZ=${TZ}
+RUN apk add --no-cache libc6-compat tzdata
+WORKDIR /app
 
 # Install dependencies only when needed
 FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
@@ -20,7 +26,8 @@ RUN \
 
 # Rebuild the source code only when needed
 FROM base AS builder
-WORKDIR /app
+ARG NEXT_TELEMETRY_DISABLED
+ENV NEXT_TELEMETRY_DISABLED=${NEXT_TELEMETRY_DISABLED}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
@@ -40,11 +47,14 @@ RUN \
 
 # Production image, copy all the files and run next
 FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-# Uncomment the following line in case you want to disable telemetry during runtime.
-ENV NEXT_TELEMETRY_DISABLED=1
+ARG NODE_ENV
+ARG NEXT_TELEMETRY_DISABLED
+ARG PORT
+ARG TZ
+ENV NODE_ENV=${NODE_ENV}
+ENV NEXT_TELEMETRY_DISABLED=${NEXT_TELEMETRY_DISABLED}
+ENV PORT=${PORT}
+ENV TZ=${TZ}
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -62,8 +72,6 @@ RUN chmod +x ./start.sh
 
 USER nextjs
 
-EXPOSE 3000
-
-ENV PORT=3000
+EXPOSE ${PORT}
 
 CMD ["./start.sh"]
