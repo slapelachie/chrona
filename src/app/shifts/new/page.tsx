@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { Suspense } from 'react'
 import { AppShell } from '@/components/layout'
 import { ShiftForm } from '@/components/shifts'
 
@@ -12,7 +12,9 @@ export default function NewShiftPage() {
       showBackButton={true}
       backButtonHref="/timeline"
     >
-      <ShiftForm mode="create" />
+      <Suspense fallback={null /* or a small skeleton */}>
+        <ShiftForm mode="create" />
+      </Suspense>
     </AppShell>
   )
 }

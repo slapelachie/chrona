@@ -6,13 +6,12 @@ import { TimeCalculations } from './calculations/time-calculations'
 
 /**
  * Pay Period Sync Service
- * 
+ *
  * Handles automatic synchronization of pay period totals and tax calculations
  * whenever shifts are added, modified, or deleted. This ensures data consistency
  * across all related entities without requiring manual intervention.
  */
 export class PayPeriodSyncService {
-  
   /**
    * Synchronizes a pay period after shift changes
    * This is the main entry point for automatic updates
@@ -21,11 +20,9 @@ export class PayPeriodSyncService {
     try {
       // Step 1: Recalculate pay period totals from shifts
       await this.updatePayPeriodTotals(payPeriodId)
-      
+
       // Step 2: Trigger tax calculation if pay period has calculated totals
       await this.updatePayPeriodTaxes(payPeriodId)
-      
-      console.log(`✅ Pay period ${payPeriodId} synchronized successfully`)
     } catch (error) {
       console.error(`❌ Failed to sync pay period ${payPeriodId}:`, error)
       // Don't re-throw to avoid breaking the original operation
@@ -38,7 +35,7 @@ export class PayPeriodSyncService {
    */
   static async syncMultiplePayPeriods(payPeriodIds: string[]): Promise<void> {
     const uniqueIds = [...new Set(payPeriodIds.filter(Boolean))]
-    
+
     for (const payPeriodId of uniqueIds) {
       await this.syncPayPeriod(payPeriodId)
     }
@@ -47,10 +44,12 @@ export class PayPeriodSyncService {
   /**
    * Updates pay period totals by recalculating from all shifts
    */
-  private static async updatePayPeriodTotals(payPeriodId: string): Promise<PayPeriod> {
+  private static async updatePayPeriodTotals(
+    payPeriodId: string
+  ): Promise<PayPeriod> {
     const payPeriod = await prisma.payPeriod.findUnique({
       where: { id: payPeriodId },
-      include: { shifts: true, extras: true }
+      include: { shifts: true, extras: true },
     })
 
     if (!payPeriod) {
@@ -59,12 +58,18 @@ export class PayPeriodSyncService {
 
     // Calculate totals from all shifts in the pay period
     const totalHours = payPeriod.shifts.reduce(
-      (sum, shift) => sum.plus(shift.totalHours || new Decimal(0)), 
+      (sum, shift) => sum.plus(shift.totalHours || new Decimal(0)),
       new Decimal(0)
     )
-    
-    const shiftsPay = payPeriod.shifts.reduce((sum, shift) => sum.plus(shift.totalPay || new Decimal(0)), new Decimal(0))
-    const extrasPay = (payPeriod.extras || []).reduce((sum, ex) => sum.plus(ex.amount || new Decimal(0)), new Decimal(0))
+
+    const shiftsPay = payPeriod.shifts.reduce(
+      (sum, shift) => sum.plus(shift.totalPay || new Decimal(0)),
+      new Decimal(0)
+    )
+    const extrasPay = (payPeriod.extras || []).reduce(
+      (sum, ex) => sum.plus(ex.amount || new Decimal(0)),
+      new Decimal(0)
+    )
     const totalPay = shiftsPay.plus(extrasPay)
 
     // Update pay period with calculated totals
@@ -74,29 +79,29 @@ export class PayPeriodSyncService {
         totalHours: TimeCalculations.roundToHours(totalHours),
         totalPay: TimeCalculations.roundToCents(totalPay),
         updatedAt: new Date(),
-      }
+      },
     })
 
-    console.log(`📊 Updated pay period totals: ${totalHours.toFixed(2)}h, $${totalPay.toFixed(2)}`)
     return updatedPayPeriod as PayPeriod
   }
 
   /**
    * Updates tax calculations for a pay period if it has calculated totals
    */
-  private static async updatePayPeriodTaxes(payPeriodId: string): Promise<void> {
+  private static async updatePayPeriodTaxes(
+    payPeriodId: string
+  ): Promise<void> {
     const payPeriod = await prisma.payPeriod.findUnique({
       where: { id: payPeriodId },
-      select: { 
-        id: true, 
-        totalPay: true, 
+      select: {
+        id: true,
+        totalPay: true,
         status: true,
-        shifts: { select: { id: true } }
-      }
+        shifts: { select: { id: true } },
+      },
     })
 
     if (!payPeriod) {
-      console.log(`⚠️ Pay period ${payPeriodId} not found for tax calculation`)
       return
     }
 
@@ -105,26 +110,25 @@ export class PayPeriodSyncService {
     // 2. Pay period has shifts
     // 3. Pay period is pending verification
     if (!payPeriod.totalPay || payPeriod.totalPay.isZero()) {
-      console.log(`⚠️ Pay period ${payPeriodId} has no total pay, skipping tax calculation`)
       return
     }
 
     if (payPeriod.shifts.length === 0) {
-      console.log(`⚠️ Pay period ${payPeriodId} has no shifts, skipping tax calculation`)
       return
     }
 
     if (payPeriod.status !== 'pending') {
-      console.log(`⚠️ Pay period ${payPeriodId} status is ${payPeriod.status}, skipping tax calculation`)
       return
     }
 
     try {
       // Calculate taxes using the existing service
       await PayPeriodTaxService.calculatePayPeriodTax(payPeriodId)
-      console.log(`💰 Updated tax calculations for pay period ${payPeriodId}`)
     } catch (error) {
-      console.error(`❌ Failed to calculate taxes for pay period ${payPeriodId}:`, error)
+      console.error(
+        `❌ Failed to calculate taxes for pay period ${payPeriodId}:`,
+        error
+      )
       // Don't re-throw - tax calculation failure shouldn't break the sync
     }
   }
@@ -135,7 +139,7 @@ export class PayPeriodSyncService {
   static async onShiftCreated(shiftId: string): Promise<void> {
     const shift = await prisma.shift.findUnique({
       where: { id: shiftId },
-      select: { payPeriodId: true }
+      select: { payPeriodId: true },
     })
 
     if (shift?.payPeriodId) {
@@ -147,14 +151,19 @@ export class PayPeriodSyncService {
    * Synchronizes pay periods after a shift is updated
    * Handles cases where shift may have moved between pay periods
    */
-  static async onShiftUpdated(shiftId: string, previousPayPeriodId?: string): Promise<void> {
+  static async onShiftUpdated(
+    shiftId: string,
+    previousPayPeriodId?: string
+  ): Promise<void> {
     const shift = await prisma.shift.findUnique({
       where: { id: shiftId },
-      select: { payPeriodId: true }
+      select: { payPeriodId: true },
     })
 
     // Sync both old and new pay periods if different
-    const payPeriodsToSync = [shift?.payPeriodId, previousPayPeriodId].filter(Boolean) as string[]
+    const payPeriodsToSync = [shift?.payPeriodId, previousPayPeriodId].filter(
+      Boolean
+    ) as string[]
     await this.syncMultiplePayPeriods(payPeriodsToSync)
   }
 
@@ -168,7 +177,7 @@ export class PayPeriodSyncService {
       // Check whether the pay period still has any shifts or extras
       const period = await prisma.payPeriod.findUnique({
         where: { id: payPeriodId },
-        include: { _count: { select: { shifts: true, extras: true } } }
+        include: { _count: { select: { shifts: true, extras: true } } },
       })
 
       if (!period) {
@@ -182,14 +191,16 @@ export class PayPeriodSyncService {
       // Relaxed: delete regardless of status
       if (!hasShifts && !hasExtras) {
         await prisma.payPeriod.delete({ where: { id: payPeriodId } })
-        console.log(`🧹 Deleted empty pay period ${payPeriodId} after final shift removal`)
         return
       }
 
       // Otherwise, keep the period and resync totals/taxes
       await this.syncPayPeriod(payPeriodId)
     } catch (err) {
-      console.error(`Failed handling onShiftDeleted for pay period ${payPeriodId}:`, err)
+      console.error(
+        `Failed handling onShiftDeleted for pay period ${payPeriodId}:`,
+        err
+      )
     }
   }
 
@@ -200,7 +211,7 @@ export class PayPeriodSyncService {
   static async onBreakPeriodsChanged(shiftId: string): Promise<void> {
     const shift = await prisma.shift.findUnique({
       where: { id: shiftId },
-      select: { payPeriodId: true }
+      select: { payPeriodId: true },
     })
 
     if (shift?.payPeriodId) {
@@ -229,7 +240,7 @@ export class PayPeriodSyncService {
   }> {
     const payPeriod = await prisma.payPeriod.findUnique({
       where: { id: payPeriodId },
-      include: { shifts: true }
+      include: { shifts: true },
     })
 
     if (!payPeriod) {
@@ -238,12 +249,12 @@ export class PayPeriodSyncService {
 
     // Calculate expected totals from shifts
     const expectedTotalHours = payPeriod.shifts.reduce(
-      (sum, shift) => sum.plus(shift.totalHours || new Decimal(0)), 
+      (sum, shift) => sum.plus(shift.totalHours || new Decimal(0)),
       new Decimal(0)
     )
-    
+
     const expectedTotalPay = payPeriod.shifts.reduce(
-      (sum, shift) => sum.plus(shift.totalPay || new Decimal(0)), 
+      (sum, shift) => sum.plus(shift.totalPay || new Decimal(0)),
       new Decimal(0)
     )
 
@@ -254,23 +265,24 @@ export class PayPeriodSyncService {
     const payDiff = expectedTotalPay.minus(actualTotalPay).abs()
 
     // Allow small rounding differences (1 minute for hours, 1 cent for pay)
-    const isValid = hoursDiff.lessThanOrEqualTo(new Decimal('0.017')) && // ~1 minute
-                   payDiff.lessThanOrEqualTo(new Decimal('0.01')) // 1 cent
+    const isValid =
+      hoursDiff.lessThanOrEqualTo(new Decimal('0.017')) && // ~1 minute
+      payDiff.lessThanOrEqualTo(new Decimal('0.01')) // 1 cent
 
     return {
       isValid,
       expected: {
         totalHours: TimeCalculations.roundToHours(expectedTotalHours),
-        totalPay: TimeCalculations.roundToCents(expectedTotalPay)
+        totalPay: TimeCalculations.roundToCents(expectedTotalPay),
       },
       actual: {
         totalHours: payPeriod.totalHours,
-        totalPay: payPeriod.totalPay
+        totalPay: payPeriod.totalPay,
       },
       differences: {
         hours: hoursDiff,
-        pay: payDiff
-      }
+        pay: payDiff,
+      },
     }
   }
 }

@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: chrona_postgres
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: change_me_in_prod
+      TZ: Australia/Brisbane
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    networks: [default]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U appuser -d appdb']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chrona_web
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.production # 👈 use production env file
+    environment:
+      TZ: Australia/Brisbane
+      DB_HOST: chrona_postgres
+      # DB_USER: appuser
+      # DB_PASSWORD: change_me_in_prod
+      # DB_NAME: appdb
+      # DB_PORT: 5432
+    restart: always
+
+volumes:
+  postgres_data:

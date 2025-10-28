@@ -86,3 +86,6 @@ temp/
 *.db
 
 .code/
+
+.env
+.env.production

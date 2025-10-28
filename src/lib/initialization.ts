@@ -33,7 +33,7 @@ export async function performInitialSetup(payload: InitPayload) {
   }
 
   const user = await prisma.user.create({
-    data: { name, email, timezone, payPeriodType }
+    data: { name, email, timezone, payPeriodType },
   })
 
   // Create default tax settings; other tax tables are optional and can be configured later
@@ -44,7 +44,7 @@ export async function performInitialSetup(payload: InitPayload) {
       isForeignResident: false,
       hasTaxFileNumber: true,
       medicareExemption: 'none',
-    }
+    },
   })
 
   return { user, created: true }
