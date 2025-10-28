@@ -26,26 +26,26 @@ export async function performInitialSetup(payload: InitPayload) {
   const timezone = payload.timezone || 'Australia/Sydney'
   const payPeriodType = payload.payPeriodType || 'WEEKLY'
 
-  // Idempotent: if a user already exists, just return it
-  const existing = await prisma.user.findFirst()
-  if (existing) {
-    return { user: existing, created: false }
-  }
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.user.findFirst()
+    if (existing) {
+      return { user: existing, created: false }
+    }
 
-  const user = await prisma.user.create({
-    data: { name, email, timezone, payPeriodType },
+    const user = await tx.user.create({
+      data: { name, email, timezone, payPeriodType },
+    })
+
+    await tx.taxSettings.create({
+      data: {
+        userId: user.id,
+        claimedTaxFreeThreshold: true,
+        isForeignResident: false,
+        hasTaxFileNumber: true,
+        medicareExemption: 'none',
+      },
+    })
+
+    return { user, created: true }
   })
-
-  // Create default tax settings; other tax tables are optional and can be configured later
-  await prisma.taxSettings.create({
-    data: {
-      userId: user.id,
-      claimedTaxFreeThreshold: true,
-      isForeignResident: false,
-      hasTaxFileNumber: true,
-      medicareExemption: 'none',
-    },
-  })
-
-  return { user, created: true }
 }

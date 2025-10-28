@@ -118,6 +118,15 @@ Rebuild Chrona as a mobile-first Australian casual pay tracker using **test-firs
 
 ### API Design
 - RESTful endpoints with proper error handling
+- First-run guard: `/setup` is the only page accessible until the initial workspace is created
+- Use `/api/setup/status` for health diagnostics (migrations applied, DB reachable)
+- `/api/setup/init` validates payloads server-side and returns structured error codes (e.g. `user_exists`)
+
+### First-Time Setup Flow
+- A global middleware redirects every request to `/setup` until the application has at least one user record; API requests receive a `503` with `redirectTo: '/setup'`
+- `docker/start.sh` and `/api/setup/status` expose environment controls (`SKIP_DB_WAIT`, `SKIP_PRISMA_MIGRATE`, `SERVER_ENTRYPOINT`) for CI/staging bootstrap scenarios
+- The setup form now runs client-side validation, surfaces inline errors, and prevents duplicate submissions while initialization is in flight
+- Initialization executes inside a Prisma transaction to ensure idempotency and to avoid partial writes when multiple requests race
 - Server-side validation and calculations
 - Timezone-aware date/time handling
 - Cursor-based pagination for performance
