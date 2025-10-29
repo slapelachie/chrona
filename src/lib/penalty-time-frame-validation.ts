@@ -3,33 +3,10 @@ import {
   ValidationResult,
   validateString,
   validateDecimal,
-  validateNumber,
+  validateTimeString,
+  validateDayOfWeek,
 } from '@/lib/validation'
 import { CreatePenaltyTimeFrameRequest, UpdatePenaltyTimeFrameRequest } from '@/types'
-
-export const validateTimeString = (time: string, field: string, validator: ValidationResult): boolean => {
-  if (!validateString(time, field, validator)) return false
-  
-  // Validate HH:MM format
-  const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-  if (!timeRegex.test(time)) {
-    validator.addError(field, `${field} must be in HH:MM format (24-hour)`)
-    return false
-  }
-  
-  return true
-}
-
-export const validateDayOfWeek = (dayOfWeek: number, field: string, validator: ValidationResult): boolean => {
-  if (!validateNumber(dayOfWeek, field, validator, { min: 0, max: 6 })) return false
-  
-  if (!Number.isInteger(dayOfWeek)) {
-    validator.addError(field, `${field} must be an integer between 0 (Sunday) and 6 (Saturday)`)
-    return false
-  }
-  
-  return true
-}
 
 export const validatePenaltyTimeFrameFields = (
   data: CreatePenaltyTimeFrameRequest | UpdatePenaltyTimeFrameRequest,

@@ -183,6 +183,38 @@ export const validateDate = (value: any, field: string, validator: ValidationRes
   return true
 }
 
+export const validateTimeString = (
+  time: any,
+  field: string,
+  validator: ValidationResult,
+): boolean => {
+  if (!validateString(time, field, validator)) return false
+
+  const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+  if (!timeRegex.test(time)) {
+    validator.addError(field, `${field} must be in HH:MM format (24-hour)`)
+    return false
+  }
+
+  return true
+}
+
+export const validateDayOfWeek = (
+  dayOfWeek: any,
+  field: string,
+  validator: ValidationResult,
+): boolean => {
+  if (!validateNumber(dayOfWeek, field, validator, { min: 0, max: 6 })) return false
+
+  const numericDay = typeof dayOfWeek === 'number' ? dayOfWeek : Number(dayOfWeek)
+  if (!Number.isInteger(numericDay)) {
+    validator.addError(field, `${field} must be an integer between 0 (Sunday) and 6 (Saturday)`)
+    return false
+  }
+
+  return true
+}
+
 export const validateDateRange = (
   startDate: any, 
   endDate: any, 

@@ -1,12 +1,13 @@
 import { Decimal } from 'decimal.js'
 import { prisma } from '@/lib/db'
-import { 
+import {
   PayPeriod,
   TaxSettings,
   YearToDateTax,
   TaxCalculationResult,
-  PayPeriodType
+  PayPeriodType,
 } from '@/types'
+import { getCurrentAuTaxYearString, getTaxYearStringFromDate } from '@/lib/tax-year'
 // TaxCalculator is imported dynamically inside methods to play nicely with test mocks
 
 /**
@@ -46,7 +47,7 @@ export class PayPeriodTaxService {
     const taxSettings = await this.getOrCreateTaxSettings(payPeriod.userId)
     
     // Get tax year from pay period dates (not current date)
-    const taxYear = this.getTaxYearFromDate(payPeriod.startDate)
+    const taxYear = getTaxYearStringFromDate(payPeriod.startDate)
     const yearToDateTax = await this.getOrCreateYearToDateTax(payPeriod.userId, taxYear)
 
     // Initialize tax calculator using database coefficients for the pay period's tax year
@@ -106,7 +107,7 @@ export class PayPeriodTaxService {
     const taxSettings = await this.getOrCreateTaxSettings(userId)
     
     // Get year-to-date tax tracking
-    const currentTaxYear = taxYear || this.getCurrentTaxYear()
+    const currentTaxYear = taxYear || getCurrentAuTaxYearString()
     let yearToDateTax: YearToDateTax
     try {
       yearToDateTax = await this.getOrCreateYearToDateTax(userId, currentTaxYear)
@@ -223,27 +224,6 @@ export class PayPeriodTaxService {
   }
 
   /**
-   * Get Australian tax year from a specific date (July 1 - June 30)
-   */
-  private static getTaxYearFromDate(date: Date): string {
-    const year = date.getFullYear()
-    
-    // Australian tax year runs from July 1 to June 30
-    if (date.getMonth() >= 6) { // July (6) onwards
-      return `${year}-${(year + 1) % 100}`
-    } else {
-      return `${year - 1}-${year % 100}`
-    }
-  }
-
-  /**
-   * Get current Australian tax year (July 1 - June 30)
-   */
-  private static getCurrentTaxYear(): string {
-    return this.getTaxYearFromDate(new Date())
-  }
-
-  /**
    * Get user's tax settings
    */
   static async getUserTaxSettings(userId: string): Promise<TaxSettings> {
@@ -277,7 +257,7 @@ export class PayPeriodTaxService {
    * Get year-to-date tax summary for a user
    */
   static async getYearToDateTaxSummary(userId: string, taxYear?: string): Promise<YearToDateTax> {
-    const currentTaxYear = taxYear || this.getCurrentTaxYear()
+    const currentTaxYear = taxYear || getCurrentAuTaxYearString()
     return await this.getOrCreateYearToDateTax(userId, currentTaxYear)
   }
 }

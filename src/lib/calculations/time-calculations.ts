@@ -47,12 +47,6 @@ export class TimeCalculations {
     return amount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
   }
 
-  // Round down to the nearest whole dollar (ignore cents)
-  static roundDownToDollar(amount: Decimal): Decimal {
-    // For non-negative amounts (taxes), this floors cents
-    return amount.toDecimalPlaces(0, Decimal.ROUND_FLOOR)
-  }
-
   // Round to the nearest whole dollar (half up)
   static roundToNearestDollar(amount: Decimal): Decimal {
     return amount.toDecimalPlaces(0, Decimal.ROUND_HALF_UP)

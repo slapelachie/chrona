@@ -1,18 +1,13 @@
 import { PenaltyTimeFrameResponse, PenaltyTimeFrame } from '@/types'
+import { transformTimeFrameBase } from '@/lib/time-frame-response'
 
-export const transformPenaltyTimeFrameToResponse = (penaltyTimeFrame: PenaltyTimeFrame & { createdAt: Date, updatedAt: Date }): PenaltyTimeFrameResponse => {
+export const transformPenaltyTimeFrameToResponse = (
+  penaltyTimeFrame: PenaltyTimeFrame & { createdAt: Date; updatedAt: Date },
+): PenaltyTimeFrameResponse => {
+  const base = transformTimeFrameBase(penaltyTimeFrame)
+
   return {
-    id: penaltyTimeFrame.id,
-    payGuideId: penaltyTimeFrame.payGuideId,
-    name: penaltyTimeFrame.name,
+    ...base,
     multiplier: penaltyTimeFrame.multiplier.toString(),
-    dayOfWeek: penaltyTimeFrame.dayOfWeek,
-    isPublicHoliday: penaltyTimeFrame.isPublicHoliday,
-    startTime: penaltyTimeFrame.startTime,
-    endTime: penaltyTimeFrame.endTime,
-    description: penaltyTimeFrame.description,
-    isActive: penaltyTimeFrame.isActive,
-    createdAt: penaltyTimeFrame.createdAt.toISOString(),
-    updatedAt: penaltyTimeFrame.updatedAt.toISOString(),
   }
 }
