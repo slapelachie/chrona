@@ -1,7 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button, Card, Input, Toggle, Alert } from '@/components/ui'
 import { PayGuideListItem, PayGuidesListResponse } from '@/types'
@@ -14,7 +13,7 @@ export const PayGuidesList: React.FC = () => {
   const [activeOnly, setActiveOnly] = useState(true)
   const [query, setQuery] = useState('')
 
-  const fetchGuides = async () => {
+  const fetchGuides = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
@@ -28,9 +27,9 @@ export const PayGuidesList: React.FC = () => {
     } catch (e: any) {
       setError(e.message)
     } finally { setLoading(false) }
-  }
+  }, [activeOnly])
 
-  useEffect(() => { fetchGuides() }, [activeOnly])
+  useEffect(() => { fetchGuides() }, [fetchGuides])
 
   const filtered = useMemo(() => items.filter(i => i.name.toLowerCase().includes(query.toLowerCase())), [items, query])
 

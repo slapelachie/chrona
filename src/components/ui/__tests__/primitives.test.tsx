@@ -1,7 +1,6 @@
 import type { ChangeEvent } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { Select, Toggle, Alert, Card, CardBody } from '@/components/ui'
 
 describe('UI primitives', () => {

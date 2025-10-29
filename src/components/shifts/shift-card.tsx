@@ -15,14 +15,12 @@ import './shift-card.scss'
 interface ShiftCardProps {
   shift: ShiftListItem
   onClick?: () => void
-  showActions?: boolean
   showDate?: boolean
 }
 
 export const ShiftCard: React.FC<ShiftCardProps> = ({
   shift,
   onClick,
-  showActions = false,
   showDate = true
 }) => {
   const formatDate = (date: Date | string) => {

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { Card, CardHeader, CardBody } from '../ui'
+import { Card, CardBody } from '../ui'
 import { Calendar, Clock, MapPin, DollarSign, ChevronRight } from 'lucide-react'
 import './upcoming-shifts.scss'
 
@@ -86,7 +86,7 @@ export const UpcomingShifts: React.FC = () => {
         const res = await fetch('/api/dashboard/summary', { cache: 'no-store' })
         const json = await res.json()
         if (!cancelled) setItems(json?.data?.upcomingShifts ?? [])
-      } catch (_) {
+      } catch {
         if (!cancelled) setItems([])
       }
     }

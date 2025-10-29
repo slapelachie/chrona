@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardBody, Button, Input } from '../ui'
 import {
   Calendar,
@@ -27,14 +27,6 @@ interface PayGuide {
   effectiveFrom: string
   effectiveTo?: string
   timezone?: string
-}
-
-interface PayPreview {
-  totalHours: string
-  basePay: string
-  overtimePay: string
-  penaltyPay: string
-  totalPay: string
 }
 
 interface ShiftFormProps {
@@ -65,7 +57,6 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   })
 
   const [payGuides, setPayGuides] = useState<PayGuide[]>([])
-  const [payPreview, setPayPreview] = useState<PayPreview | null>(null)
   const [payCalculation, setPayCalculation] =
     useState<PayCalculationResult | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -125,7 +116,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       setInitialLoading(false)
       setInitialBreakPeriods([])
     }
-  }, [mode, shiftId])
+  }, [fetchPayGuides, fetchShiftData, fetchUser, mode, shiftId])
 
   // Fetch pay preview when form data changes
   useEffect(() => {
@@ -136,7 +127,6 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
 
       return () => clearTimeout(timeoutId)
     } else {
-      setPayPreview(null)
       setPayCalculation(null)
     }
   }, [
@@ -144,6 +134,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     formData.startTime,
     formData.endTime,
     formData.breakPeriods,
+    fetchPayPreview,
   ])
 
   const dismissBanner = () => {
@@ -157,7 +148,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     router.replace(nextPath as Route)
   }
 
-  const fetchPayGuides = async () => {
+  const fetchPayGuides = useCallback(async () => {
     try {
       const response = await fetch('/api/pay-rates?active=true&limit=50&include=metadata')
       if (response.ok) {
@@ -167,9 +158,9 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     } catch (error) {
       console.error('Failed to fetch pay guides:', error)
     }
-  }
+  }, [])
 
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       const response = await fetch('/api/user')
       if (!response.ok) return
@@ -183,7 +174,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     } catch (error) {
       console.error('Failed to fetch user context:', error)
     }
-  }
+  }, [])
 
   // Auto-select default pay guide for new shifts if available
   useEffect(() => {
@@ -208,7 +199,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     }
   }, [formData.payGuideId, payGuides])
 
-  const fetchShiftData = async () => {
+  const fetchShiftData = useCallback(async () => {
     if (!shiftId) return
 
     try {
@@ -241,9 +232,9 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     } finally {
       setInitialLoading(false)
     }
-  }
+  }, [shiftId])
 
-  const fetchPayPreview = async () => {
+  const fetchPayPreview = useCallback(async () => {
     try {
       setPreviewLoading(true)
 
@@ -272,24 +263,13 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
 
         // Store the complete calculation for breakdown
         setPayCalculation(calculation)
-
-        // Transform the PayCalculationResult to PayPreview format for backward compatibility
-        const preview: PayPreview = {
-          totalHours: calculation.shift.totalHours.toString(),
-          basePay: calculation.breakdown.basePay.toString(),
-          overtimePay: calculation.breakdown.overtimePay.toString(),
-          penaltyPay: calculation.breakdown.penaltyPay.toString(),
-          totalPay: calculation.breakdown.totalPay.toString(),
-        }
-
-        setPayPreview(preview)
       }
     } catch (error) {
       console.error('Failed to fetch pay preview:', error)
     } finally {
       setPreviewLoading(false)
     }
-  }
+  }, [formData.breakPeriods, formData.endTime, formData.payGuideId, formData.startTime])
 
   const formatDateTimeLocal = (date: Date): string => {
     const year = date.getFullYear()
@@ -644,8 +624,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       breakPeriods: [],
     })
     setErrors({})
-    setPayPreview(null)
-    setPayCalculation(null)
+      setPayCalculation(null)
     setPreviewLoading(false)
   }
 
@@ -813,7 +792,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
         endTime: storedEnd ?? prev.endTime,
       }
     })
-  }, [mode])
+  }, [fallbackShiftDurationMs, mode])
 
   if (initialLoading) {
     return (

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Card, Input, Alert } from '@/components/ui'
 import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import './tax-admin.scss'
@@ -21,29 +21,6 @@ interface Props {
 
 const SCALES = ['scale1','scale2','scale3','scale4','scale5','scale6']
 
-function ScalePicker({ value, onChange }: { value: string; onChange: (s: string) => void }) {
-  return (
-    <div className="tax-admin__scale-picker">
-      {SCALES.map((s) => {
-        const isActive = value === s
-        return (
-          <Button
-            key={s}
-            type="button"
-            size="sm"
-            variant={isActive ? 'primary' : 'ghost'}
-            onClick={() => onChange(s)}
-            aria-pressed={isActive}
-            className="tax-admin__scale-option"
-          >
-            {s.replace('scale', 'Scale ')}
-          </Button>
-        )
-      })}
-    </div>
-  )
-}
-
 import { getCurrentAuTaxYearString } from '@/lib/tax-year'
 
 export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurrentAuTaxYearString() }) => {
@@ -56,7 +33,7 @@ export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurren
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => Object.fromEntries(SCALES.map(s => [s, true])) as Record<string, boolean>)
   const [currentScale, setCurrentScale] = useState<string>('')
 
-  const fetchRows = async () => {
+  const fetchRows = useCallback(async () => {
     setLoading(true); setErr(null); setMsg(null)
     try {
       const q = new URLSearchParams({ taxYear })
@@ -65,9 +42,9 @@ export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurren
       if (!res.ok) throw new Error(json?.error || 'Failed to load coefficients')
       setRows(json.data as Coeff[])
     } catch (e: any) { setErr(e.message) } finally { setLoading(false) }
-  }
+  }, [taxYear])
 
-  useEffect(() => { fetchRows() }, [taxYear])
+  useEffect(() => { fetchRows() }, [fetchRows])
 
   const grouped = useMemo(() => {
     const map = Object.fromEntries(SCALES.map(s => [s, [] as Coeff[]])) as Record<string, Coeff[]>
@@ -89,7 +66,7 @@ export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurren
 
   const [violations, setViolations] = useState<Record<string, string | null>>({})
 
-  const recomputeValidation = (draft: Coeff[] = rows) => {
+  const recomputeValidation = useCallback((draft: Coeff[] = rows) => {
     const v: Record<string, string | null> = {}
     for (const s of SCALES) {
       const list = draft.filter(r => r.scale === s)
@@ -103,9 +80,9 @@ export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurren
     }
     setViolations(v)
     return v
-  }
+  }, [rows])
 
-  useEffect(() => { recomputeValidation() }, [rows])
+  useEffect(() => { recomputeValidation() }, [recomputeValidation])
 
   const save = async () => {
     setSaving(true); setErr(null); setMsg(null)
@@ -252,7 +229,7 @@ export const CoefficientsEditor: React.FC<Props> = ({ initialTaxYear = getCurren
                   <div>Description</div>
                   <div className="text-secondary" style={{ textAlign: 'right' }}>Reorder</div>
                 </div>
-                {list.map((r, localIdx) => {
+                {list.map((r) => {
                   // compute global index for update/remove operations
                   const idx = rows.indexOf(r)
                   return (

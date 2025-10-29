@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { Decimal } from 'decimal.js'
 
 // POST /api/admin/maintenance/reprocess
 // Re-sync all pay periods (totals + taxes) and recompute YTD per tax year
-export async function POST(_request: NextRequest) {
+export async function POST() {
   try {
     const user = await prisma.user.findFirst({ select: { id: true, payPeriodType: true } })
     if (!user) {

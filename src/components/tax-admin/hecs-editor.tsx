@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { Button, Card, Input, Alert } from '@/components/ui'
 import './tax-admin.scss'
 
@@ -24,7 +24,7 @@ export const HecsEditor: React.FC<Props> = ({ initialTaxYear = getCurrentAuTaxYe
   const [err, setErr] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
 
-  const fetchRows = async () => {
+  const fetchRows = useCallback(async () => {
     setLoading(true); setErr(null); setMsg(null)
     try {
       const q = new URLSearchParams({ taxYear })
@@ -33,9 +33,9 @@ export const HecsEditor: React.FC<Props> = ({ initialTaxYear = getCurrentAuTaxYe
       if (!res.ok) throw new Error(json?.error || 'Failed to load thresholds')
       setRows(json.data as Hecs[])
     } catch (e: any) { setErr(e.message) } finally { setLoading(false) }
-  }
+  }, [taxYear])
 
-  useEffect(() => { fetchRows() }, [taxYear])
+  useEffect(() => { fetchRows() }, [fetchRows])
 
   const addRow = () => setRows(prev => ([...prev, { incomeFrom: '0', incomeTo: '', rate: '0.00', description: '' }]))
   const removeRow = (idx: number) => setRows(prev => prev.filter((_, i) => i !== idx))

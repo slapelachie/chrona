@@ -6,7 +6,6 @@ import {
   ShiftsListResponse,
   ApiValidationResponse,
   BreakPeriodResponse,
-  PayPeriodStatus,
   ShiftListItem,
 } from '@/types'
 import {

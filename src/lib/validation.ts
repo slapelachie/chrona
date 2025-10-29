@@ -147,7 +147,7 @@ export const validateDecimal = (
   let decimal: Decimal
   try {
     decimal = new Decimal(value)
-  } catch (error) {
+  } catch {
     validator.addError(field, `${field} must be a valid decimal number`)
     return false
   }

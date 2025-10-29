@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { Card, CardHeader, CardBody } from '../ui'
+import { Card, CardBody } from '../ui'
 import { 
   Clock, 
   DollarSign, 
@@ -135,7 +135,7 @@ export const RecentActivity: React.FC = () => {
           status: a.status,
         }))
         setRecentActivities(items)
-      } catch (_) {
+      } catch {
         if (!cancelled) setRecentActivities([])
       }
     }

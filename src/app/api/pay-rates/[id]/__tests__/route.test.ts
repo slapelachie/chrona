@@ -15,11 +15,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { PrismaClient } from '@prisma/client'
 import { execSync } from 'child_process'
 import { Decimal } from 'decimal.js'
-import {
-  UpdatePayGuideRequest,
-  PayGuideResponse,
-  ApiValidationResponse,
-} from '@/types'
+import { UpdatePayGuideRequest } from '@/types'
 
 // Mock Next.js request/response objects following existing patterns
 class MockRequest {
@@ -51,30 +47,6 @@ class MockRequest {
 
   async json() {
     return typeof this._body === 'string' ? JSON.parse(this._body) : this._body
-  }
-}
-
-class MockResponse {
-  private _status: number = 200
-  private _body: any
-  private _headers: Record<string, string> = {}
-
-  static json(data: any, options: { status?: number } = {}) {
-    const response = new MockResponse()
-    response._body = data
-    response._status = options.status || 200
-    return response
-  }
-
-  get status() {
-    return this._status
-  }
-  get body() {
-    return this._body
-  }
-
-  async json() {
-    return this._body
   }
 }
 
@@ -113,7 +85,7 @@ describe('Pay Rates [id] Route API', () => {
     testUserId = testUser.id
 
     // Create base test pay guides
-    const testPayGuide = await prisma.payGuide.create({
+    const createdPayGuide = await prisma.payGuide.create({
       data: {
         name: 'Test Retail Award',
         baseRate: new Decimal('25.00'),
@@ -125,9 +97,9 @@ describe('Pay Rates [id] Route API', () => {
         description: 'Test pay guide for API testing',
       },
     })
-    testPayGuideId = testPayGuide.id
+    testPayGuideId = createdPayGuide.id
 
-    const secondTestPayGuide = await prisma.payGuide.create({
+    const createdSecondPayGuide = await prisma.payGuide.create({
       data: {
         name: 'Test Hospitality Award',
         baseRate: new Decimal('28.50'),
@@ -136,7 +108,7 @@ describe('Pay Rates [id] Route API', () => {
         isActive: false,
       },
     })
-    secondTestPayGuideId = secondTestPayGuide.id
+    secondTestPayGuideId = createdSecondPayGuide.id
   })
 
   afterAll(async () => {
@@ -151,7 +123,7 @@ describe('Pay Rates [id] Route API', () => {
     await prisma.payGuide.deleteMany()
 
     // Recreate test pay guides
-    const testPayGuide = await prisma.payGuide.create({
+    await prisma.payGuide.create({
       data: {
         id: testPayGuideId,
         name: 'Test Retail Award',
@@ -165,7 +137,7 @@ describe('Pay Rates [id] Route API', () => {
       },
     })
 
-    const secondTestPayGuide = await prisma.payGuide.create({
+    await prisma.payGuide.create({
       data: {
         id: secondTestPayGuideId,
         name: 'Test Hospitality Award',

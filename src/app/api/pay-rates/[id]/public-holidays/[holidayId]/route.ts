@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { UpdatePublicHolidayRequest, PublicHolidayResponse, ApiValidationResponse } from '@/types'
+import { UpdatePublicHolidayRequest, ApiValidationResponse } from '@/types'
 import { ValidationResult, validateCuid } from '@/lib/validation'
 import { validatePublicHolidayFields } from '@/lib/public-holiday-validation'
 import { getPayGuide } from '@/lib/pay-guide-utils'

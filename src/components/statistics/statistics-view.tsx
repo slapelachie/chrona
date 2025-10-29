@@ -209,7 +209,7 @@ export const StatisticsView: React.FC = () => {
   const [activeMetricKeys, setActiveMetricKeys] = useState<ChartMetricKey[]>(metricConfigs.map((m) => m.key))
   const [expandedCards, setExpandedCards] = useState<Set<string>>(() => new Set())
 
-  const payPeriods = data?.payPeriods ?? []
+  const payPeriods = useMemo(() => data?.payPeriods ?? [], [data])
   const chartData = useMemo(() => buildChartData(payPeriods), [payPeriods])
   const monthlyBuckets = useMemo(() => buildMonthlyBuckets(payPeriods), [payPeriods])
   const totals = data?.totals

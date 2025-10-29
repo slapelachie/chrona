@@ -8,13 +8,11 @@ import { AppliedOvertime } from '@/types'
 interface OvertimeBreakdownProps {
   overtimes: AppliedOvertime[]
   baseRate: string | number
-  isPreview?: boolean
 }
 
 export const OvertimeBreakdown: React.FC<OvertimeBreakdownProps> = ({ 
   overtimes, 
-  baseRate,
-  isPreview = false 
+  baseRate
 }) => {
   if (overtimes.length === 0) {
     return null

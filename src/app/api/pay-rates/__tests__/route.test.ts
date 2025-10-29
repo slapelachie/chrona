@@ -13,12 +13,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { PrismaClient } from '@prisma/client'
 import { execSync } from 'child_process'
 import { Decimal } from 'decimal.js'
-import {
-  CreatePayGuideRequest,
-  PayGuideResponse,
-  PayGuidesListResponse,
-  ApiValidationResponse,
-} from '@/types'
+import { CreatePayGuideRequest } from '@/types'
 
 // Mock Next.js request/response objects following existing patterns
 class MockRequest {
@@ -53,30 +48,6 @@ class MockRequest {
   }
 }
 
-class MockResponse {
-  private _status: number = 200
-  private _body: any
-  private _headers: Record<string, string> = {}
-
-  static json(data: any, options: { status?: number } = {}) {
-    const response = new MockResponse()
-    response._body = data
-    response._status = options.status || 200
-    return response
-  }
-
-  get status() {
-    return this._status
-  }
-  get body() {
-    return this._body
-  }
-
-  async json() {
-    return this._body
-  }
-}
-
 // Setup test database connection
 const prisma = new PrismaClient({
   datasources: {
@@ -87,8 +58,6 @@ const prisma = new PrismaClient({
 })
 
 describe('Pay Rates API', () => {
-  let testUserId: string
-  let testPayGuideId: string
 
   beforeAll(async () => {
     /**
@@ -933,7 +902,7 @@ describe('Pay Rates API', () => {
     describe('Response Structure Validation', () => {
       it('should return properly structured response with all required fields', async () => {
         // Create a comprehensive test pay guide with all possible fields
-        const testPayGuide = await prisma.payGuide.create({
+        await prisma.payGuide.create({
           data: {
             name: 'Structure Test Award',
             baseRate: new Decimal('27.50'),

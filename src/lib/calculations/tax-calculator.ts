@@ -7,7 +7,6 @@ import {
   TaxCoefficient,
   StslRate,
   YearToDateTax,
-  TaxRateConfig,
 } from '@/types'
 import { TimeCalculations } from './time-calculations'
 import { taxLog } from '@/lib/log'
@@ -92,7 +91,7 @@ export class TaxCalculator {
     taxLog('payg-raw', { weeklyPaygWithholding: weeklyPaygWithholding.toString(), paygWithholdingRaw: paygWithholdingRaw.toString() })
     
     // Calculate STSL (HELP) component
-    const stslAmountRaw = this.calculateStsl(grossPay, payPeriodType, yearToDateTax)
+    const stslAmountRaw = this.calculateStsl(grossPay, payPeriodType)
     taxLog('stsl-raw', { stslAmountRaw: stslAmountRaw.toString() })
     
     // Round PAYG and STSL to nearest dollar (half-up)
@@ -142,18 +141,13 @@ export class TaxCalculator {
     payPeriodId: string,
     grossPay: Decimal,
     payPeriodType: PayPeriodType,
-    yearToDateTax: YearToDateTax,
-    opts?: { taxYear?: string; onDate?: Date }
+    yearToDateTax: YearToDateTax
   ): Promise<TaxCalculationResult> {
     const weeklyGrossPay = this.convertToWeeklyPay(grossPay, payPeriodType)
     const taxScale = this.determineTaxScale()
     const weeklyPaygWithholding = this.calculatePaygWithholding(weeklyGrossPay, taxScale)
     const paygWithholdingRaw = this.convertFromWeeklyPay(weeklyPaygWithholding, payPeriodType)
-    const stslAmountRaw = this.calculateStsl(
-      grossPay,
-      payPeriodType,
-      yearToDateTax
-    )
+    const stslAmountRaw = this.calculateStsl(grossPay, payPeriodType)
 
     const paygWithholding = TimeCalculations.roundToNearestDollar(paygWithholdingRaw)
     const stslAmount = TimeCalculations.roundToNearestDollar(stslAmountRaw)
@@ -225,8 +219,7 @@ export class TaxCalculator {
    */
   private calculateStsl(
     grossPay: Decimal,
-    payPeriodType: PayPeriodType,
-    _yearToDateTax: YearToDateTax
+    payPeriodType: PayPeriodType
   ): Decimal {
     // Determine STSL scale per Schedule 8
     const stslScale = (this.taxSettings.claimedTaxFreeThreshold || this.taxSettings.isForeignResident)

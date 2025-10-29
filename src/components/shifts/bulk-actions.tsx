@@ -8,7 +8,6 @@ import {
   Trash2, 
   Download, 
   X, 
-  Loader,
   AlertTriangle,
   FileText
 } from 'lucide-react'

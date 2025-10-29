@@ -103,8 +103,6 @@ describe('Shift API Automatic Sync Integration Tests', () => {
       const response = await createShift(request)
       expect(response.status).toBe(201)
 
-      const responseData = await response.json()
-      const shiftId = responseData.data.id
 
       // Check that pay period was automatically updated (allow brief async sync)
       const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -195,7 +193,7 @@ describe('Shift API Automatic Sync Integration Tests', () => {
         },
       })
 
-      const shift2 = await prisma.shift.create({
+      await prisma.shift.create({
         data: {
           userId,
           payGuideId,

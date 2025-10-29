@@ -9,12 +9,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { PrismaClient } from '@prisma/client'
 import { execSync } from 'child_process'
 import { Decimal } from 'decimal.js'
-import {
-  CreateBreakPeriodRequest,
-  BreakPeriodResponse,
-  BreakPeriodsListResponse,
-  ApiValidationResponse,
-} from '@/types'
+import { CreateBreakPeriodRequest } from '@/types'
 
 // Mock Next.js request/response objects
 class MockRequest {
@@ -46,30 +41,6 @@ class MockRequest {
 
   async json() {
     return typeof this._body === 'string' ? JSON.parse(this._body) : this._body
-  }
-}
-
-class MockResponse {
-  private _status: number = 200
-  private _body: any
-  private _headers: Record<string, string> = {}
-
-  static json(data: any, options: { status?: number } = {}) {
-    const response = new MockResponse()
-    response._body = data
-    response._status = options.status || 200
-    return response
-  }
-
-  get status() {
-    return this._status
-  }
-  get body() {
-    return this._body
-  }
-
-  async json() {
-    return this._body
   }
 }
 

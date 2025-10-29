@@ -2074,11 +2074,6 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(result.overtimes[0].multiplier.toString()).toBe('1.75')
 
         // Verify total pay calculation
-        const expectedCasualPay = new Decimal('10').times('26.55').times('1.25')
-        const expectedEveningPay = new Decimal('1').times('26.55').times('1.5')
-        const expectedOvertimePay = new Decimal('0.5')
-          .times('26.55')
-          .times('1.75')
         // Use actual result to avoid rounding precision issues
         expect(result.breakdown.totalPay.toString()).toBe('394.94')
       })
@@ -2322,12 +2317,6 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(eveningPenalty!.multiplier.toString()).toBe('1.5')
 
         // Verify total pay calculation
-        const expectedCasualPay = new Decimal('3').times('26.55').times('1.25')
-        const expectedEveningPay = new Decimal('1.5')
-          .times('26.55')
-          .times('1.5')
-        const expectedTotal = expectedCasualPay.plus(expectedEveningPay)
-
         // Use actual result to match the calculator's output format
         expect(result.breakdown.totalPay.toString()).toBe('159.3')
       })
@@ -2381,13 +2370,6 @@ describe('PayCalculator - Blackbox Tests', () => {
         expect(sunMorningPenalty!.multiplier.toString()).toBe('2.25')
 
         // Verify total pay calculation
-        const expectedSatNightPay = new Decimal('1.5')
-          .times('26.55')
-          .times('1.75')
-        const expectedSunMorningPay = new Decimal('1.5')
-          .times('26.55')
-          .times('2.25')
-        // Use actual result to match the calculator's output format
         expect(result.breakdown.totalPay.toString()).toBe('159.3')
       })
 

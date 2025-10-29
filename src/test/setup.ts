@@ -5,7 +5,6 @@ import * as matchers from '@testing-library/jest-dom/matchers'
 import { beforeAll, afterAll } from 'vitest'
 import { prisma } from '@/lib/db'
 import { seedTaxConfigForYear, clearTaxConfig } from '@/lib/__tests__/helpers/tax-config'
-import { beforeEach } from 'vitest'
 
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers)

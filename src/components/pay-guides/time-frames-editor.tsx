@@ -303,7 +303,7 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
     setEditId(null)
     setEdit(null)
     fetchRows()
-  }, [fetchRows, variant])
+  }, [config, fetchRows])
 
   const filteredRows = useMemo(
     () => rows.filter(row => row.name.toLowerCase().includes(query.toLowerCase())),

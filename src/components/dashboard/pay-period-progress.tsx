@@ -15,7 +15,7 @@ export const PayPeriodProgress: React.FC = () => {
         const res = await fetch('/api/dashboard/summary', { cache: 'no-store' })
         const json = await res.json()
         if (!cancelled) setSummary(json.data)
-      } catch (_) {
+      } catch {
         if (!cancelled) setSummary(null)
       }
     }

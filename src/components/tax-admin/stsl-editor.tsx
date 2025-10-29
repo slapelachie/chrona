@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Card, Input, Alert } from '@/components/ui'
 import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import './tax-admin.scss'
@@ -31,7 +31,7 @@ export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYe
   const [msg, setMsg] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => ({ WITH_TFT_OR_FR: true, NO_TFT: true }))
 
-  const fetchRows = async () => {
+  const fetchRows = useCallback(async () => {
     setLoading(true); setErr(null); setMsg(null)
     try {
       const q = new URLSearchParams({ taxYear })
@@ -42,9 +42,9 @@ export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYe
       const data = (json.data || [])
       setRows(data as Rate[])
     } catch (e: any) { setErr(e.message) } finally { setLoading(false) }
-  }
+  }, [taxYear])
 
-  useEffect(() => { fetchRows() }, [taxYear])
+  useEffect(() => { fetchRows() }, [fetchRows])
 
   const grouped = useMemo(() => {
     return {
@@ -58,7 +58,7 @@ export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYe
   const update = (idx: number, patch: Partial<Rate>) => setRows(prev => prev.map((r, i) => i === idx ? { ...r, ...patch } : r))
 
   const [violations, setViolations] = useState<Record<string, string | null>>({})
-  const recomputeValidation = (draft: Rate[] = rows) => {
+  const recomputeValidation = useCallback((draft: Rate[] = rows) => {
     const v: Record<string, string | null> = {}
     for (const s of ['WITH_TFT_OR_FR','NO_TFT'] as const) {
       const list = draft.filter(r => r.scale === s)
@@ -72,8 +72,8 @@ export const StslEditor: React.FC<{ initialTaxYear?: string }> = ({ initialTaxYe
     }
     setViolations(v)
     return v
-  }
-  useEffect(() => { recomputeValidation() }, [rows])
+  }, [rows])
+  useEffect(() => { recomputeValidation() }, [recomputeValidation])
 
   const save = async () => {
     setSaving(true); setErr(null); setMsg(null)

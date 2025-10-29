@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardBody, Button } from '../ui'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -28,7 +28,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onShiftClick }) => {
   const router = useRouter()
 
   // Generate calendar dates for the current view
-  const getCalendarDates = () => {
+  const getCalendarDates = useCallback(() => {
     if (viewMode === 'week') {
       const startOfWeek = new Date(currentDate)
       startOfWeek.setDate(currentDate.getDate() - currentDate.getDay())
@@ -45,7 +45,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onShiftClick }) => {
       const month = currentDate.getMonth()
       
       const firstDay = new Date(year, month, 1)
-      const lastDay = new Date(year, month + 1, 0)
       const startDate = new Date(firstDay)
       startDate.setDate(startDate.getDate() - startDate.getDay())
       
@@ -57,10 +56,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onShiftClick }) => {
       }
       return dates
     }
-  }
+  }, [currentDate, viewMode])
 
   // Fetch shifts for the current view period
-  const fetchShifts = async () => {
+  const fetchShifts = useCallback(async () => {
     try {
       setLoading(true)
       
@@ -92,7 +91,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onShiftClick }) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [getCalendarDates])
 
   // Determine shift status based on timing
   const getShiftStatus = (startTime: Date, endTime: Date): 'upcoming' | 'in-progress' | 'completed' => {
@@ -150,7 +149,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onShiftClick }) => {
   // Fetch shifts when date or view mode changes
   useEffect(() => {
     fetchShifts()
-  }, [currentDate, viewMode])
+  }, [fetchShifts])
 
   const calendarDates = getCalendarDates()
   const currentMonth = currentDate.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })

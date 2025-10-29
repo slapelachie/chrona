@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Decimal } from 'decimal.js'
 import { prisma } from '@/lib/db'
 import {
   CreateTaxSettingsRequest,
@@ -11,7 +10,7 @@ import { ValidationResult, validateBoolean } from '@/lib/validation'
 import { PayPeriodTaxService } from '@/lib/pay-period-tax-service'
 
 // GET /api/tax-settings - Get user's tax settings
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Get the default user (single user app)
     const user = await prisma.user.findFirst()

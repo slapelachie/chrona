@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Button, Card, CardBody } from '../ui'
 import { ShiftFilters } from './shift-filters'
 import { ShiftCard } from './shift-card'
@@ -85,7 +85,7 @@ export const ShiftsList: React.FC = () => {
     notes: shift.notes ?? undefined,
   })
 
-  const applyShiftFilters = (shifts: ShiftResponse[]): ShiftListItem[] => {
+  const applyShiftFilters = useCallback((shifts: ShiftResponse[]): ShiftListItem[] => {
     const filteredByGuide = filters.payGuideId
       ? shifts.filter(shift => shift.payGuideId === filters.payGuideId)
       : shifts
@@ -118,9 +118,9 @@ export const ShiftsList: React.FC = () => {
 
       return listItem
     })
-  }
+  }, [filters, payGuideLookup])
 
-  const fetchTimeline = async () => {
+  const fetchTimeline = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -233,11 +233,11 @@ export const ShiftsList: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [applyShiftFilters, filters])
 
   useEffect(() => {
     fetchTimeline()
-  }, [filters])
+  }, [fetchTimeline])
 
   useEffect(() => {
     if (!Object.keys(payGuideLookup).length) return

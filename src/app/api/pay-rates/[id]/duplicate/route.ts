@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (hasRequestBody) {
       try {
         body = await request.json()
-      } catch (error) {
+      } catch {
         validator.addError('body', 'Request body must be valid JSON')
       }
     }
@@ -129,46 +129,46 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
       if (source.penaltyTimeFrames.length > 0) {
         await tx.penaltyTimeFrame.createMany({
-          data: source.penaltyTimeFrames.map(({
-            id: _id,
-            payGuideId: _payGuideId,
-            createdAt: _createdAt,
-            updatedAt: _updatedAt,
-            ...frame
-          }) => ({
-            ...frame,
-            payGuideId: created.id,
-          })),
+          data: source.penaltyTimeFrames.map(({ id, payGuideId, createdAt, updatedAt, ...frame }) => {
+            void id
+            void payGuideId
+            void createdAt
+            void updatedAt
+            return {
+              ...frame,
+              payGuideId: created.id,
+            }
+          }),
         })
       }
 
       if (source.overtimeTimeFrames.length > 0) {
         await tx.overtimeTimeFrame.createMany({
-          data: source.overtimeTimeFrames.map(({
-            id: _id,
-            payGuideId: _payGuideId,
-            createdAt: _createdAt,
-            updatedAt: _updatedAt,
-            ...frame
-          }) => ({
-            ...frame,
-            payGuideId: created.id,
-          })),
+          data: source.overtimeTimeFrames.map(({ id, payGuideId, createdAt, updatedAt, ...frame }) => {
+            void id
+            void payGuideId
+            void createdAt
+            void updatedAt
+            return {
+              ...frame,
+              payGuideId: created.id,
+            }
+          }),
         })
       }
 
       if (source.publicHolidays.length > 0) {
         await tx.publicHoliday.createMany({
-          data: source.publicHolidays.map(({
-            id: _id,
-            payGuideId: _payGuideId,
-            createdAt: _createdAt,
-            updatedAt: _updatedAt,
-            ...holiday
-          }) => ({
-            ...holiday,
-            payGuideId: created.id,
-          })),
+          data: source.publicHolidays.map(({ id, payGuideId, createdAt, updatedAt, ...holiday }) => {
+            void id
+            void payGuideId
+            void createdAt
+            void updatedAt
+            return {
+              ...holiday,
+              payGuideId: created.id,
+            }
+          }),
         })
       }
 

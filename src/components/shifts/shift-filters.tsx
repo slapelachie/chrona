@@ -61,7 +61,7 @@ export const ShiftFilters: React.FC<ShiftFiltersProps> = ({
     if (showFilters && payGuides.length === 0) {
       fetchPayGuides()
     }
-  }, [showFilters])
+  }, [showFilters, payGuides.length])
 
   useEffect(() => {
     setLocalFilters({

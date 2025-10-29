@@ -27,7 +27,7 @@ export const QuickActions: React.FC = () => {
         const res = await fetch('/api/dashboard/summary', { cache: 'no-store' })
         const json = await res.json()
         if (!cancelled) setSummary(json.data)
-      } catch (_) {
+      } catch {
         if (!cancelled) setSummary(null)
       }
     }
@@ -41,7 +41,7 @@ export const QuickActions: React.FC = () => {
       const json = await res.json()
       setSummary(json.data)
       return json.data
-    } catch (error) {
+    } catch {
       setSummary(null)
       return null
     }
@@ -57,7 +57,7 @@ export const QuickActions: React.FC = () => {
       const json = await res.json()
       setReadiness(json?.data ?? null)
       return json?.data ?? null
-    } catch (error) {
+    } catch {
       setReadiness(null)
       return null
     }
@@ -176,7 +176,7 @@ export const QuickActions: React.FC = () => {
     }
 
     return base
-  }, [router, currentId, canView, canRefresh, canVerify, canReopen, busy, reloadSummary, reloadReadiness])
+  }, [router, currentId, canView, canRefresh, canVerify, canReopen, reloadSummary, reloadReadiness])
 
   return (
     <div className="quick-actions">

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card, CardBody, CardHeader, Button, Input } from '@/components/ui'
 import { Form } from 'react-bootstrap'
 import { Plus, Save, Trash2, X, Edit, GripVertical } from 'lucide-react'
@@ -76,13 +76,13 @@ export const DefaultPayPeriodExtrasSettings: React.FC = () => {
     fetchTemplates()
   }, [])
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setFormState({ ...EMPTY_FORM, sortOrder: templates.length })
-  }
+  }, [templates.length])
 
   useEffect(() => {
     resetForm()
-  }, [templates.length])
+  }, [resetForm])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()

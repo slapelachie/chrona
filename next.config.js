@@ -2,9 +2,6 @@
 const nextConfig = {
   output: 'standalone',
   typedRoutes: true,
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
 }
 
 module.exports = nextConfig

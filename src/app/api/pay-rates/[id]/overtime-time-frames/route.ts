@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Decimal } from 'decimal.js'
 import { prisma } from '@/lib/db'
-import { CreateOvertimeTimeFrameRequest, OvertimeTimeFrameResponse, ApiValidationResponse } from '@/types'
+import { CreateOvertimeTimeFrameRequest, ApiValidationResponse } from '@/types'
 import { ValidationResult, validateCuid } from '@/lib/validation'
 import { validateOvertimeTimeFrameFields } from '@/lib/overtime-time-frame-validation'
 import { getPayGuide } from '@/lib/pay-guide-utils'

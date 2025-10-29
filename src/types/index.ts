@@ -502,7 +502,7 @@ export interface UpdateTaxSettingsRequest {
   medicareExemption?: 'none' | 'half' | 'full'
 }
 
-export interface TaxSettingsResponse extends TaxSettings {}
+export type TaxSettingsResponse = TaxSettings
 
 // Tax Calculation API Types
 export interface TaxCalculationRequest {

@@ -349,7 +349,7 @@ export async function POST(request: NextRequest) {
               if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
                 throw new Error('Invalid date')
               }
-            } catch (error) {
+            } catch {
               result.errors.push({
                 type: 'validation',
                 field: 'payPeriods',
@@ -656,7 +656,7 @@ async function importTaxDataPayload(
 
       result.updated.push('Tax settings')
       result.summary.successful++
-    } catch (error) {
+    } catch {
       console.error('Error importing tax settings (selective):', error)
       result.errors.push({
         type: 'validation',

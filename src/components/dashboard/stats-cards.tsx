@@ -59,12 +59,10 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, trend
 export const StatsCards: React.FC = () => {
   const [summary, setSummary] = useState<any | null>(null)
   const [ytd, setYtd] = useState<any | null>(null)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     async function load() {
-      setLoading(true)
       try {
         const [summaryRes, ytdRes] = await Promise.all([
           fetch('/api/dashboard/summary', { cache: 'no-store' }),
@@ -76,13 +74,11 @@ export const StatsCards: React.FC = () => {
           setSummary(summaryJson.data)
           setYtd(ytdJson.data)
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) {
           setSummary(null)
           setYtd(null)
         }
-      } finally {
-        if (!cancelled) setLoading(false)
       }
     }
     load()

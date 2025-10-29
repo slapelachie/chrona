@@ -78,7 +78,7 @@ describe('Pay Periods API Routes', () => {
 
     it('should return list of pay periods with default pagination', async () => {
       // Create test pay periods
-      const payPeriod1 = await prisma.payPeriod.create({
+      await prisma.payPeriod.create({
         data: {
           userId: mockUser.id,
           startDate: new Date('2024-01-01'),
@@ -87,7 +87,7 @@ describe('Pay Periods API Routes', () => {
         }
       })
 
-      const payPeriod2 = await prisma.payPeriod.create({
+      await prisma.payPeriod.create({
         data: {
           userId: mockUser.id,
           startDate: new Date('2024-01-15'),

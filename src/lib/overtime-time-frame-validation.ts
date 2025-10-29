@@ -82,14 +82,8 @@ export const validateOvertimeTimeFrameFields = (
 
   // Cross-field validation for start/end time
   if (data.startTime && data.endTime) {
-    const startTime = data.startTime.split(':').map(Number)
-    const endTime = data.endTime.split(':').map(Number)
-    const startMinutes = startTime[0] * 60 + startTime[1]
-    const endMinutes = endTime[0] * 60 + endTime[1]
-    
     // Allow overnight shifts (end time can be less than start time)
     // This is valid for overnight overtime rules
-    // No validation error in this case
   }
 
   // Description validation (optional for both)

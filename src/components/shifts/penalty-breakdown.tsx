@@ -8,13 +8,11 @@ import { AppliedPenalty } from '@/types'
 interface PenaltyBreakdownProps {
   penalties: AppliedPenalty[]
   baseRate: string | number
-  isPreview?: boolean
 }
 
 export const PenaltyBreakdown: React.FC<PenaltyBreakdownProps> = ({ 
   penalties, 
-  baseRate,
-  isPreview = false 
+  baseRate
 }) => {
   if (penalties.length === 0) {
     return null

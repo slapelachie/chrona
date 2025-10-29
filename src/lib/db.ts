@@ -17,7 +17,7 @@ function getClient(): PrismaClient {
 
 // Proxy forwards all property accesses/calls to the active client
 export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
-  get(_target, prop, _receiver) {
+  get(_target, prop) {
     const client = getClient() as any
     const value = client[prop]
     return typeof value === 'function' ? value.bind(client) : value

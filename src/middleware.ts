@@ -50,6 +50,7 @@ export async function middleware(request: NextRequest) {
       initialized = Boolean(body?.data?.initialized)
     }
   } catch (error) {
+    console.error('Failed to probe setup status in middleware:', error)
     initialized = false
   }
 

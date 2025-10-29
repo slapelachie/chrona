@@ -8,7 +8,6 @@
 
 import { describe, it, expect } from 'vitest'
 import { TimeZoneHelper } from '@/lib/calculations/timezone-helper'
-import { Period } from '@/types'
 
 describe('TimeZoneHelper', () => {
   describe('Australian timezone handling', () => {

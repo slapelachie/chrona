@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { calculatePayPeriod } from '@/lib/pay-period-utils'
 import { Decimal } from 'decimal.js'
 
 // GET /api/dashboard/summary - consolidated data for dashboard widgets
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     // Get the default user (single-user app assumption)
     const user = await prisma.user.findFirst({
@@ -36,7 +36,6 @@ export async function GET(_request: NextRequest) {
     )
 
     // Tally hours/pay from existing period (or zeros if it doesn’t exist)
-    const hoursWorked = currentPayPeriod?.totalHours ?? new Decimal(0)
     const grossPay = currentPayPeriod?.totalPay ?? new Decimal(0)
     const paygWithholding = currentPayPeriod?.paygWithholding ?? new Decimal(0)
     const stslAmount = currentPayPeriod?.stslAmount ?? new Decimal(0)
@@ -60,7 +59,7 @@ export async function GET(_request: NextRequest) {
 
     // Completed vs upcoming in current period
     const completed = periodShifts.filter(s => s.endTime && s.endTime <= now)
-    const upcomingInPeriod = periodShifts.filter(s => !s.endTime || s.endTime > now)
+
 
     const hoursSoFar = completed.reduce((sum, s) => sum.plus(s.totalHours || new Decimal(0)), new Decimal(0))
     const grossSoFar = completed.reduce((sum, s) => sum.plus(s.totalPay || new Decimal(0)), new Decimal(0))
@@ -75,7 +74,7 @@ export async function GET(_request: NextRequest) {
       const { PayPeriodTaxService } = await import('@/lib/pay-period-tax-service')
       const preview = await PayPeriodTaxService.previewTaxCalculation(user.id, grossRosteredTotal, user.payPeriodType)
       projectedNet = preview.breakdown.netPay
-    } catch (e) {
+    } catch {
       projectedNet = grossRosteredTotal.minus(paygWithholding).minus(stslAmount)
     }
 

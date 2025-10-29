@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { UpdatePayGuideRequest, PayGuideResponse, ApiValidationResponse } from '@/types'
+import { UpdatePayGuideRequest, ApiValidationResponse } from '@/types'
 import { ValidationResult, validateCuid } from '@/lib/validation'
 import {
   validatePayGuideFields,

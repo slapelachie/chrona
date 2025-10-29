@@ -128,8 +128,8 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
         throw new Error(json?.message || 'Unable to load readiness data')
       }
       setReadiness(json.data as ReadinessState)
-    } catch (e) {
-      console.error('Failed to load readiness', e)
+    } catch (error) {
+      console.error('Failed to load readiness', error)
       setReadiness(null)
     }
   }
@@ -174,7 +174,8 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
       if (!res.ok) throw new Error('Failed to open pay period')
       await fetchPayPeriod()
       await fetchReadiness()
-    } catch (e) {
+    } catch (error) {
+      console.error('Could not open the period.', error)
       alert('Could not open the period. Please try again.')
     } finally {
       setOpenBusy(false)

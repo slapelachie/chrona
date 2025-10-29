@@ -70,6 +70,7 @@ export const SetupForm: React.FC = () => {
           router.replace('/')
         }
       } catch (error) {
+        console.error('Failed to check setup status', error)
         if (isMounted) {
           setGlobalError('We could not confirm the setup status. You can still try to continue below.')
         }
