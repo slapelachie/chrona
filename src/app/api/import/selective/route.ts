@@ -5,16 +5,20 @@ import {
   ConflictResolution,
   ImportTaxDataRequest,
   ImportPayPeriodsRequest,
-  ImportPreferencesRequest
+  ImportPreferencesRequest,
 } from '@/types'
 import {
   validateShiftsImport,
   validatePayGuidesImport,
   validatePayPeriodsImport,
   validatePreferencesImport,
-  validateTaxDataImport
+  validateTaxDataImport,
 } from '@/lib/import-validation'
-import { calculateAndUpdateShift, fetchShiftBreakPeriods, updateShiftWithCalculation } from '@/lib/shift-calculation'
+import {
+  calculateAndUpdateShift,
+  fetchShiftBreakPeriods,
+  updateShiftWithCalculation,
+} from '@/lib/shift-calculation'
 import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 import { Decimal } from 'decimal.js'
@@ -44,7 +48,7 @@ export async function POST(request: NextRequest) {
       warnings: [],
       created: [],
       updated: [],
-      skipped: []
+      skipped: [],
     }
 
     const { data, options } = body
@@ -52,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     // Get the default user (single user app)
     const user = await prisma.user.findFirst({
-      select: { id: true, payPeriodType: true }
+      select: { id: true, payPeriodType: true },
     })
     if (!user) {
       return NextResponse.json(
@@ -68,8 +72,8 @@ export async function POST(request: NextRequest) {
           payGuides: data.payGuides.payGuides,
           options: {
             conflictResolution,
-            activateImported: importSettings.activateImported ?? true
-          }
+            activateImported: importSettings.activateImported ?? true,
+          },
         }
 
         const validator = await validatePayGuidesImport(payGuidesRequest)
@@ -78,13 +82,15 @@ export async function POST(request: NextRequest) {
           result.summary.failed += payGuidesRequest.payGuides.length
         } else {
           const existingPayGuides = await prisma.payGuide.findMany({
-            select: { id: true, name: true, isActive: true }
+            select: { id: true, name: true, isActive: true },
           })
-          const existingNames = new Map(existingPayGuides.map(pg => [pg.name, pg]))
+          const existingNames = new Map(
+            existingPayGuides.map((pg) => [pg.name, pg])
+          )
 
           for (const guideData of payGuidesRequest.payGuides) {
             result.summary.totalProcessed++
-            
+
             let finalName = guideData.name
             let shouldSkip = false
             let shouldUpdate = false
@@ -92,10 +98,12 @@ export async function POST(request: NextRequest) {
 
             if (existingNames.has(guideData.name)) {
               const existingGuide = existingNames.get(guideData.name)!
-              
+
               switch (conflictResolution) {
                 case 'skip':
-                  result.skipped.push(`Pay guide "${guideData.name}": already exists`)
+                  result.skipped.push(
+                    `Pay guide "${guideData.name}": already exists`
+                  )
                   result.summary.skipped++
                   shouldSkip = true
                   break
@@ -124,9 +132,11 @@ export async function POST(request: NextRequest) {
               maximumShiftHours: guideData.maximumShiftHours || null,
               description: guideData.description || null,
               effectiveFrom: new Date(guideData.effectiveFrom),
-              effectiveTo: guideData.effectiveTo ? new Date(guideData.effectiveTo) : null,
+              effectiveTo: guideData.effectiveTo
+                ? new Date(guideData.effectiveTo)
+                : null,
               timezone: guideData.timezone || 'Australia/Sydney',
-              isActive: importSettings.activateImported ?? true
+              isActive: importSettings.activateImported ?? true,
             }
 
             let payGuide: any
@@ -134,32 +144,41 @@ export async function POST(request: NextRequest) {
             if (shouldUpdate && existingGuideId) {
               payGuide = await prisma.payGuide.update({
                 where: { id: existingGuideId },
-                data: payGuideData
+                data: payGuideData,
               })
-              
+
               await Promise.all([
-                prisma.penaltyTimeFrame.deleteMany({ where: { payGuideId: existingGuideId } }),
-                prisma.overtimeTimeFrame.deleteMany({ where: { payGuideId: existingGuideId } }),
-                prisma.publicHoliday.deleteMany({ where: { payGuideId: existingGuideId } })
+                prisma.penaltyTimeFrame.deleteMany({
+                  where: { payGuideId: existingGuideId },
+                }),
+                prisma.overtimeTimeFrame.deleteMany({
+                  where: { payGuideId: existingGuideId },
+                }),
+                prisma.publicHoliday.deleteMany({
+                  where: { payGuideId: existingGuideId },
+                }),
               ])
 
               result.updated.push(`Pay guide "${finalName}"`)
             } else {
               payGuide = await prisma.payGuide.create({
-                data: payGuideData
+                data: payGuideData,
               })
-              
+
               result.created.push(`Pay guide "${finalName}"`)
             }
 
             existingNames.set(finalName, {
               id: payGuide.id,
               name: finalName,
-              isActive: payGuide.isActive
+              isActive: payGuide.isActive,
             })
 
             // Create related data
-            if (guideData.penaltyTimeFrames && guideData.penaltyTimeFrames.length > 0) {
+            if (
+              guideData.penaltyTimeFrames &&
+              guideData.penaltyTimeFrames.length > 0
+            ) {
               await prisma.penaltyTimeFrame.createMany({
                 data: guideData.penaltyTimeFrames.map((ptf: any) => ({
                   payGuideId: payGuide.id,
@@ -170,12 +189,15 @@ export async function POST(request: NextRequest) {
                   endTime: ptf.endTime || null,
                   isPublicHoliday: ptf.isPublicHoliday || false,
                   description: ptf.description || null,
-                  isActive: true
-                }))
+                  isActive: true,
+                })),
               })
             }
 
-            if (guideData.overtimeTimeFrames && guideData.overtimeTimeFrames.length > 0) {
+            if (
+              guideData.overtimeTimeFrames &&
+              guideData.overtimeTimeFrames.length > 0
+            ) {
               await prisma.overtimeTimeFrame.createMany({
                 data: guideData.overtimeTimeFrames.map((otf: any) => ({
                   payGuideId: payGuide.id,
@@ -187,19 +209,22 @@ export async function POST(request: NextRequest) {
                   endTime: otf.endTime || null,
                   isPublicHoliday: otf.isPublicHoliday || false,
                   description: otf.description || null,
-                  isActive: true
-                }))
+                  isActive: true,
+                })),
               })
             }
 
-            if (guideData.publicHolidays && guideData.publicHolidays.length > 0) {
+            if (
+              guideData.publicHolidays &&
+              guideData.publicHolidays.length > 0
+            ) {
               await prisma.publicHoliday.createMany({
                 data: guideData.publicHolidays.map((ph: any) => ({
                   payGuideId: payGuide.id,
                   name: ph.name,
                   date: new Date(ph.date),
-                  isActive: true
-                }))
+                  isActive: true,
+                })),
               })
             }
 
@@ -211,7 +236,7 @@ export async function POST(request: NextRequest) {
         result.errors.push({
           type: 'validation',
           field: 'payGuides',
-          message: `Failed to import pay guides: ${error instanceof Error ? error.message : 'Unknown error'}`
+          message: `Failed to import pay guides: ${error instanceof Error ? error.message : 'Unknown error'}`,
         })
         result.success = false
       }
@@ -223,8 +248,8 @@ export async function POST(request: NextRequest) {
           user: data.preferences.user,
           defaultExtras: data.preferences.defaultExtras,
           options: {
-            conflictResolution
-          }
+            conflictResolution,
+          },
         }
 
         const validator = await validatePreferencesImport(preferencesRequest)
@@ -237,7 +262,7 @@ export async function POST(request: NextRequest) {
             result.errors.push({
               type: 'validation',
               field: 'preferences',
-              message: 'No user found. Please seed the database first.'
+              message: 'No user found. Please seed the database first.',
             })
             result.success = false
           } else {
@@ -247,16 +272,20 @@ export async function POST(request: NextRequest) {
 
               if (source.name !== undefined) updatePayload.name = source.name
               if (source.email !== undefined) updatePayload.email = source.email
-              if (source.timezone !== undefined) updatePayload.timezone = source.timezone
-              if (source.payPeriodType !== undefined) updatePayload.payPeriodType = source.payPeriodType
+              if (source.timezone !== undefined)
+                updatePayload.timezone = source.timezone
+              if (source.payPeriodType !== undefined)
+                updatePayload.payPeriodType = source.payPeriodType
               if (source.defaultShiftLengthMinutes !== undefined) {
-                updatePayload.defaultShiftLengthMinutes = Number(source.defaultShiftLengthMinutes)
+                updatePayload.defaultShiftLengthMinutes = Number(
+                  source.defaultShiftLengthMinutes
+                )
               }
 
               if (Object.keys(updatePayload).length > 0) {
                 await prisma.user.update({
                   where: { id: user.id },
-                  data: updatePayload
+                  data: updatePayload,
                 })
                 result.updated.push('User preferences')
                 result.summary.totalProcessed++
@@ -265,35 +294,51 @@ export async function POST(request: NextRequest) {
             }
 
             if (preferencesRequest.defaultExtras) {
-              const existingExtras = await prisma.payPeriodExtraTemplate.findMany({
-                where: { userId: user.id },
-                select: { id: true }
-              })
+              const existingExtras =
+                await prisma.payPeriodExtraTemplate.findMany({
+                  where: { userId: user.id },
+                  select: { id: true },
+                })
 
-              if (existingExtras.length > 0 && conflictResolution !== 'overwrite') {
-                result.skipped.push('Default pay period extras: existing templates preserved (use overwrite to replace)')
-                result.summary.totalProcessed += preferencesRequest.defaultExtras.length
-                result.summary.skipped += preferencesRequest.defaultExtras.length
+              if (
+                existingExtras.length > 0 &&
+                conflictResolution !== 'overwrite'
+              ) {
+                result.skipped.push(
+                  'Default pay period extras: existing templates preserved (use overwrite to replace)'
+                )
+                result.summary.totalProcessed +=
+                  preferencesRequest.defaultExtras.length
+                result.summary.skipped +=
+                  preferencesRequest.defaultExtras.length
               } else {
                 if (existingExtras.length > 0) {
-                  await prisma.payPeriodExtraTemplate.deleteMany({ where: { userId: user.id } })
+                  await prisma.payPeriodExtraTemplate.deleteMany({
+                    where: { userId: user.id },
+                  })
                 }
 
                 if (preferencesRequest.defaultExtras.length > 0) {
                   await prisma.payPeriodExtraTemplate.createMany({
-                    data: preferencesRequest.defaultExtras.map((extra, index) => ({
-                      userId: user.id,
-                      label: extra.label,
-                      description: extra.description ?? null,
-                      amount: new Decimal(extra.amount),
-                      taxable: extra.taxable,
-                      active: extra.active ?? true,
-                      sortOrder: extra.sortOrder ?? index
-                    }))
+                    data: preferencesRequest.defaultExtras.map(
+                      (extra, index) => ({
+                        userId: user.id,
+                        label: extra.label,
+                        description: extra.description ?? null,
+                        amount: new Decimal(extra.amount),
+                        taxable: extra.taxable,
+                        active: extra.active ?? true,
+                        sortOrder: extra.sortOrder ?? index,
+                      })
+                    ),
                   })
-                  result.summary.totalProcessed += preferencesRequest.defaultExtras.length
-                  result.summary.successful += preferencesRequest.defaultExtras.length
-                  result.created.push(`Default pay period extras (${preferencesRequest.defaultExtras.length})`)
+                  result.summary.totalProcessed +=
+                    preferencesRequest.defaultExtras.length
+                  result.summary.successful +=
+                    preferencesRequest.defaultExtras.length
+                  result.created.push(
+                    `Default pay period extras (${preferencesRequest.defaultExtras.length})`
+                  )
                 }
               }
             }
@@ -304,7 +349,7 @@ export async function POST(request: NextRequest) {
         result.errors.push({
           type: 'validation',
           field: 'preferences',
-          message: `Failed to import preferences: ${error instanceof Error ? error.message : 'Unknown error'}`
+          message: `Failed to import preferences: ${error instanceof Error ? error.message : 'Unknown error'}`,
         })
         result.success = false
       }
@@ -317,8 +362,8 @@ export async function POST(request: NextRequest) {
           payPeriods: data.payPeriods.payPeriods,
           extras: data.payPeriods.extras,
           options: {
-            conflictResolution
-          }
+            conflictResolution,
+          },
         }
 
         const validator = await validatePayPeriodsImport(payPeriodsRequest)
@@ -326,7 +371,9 @@ export async function POST(request: NextRequest) {
           result.errors.push(...validator.getErrors())
           result.summary.failed += payPeriodsRequest.payPeriods.length
         } else {
-          type PayPeriodExtraImport = NonNullable<ImportPayPeriodsRequest['extras']>[number]
+          type PayPeriodExtraImport = NonNullable<
+            ImportPayPeriodsRequest['extras']
+          >[number]
           const extrasByStart = new Map<string, PayPeriodExtraImport[]>()
 
           if (payPeriodsRequest.extras) {
@@ -353,7 +400,7 @@ export async function POST(request: NextRequest) {
               result.errors.push({
                 type: 'validation',
                 field: 'payPeriods',
-                message: `Invalid dates for pay period starting ${payPeriodData.startDate}`
+                message: `Invalid dates for pay period starting ${payPeriodData.startDate}`,
               })
               result.summary.failed++
               continue
@@ -364,17 +411,20 @@ export async function POST(request: NextRequest) {
               where: {
                 userId_startDate: {
                   userId: user.id,
-                  startDate
-                }
+                  startDate,
+                },
               },
-              include: { extras: true }
+              include: { extras: true },
             })
 
             if (existing && conflictResolution !== 'overwrite') {
-              const reason = conflictResolution === 'rename'
-                ? 'Rename is not supported for pay periods; skipping existing period'
-                : 'Pay period already exists and will be skipped'
-              result.skipped.push(`Pay period starting ${payPeriodData.startDate}: ${reason}`)
+              const reason =
+                conflictResolution === 'rename'
+                  ? 'Rename is not supported for pay periods; skipping existing period'
+                  : 'Pay period already exists and will be skipped'
+              result.skipped.push(
+                `Pay period starting ${payPeriodData.startDate}: ${reason}`
+              )
               result.summary.skipped++
               continue
             }
@@ -383,13 +433,27 @@ export async function POST(request: NextRequest) {
               startDate,
               endDate,
               status: payPeriodData.status,
-              totalHours: payPeriodData.totalHours ? new Decimal(payPeriodData.totalHours) : null,
-              totalPay: payPeriodData.totalPay ? new Decimal(payPeriodData.totalPay) : null,
-              paygWithholding: payPeriodData.paygWithholding ? new Decimal(payPeriodData.paygWithholding) : null,
-              stslAmount: payPeriodData.stslAmount ? new Decimal(payPeriodData.stslAmount) : null,
-              totalWithholdings: payPeriodData.totalWithholdings ? new Decimal(payPeriodData.totalWithholdings) : null,
-              netPay: payPeriodData.netPay ? new Decimal(payPeriodData.netPay) : null,
-              actualPay: payPeriodData.actualPay ? new Decimal(payPeriodData.actualPay) : null
+              totalHours: payPeriodData.totalHours
+                ? new Decimal(payPeriodData.totalHours)
+                : null,
+              totalPay: payPeriodData.totalPay
+                ? new Decimal(payPeriodData.totalPay)
+                : null,
+              paygWithholding: payPeriodData.paygWithholding
+                ? new Decimal(payPeriodData.paygWithholding)
+                : null,
+              stslAmount: payPeriodData.stslAmount
+                ? new Decimal(payPeriodData.stslAmount)
+                : null,
+              totalWithholdings: payPeriodData.totalWithholdings
+                ? new Decimal(payPeriodData.totalWithholdings)
+                : null,
+              netPay: payPeriodData.netPay
+                ? new Decimal(payPeriodData.netPay)
+                : null,
+              actualPay: payPeriodData.actualPay
+                ? new Decimal(payPeriodData.actualPay)
+                : null,
             }
 
             let payPeriodId: string
@@ -397,32 +461,36 @@ export async function POST(request: NextRequest) {
             if (existing) {
               const updated = await prisma.payPeriod.update({
                 where: { id: existing.id },
-                data: payload
+                data: payload,
               })
               payPeriodId = updated.id
-              result.updated.push(`Pay period starting ${payPeriodData.startDate}`)
+              result.updated.push(
+                `Pay period starting ${payPeriodData.startDate}`
+              )
               await prisma.payPeriodExtra.deleteMany({ where: { payPeriodId } })
             } else {
               const created = await prisma.payPeriod.create({
                 data: {
                   userId: user.id,
-                  ...payload
-                }
+                  ...payload,
+                },
               })
               payPeriodId = created.id
-              result.created.push(`Pay period starting ${payPeriodData.startDate}`)
+              result.created.push(
+                `Pay period starting ${payPeriodData.startDate}`
+              )
             }
 
             const extrasForPeriod = extrasByStart.get(normalizedStart)
             if (extrasForPeriod && extrasForPeriod.length > 0) {
               await prisma.payPeriodExtra.createMany({
-                data: extrasForPeriod.map(extra => ({
+                data: extrasForPeriod.map((extra) => ({
                   payPeriodId,
                   type: extra.type,
                   description: extra.description ?? null,
                   amount: new Decimal(extra.amount),
-                  taxable: !!extra.taxable
-                }))
+                  taxable: !!extra.taxable,
+                })),
               })
             }
 
@@ -434,7 +502,7 @@ export async function POST(request: NextRequest) {
         result.errors.push({
           type: 'validation',
           field: 'payPeriods',
-          message: `Failed to import pay periods: ${error instanceof Error ? error.message : 'Unknown error'}`
+          message: `Failed to import pay periods: ${error instanceof Error ? error.message : 'Unknown error'}`,
         })
         result.success = false
       }
@@ -449,12 +517,12 @@ export async function POST(request: NextRequest) {
             startTime: shift.startTime,
             endTime: shift.endTime,
             notes: shift.notes,
-            breakPeriods: shift.breakPeriods
+            breakPeriods: shift.breakPeriods,
           })),
           options: {
             conflictResolution,
-            validatePayGuides: importSettings.validatePayGuides ?? true
-          }
+            validatePayGuides: importSettings.validatePayGuides ?? true,
+          },
         }
 
         const validator = await validateShiftsImport(shiftsRequest)
@@ -463,9 +531,9 @@ export async function POST(request: NextRequest) {
           result.summary.failed += shiftsRequest.shifts.length
         } else {
           const payGuides = await prisma.payGuide.findMany({
-            select: { id: true, name: true, isActive: true, timezone: true }
+            select: { id: true, name: true, isActive: true, timezone: true },
           })
-          const payGuideMap = new Map(payGuides.map(pg => [pg.name, pg]))
+          const payGuideMap = new Map(payGuides.map((pg) => [pg.name, pg]))
 
           const defaultExtrasCount = await prisma.payPeriodExtraTemplate.count({
             where: { userId: user.id, active: true },
@@ -491,13 +559,13 @@ export async function POST(request: NextRequest) {
 
           for (const shiftData of shiftsRequest.shifts) {
             result.summary.totalProcessed++
-            
+
             const payGuide = payGuideMap.get(shiftData.payGuideName)
             if (!payGuide) {
               result.errors.push({
                 type: 'dependency',
                 field: 'payGuideName',
-                message: `Pay guide "${shiftData.payGuideName}" not found`
+                message: `Pay guide "${shiftData.payGuideName}" not found`,
               })
               result.summary.failed++
               continue
@@ -511,11 +579,17 @@ export async function POST(request: NextRequest) {
                 where: {
                   userId: user.id,
                   OR: [
-                    { startTime: { lte: startTime }, endTime: { gte: startTime } },
+                    {
+                      startTime: { lte: startTime },
+                      endTime: { gte: startTime },
+                    },
                     { startTime: { lte: endTime }, endTime: { gte: endTime } },
-                    { startTime: { gte: startTime }, endTime: { lte: endTime } }
-                  ]
-                }
+                    {
+                      startTime: { gte: startTime },
+                      endTime: { lte: endTime },
+                    },
+                  ],
+                },
               })
 
               if (overlappingShifts.length > 0) {
@@ -525,7 +599,11 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            const payPeriod = await findOrCreatePayPeriod(user.id, startTime, payGuide.timezone)
+            const payPeriod = await findOrCreatePayPeriod(
+              user.id,
+              startTime,
+              payGuide.timezone
+            )
 
             const shift = await prisma.shift.create({
               data: {
@@ -534,8 +612,8 @@ export async function POST(request: NextRequest) {
                 startTime,
                 endTime,
                 notes: shiftData.notes || null,
-                payPeriodId: payPeriod.id
-              }
+                payPeriodId: payPeriod.id,
+              },
             })
 
             if (shiftData.breakPeriods && shiftData.breakPeriods.length > 0) {
@@ -543,8 +621,8 @@ export async function POST(request: NextRequest) {
                 data: shiftData.breakPeriods.map((bp: any) => ({
                   shiftId: shift.id,
                   startTime: new Date(bp.startTime),
-                  endTime: new Date(bp.endTime)
-                }))
+                  endTime: new Date(bp.endTime),
+                })),
               })
             }
 
@@ -553,7 +631,7 @@ export async function POST(request: NextRequest) {
               payGuideId: payGuide.id,
               startTime,
               endTime,
-              breakPeriods
+              breakPeriods,
             })
 
             if (calculation) {
@@ -562,7 +640,9 @@ export async function POST(request: NextRequest) {
 
             await PayPeriodSyncService.onShiftCreated(shift.id)
 
-            result.created.push(`Shift: ${shiftData.startTime} to ${shiftData.endTime}`)
+            result.created.push(
+              `Shift: ${shiftData.startTime} to ${shiftData.endTime}`
+            )
             result.summary.successful++
           }
         }
@@ -571,7 +651,7 @@ export async function POST(request: NextRequest) {
         result.errors.push({
           type: 'validation',
           field: 'shifts',
-          message: `Failed to import shifts: ${error instanceof Error ? error.message : 'Unknown error'}`
+          message: `Failed to import shifts: ${error instanceof Error ? error.message : 'Unknown error'}`,
         })
         result.success = false
       }
@@ -587,8 +667,8 @@ export async function POST(request: NextRequest) {
           taxRateConfigs: data.taxData.taxRateConfigs,
           options: {
             conflictResolution,
-            replaceExisting: importSettings.replaceExisting ?? false
-          }
+            replaceExisting: importSettings.replaceExisting ?? false,
+          },
         }
 
         const validator = await validateTaxDataImport(taxDataRequest)
@@ -602,14 +682,13 @@ export async function POST(request: NextRequest) {
         result.errors.push({
           type: 'validation',
           field: 'taxData',
-          message: `Failed to import tax data: ${error instanceof Error ? error.message : 'Unknown error'}`
+          message: `Failed to import tax data: ${error instanceof Error ? error.message : 'Unknown error'}`,
         })
         result.success = false
       }
     }
 
     return NextResponse.json(result, { status: result.success ? 200 : 207 })
-
   } catch (error) {
     console.error('Error in selective import:', error)
     return NextResponse.json(
@@ -624,7 +703,10 @@ async function importTaxDataPayload(
   payload: ImportTaxDataRequest,
   result: ImportResult
 ) {
-  const options = payload.options ?? { conflictResolution: 'skip', replaceExisting: false }
+  const options = payload.options ?? {
+    conflictResolution: 'skip',
+    replaceExisting: false,
+  }
 
   // Import tax settings
   if (payload.taxSettings) {
@@ -633,7 +715,8 @@ async function importTaxDataPayload(
 
       const updateData: any = {}
       if (payload.taxSettings.claimedTaxFreeThreshold !== undefined) {
-        updateData.claimedTaxFreeThreshold = payload.taxSettings.claimedTaxFreeThreshold
+        updateData.claimedTaxFreeThreshold =
+          payload.taxSettings.claimedTaxFreeThreshold
       }
       if (payload.taxSettings.isForeignResident !== undefined) {
         updateData.isForeignResident = payload.taxSettings.isForeignResident
@@ -650,18 +733,18 @@ async function importTaxDataPayload(
         update: updateData,
         create: {
           userId,
-          ...updateData
-        }
+          ...updateData,
+        },
       })
 
       result.updated.push('Tax settings')
       result.summary.successful++
-    } catch {
+    } catch (error) {
       console.error('Error importing tax settings (selective):', error)
       result.errors.push({
         type: 'validation',
         field: 'taxSettings',
-        message: `Failed to import tax settings: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Failed to import tax settings: ${error instanceof Error ? error.message : 'Unknown error'}`,
       })
       result.summary.failed++
       result.success = false
@@ -682,7 +765,7 @@ async function importTaxDataPayload(
           coefficientA: new Decimal(coeff.coefficientA),
           coefficientB: new Decimal(coeff.coefficientB),
           description: coeff.description || null,
-          isActive: true
+          isActive: true,
         }
 
         if (options.replaceExisting) {
@@ -691,50 +774,61 @@ async function importTaxDataPayload(
               taxYear_scale_earningsFrom: {
                 taxYear: coeff.taxYear,
                 scale: coeff.scale,
-                earningsFrom: new Decimal(coeff.earningsFrom)
-              }
+                earningsFrom: new Decimal(coeff.earningsFrom),
+              },
             },
             update: coeffData,
-            create: coeffData
+            create: coeffData,
           })
-          result.updated.push(`Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}`)
+          result.updated.push(
+            `Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}`
+          )
         } else {
           const existing = await prisma.taxCoefficient.findUnique({
             where: {
               taxYear_scale_earningsFrom: {
                 taxYear: coeff.taxYear,
                 scale: coeff.scale,
-                earningsFrom: new Decimal(coeff.earningsFrom)
-              }
-            }
+                earningsFrom: new Decimal(coeff.earningsFrom),
+              },
+            },
           })
 
           if (existing) {
             if (options.conflictResolution === 'skip') {
-              result.skipped.push(`Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}: already exists`)
+              result.skipped.push(
+                `Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}: already exists`
+              )
               result.summary.skipped++
               continue
             } else if (options.conflictResolution === 'overwrite') {
               await prisma.taxCoefficient.update({
                 where: { id: existing.id },
-                data: coeffData
+                data: coeffData,
               })
-              result.updated.push(`Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}`)
+              result.updated.push(
+                `Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}`
+              )
             }
           } else {
             await prisma.taxCoefficient.create({ data: coeffData })
-            result.created.push(`Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}`)
+            result.created.push(
+              `Tax coefficient ${coeff.taxYear} ${coeff.scale} ${coeff.earningsFrom}`
+            )
           }
         }
 
         result.summary.successful++
       } catch (error) {
-        console.error(`Error importing tax coefficient (selective) ${i}:`, error)
+        console.error(
+          `Error importing tax coefficient (selective) ${i}:`,
+          error
+        )
         result.errors.push({
           type: 'validation',
           field: 'taxCoefficients',
           message: `Failed to import tax coefficient: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          index: i
+          index: i,
         })
         result.summary.failed++
         result.success = false
@@ -756,7 +850,7 @@ async function importTaxDataPayload(
           coefficientA: new Decimal(rate.coefficientA),
           coefficientB: new Decimal(rate.coefficientB),
           description: rate.description || null,
-          isActive: true
+          isActive: true,
         }
 
         if (options.replaceExisting) {
@@ -765,39 +859,47 @@ async function importTaxDataPayload(
               taxYear_scale_earningsFrom: {
                 taxYear: rate.taxYear,
                 scale: rate.scale,
-                earningsFrom: new Decimal(rate.earningsFrom)
-              }
+                earningsFrom: new Decimal(rate.earningsFrom),
+              },
             },
             update: rateData,
-            create: rateData
+            create: rateData,
           })
-          result.updated.push(`STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}`)
+          result.updated.push(
+            `STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}`
+          )
         } else {
           const existing = await prisma.stslRate.findUnique({
             where: {
               taxYear_scale_earningsFrom: {
                 taxYear: rate.taxYear,
                 scale: rate.scale,
-                earningsFrom: new Decimal(rate.earningsFrom)
-              }
-            }
+                earningsFrom: new Decimal(rate.earningsFrom),
+              },
+            },
           })
 
           if (existing) {
             if (options.conflictResolution === 'skip') {
-              result.skipped.push(`STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}: already exists`)
+              result.skipped.push(
+                `STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}: already exists`
+              )
               result.summary.skipped++
               continue
             } else if (options.conflictResolution === 'overwrite') {
               await prisma.stslRate.update({
                 where: { id: existing.id },
-                data: rateData
+                data: rateData,
               })
-              result.updated.push(`STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}`)
+              result.updated.push(
+                `STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}`
+              )
             }
           } else {
             await prisma.stslRate.create({ data: rateData })
-            result.created.push(`STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}`)
+            result.created.push(
+              `STSL rate ${rate.taxYear} ${rate.scale} ${rate.earningsFrom}`
+            )
           }
         }
 
@@ -808,7 +910,7 @@ async function importTaxDataPayload(
           type: 'validation',
           field: 'stslRates',
           message: `Failed to import STSL rate: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          index: i
+          index: i,
         })
         result.summary.failed++
         result.success = false
@@ -823,21 +925,29 @@ async function importTaxDataPayload(
 
       try {
         const existing = await prisma.taxRateConfig.findFirst({
-          where: { taxYear: config.taxYear, description: config.description || undefined }
+          where: {
+            taxYear: config.taxYear,
+            description: config.description || undefined,
+          },
         })
 
         if (existing) {
           if (options.conflictResolution === 'skip') {
-            result.skipped.push(`Tax rate config ${config.taxYear}: already exists`)
+            result.skipped.push(
+              `Tax rate config ${config.taxYear}: already exists`
+            )
             result.summary.skipped++
             continue
-          } else if (options.conflictResolution === 'overwrite' || options.replaceExisting) {
+          } else if (
+            options.conflictResolution === 'overwrite' ||
+            options.replaceExisting
+          ) {
             await prisma.taxRateConfig.update({
               where: { id: existing.id },
               data: {
                 description: config.description || null,
-                isActive: true
-              }
+                isActive: true,
+              },
             })
             result.updated.push(`Tax rate config ${config.taxYear}`)
           }
@@ -846,20 +956,23 @@ async function importTaxDataPayload(
             data: {
               taxYear: config.taxYear,
               description: config.description || null,
-              isActive: true
-            }
+              isActive: true,
+            },
           })
           result.created.push(`Tax rate config ${config.taxYear}`)
         }
 
         result.summary.successful++
       } catch (error) {
-        console.error(`Error importing tax rate config (selective) ${i}:`, error)
+        console.error(
+          `Error importing tax rate config (selective) ${i}:`,
+          error
+        )
         result.errors.push({
           type: 'validation',
           field: 'taxRateConfigs',
           message: `Failed to import tax rate config: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          index: i
+          index: i,
         })
         result.summary.failed++
         result.success = false

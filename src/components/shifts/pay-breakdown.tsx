@@ -179,7 +179,6 @@ export const PayBreakdown: React.FC<PayBreakdownProps> = ({
                   <PenaltyBreakdown 
                     penalties={penalties}
                     baseRate={payGuide.baseRate.toString()}
-                    isPreview={isPreview}
                   />
                 )}
                 
@@ -187,7 +186,6 @@ export const PayBreakdown: React.FC<PayBreakdownProps> = ({
                   <OvertimeBreakdown 
                     overtimes={overtimes}
                     baseRate={payGuide.baseRate.toString()}
-                    isPreview={isPreview}
                   />
                 )}
               </div>

@@ -48,7 +48,7 @@ const getDayLabel = (dayOfWeek?: number | null) => {
   return option?.label ?? 'All days'
 }
 
-interface VariantConfig<FormState extends BaseFormState, Row> {
+interface VariantConfig<FormState extends BaseFormState, Row extends { name: string }> {
   resourcePath: string
   title: string
   subtitle: string
@@ -238,8 +238,8 @@ const variantConfigs = {
 } as const
 
 type VariantConfigFor<V extends Variant> = typeof variantConfigs[V]
-type FormStateFor<V extends Variant> = VariantConfigFor<V> extends VariantConfig<infer F, unknown> ? F : never
-type RowFor<V extends Variant> = VariantConfigFor<V> extends VariantConfig<unknown, infer R> ? R : never
+type FormStateFor<V extends Variant> = ReturnType<VariantConfigFor<V>['initialForm']>
+type RowFor<V extends Variant> = Parameters<VariantConfigFor<V>['mapRowToForm']>[0]
 
 type Props<V extends Variant> = {
   payGuideId: string
@@ -255,7 +255,7 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
   const [error, setError] = useState<string | null>(null)
   const [rows, setRows] = useState<Row[]>([])
   const [query, setQuery] = useState('')
-  const [form, setForm] = useState<FormState>(() => config.initialForm())
+  const [form, setForm] = useState<FormState>(() => config.initialForm() as unknown as FormState)
   const [saving, setSaving] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [edit, setEdit] = useState<FormState | null>(null)
@@ -263,14 +263,14 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
   const updateEdit = useCallback<React.Dispatch<React.SetStateAction<FormState>>>(
     (updater) => {
       setEdit(prev => {
-        const base = prev ?? variantConfigs[variant].initialForm()
+        const base = prev ?? (config.initialForm() as unknown as FormState)
         if (typeof updater === 'function') {
           return (updater as (current: FormState) => FormState)(base)
         }
         return updater
       })
     },
-    [variant],
+    [config],
   )
 
   const resourceBase = `/api/pay-rates/${payGuideId}/${config.resourcePath}`
@@ -299,14 +299,18 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
   }, [resourceBase])
 
   useEffect(() => {
-    setForm(config.initialForm())
+    setForm(config.initialForm() as unknown as FormState)
     setEditId(null)
     setEdit(null)
     fetchRows()
   }, [config, fetchRows])
 
   const filteredRows = useMemo(
-    () => rows.filter(row => row.name.toLowerCase().includes(query.toLowerCase())),
+    () =>
+      rows.filter(row => {
+        const name = (row as { name?: string }).name ?? ''
+        return name.toLowerCase().includes(query.toLowerCase())
+      }),
     [rows, query],
   )
 
@@ -314,7 +318,7 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
     setSaving(true)
     setError(null)
     try {
-      const payload = config.buildCreatePayload(form)
+      const payload = config.buildCreatePayload(form as any)
       const res = await fetch(resourceBase, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -325,7 +329,7 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
         const message = json?.message || json?.error || 'Create failed'
         throw new Error(message)
       }
-      setForm(config.initialForm())
+      setForm(config.initialForm() as unknown as FormState)
       await fetchRows()
     } catch (err) {
       if (err instanceof Error) {
@@ -340,7 +344,7 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
 
   const save = async (id: string, patch: Partial<FormState>) => {
     try {
-      const sanitized = config.sanitizePatch(patch)
+      const sanitized = config.sanitizePatch(patch as any)
       const res = await fetch(`${resourceBase}/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -401,7 +405,7 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
               value={form.name}
               onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
             />
-            {config.renderCreateFields(form, setForm).map((node, index) => (
+            {config.renderCreateFields(form as any, setForm as any).map((node, index) => (
               <React.Fragment key={index}>{node}</React.Fragment>
             ))}
             <Select
@@ -448,7 +452,7 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
               onChange={event => setForm(prev => ({ ...prev, isPublicHoliday: event.target.checked }))}
             />
             <div className="align-self-end">
-              <Button onClick={create} disabled={saving || !config.canCreate(form)}>
+              <Button onClick={create} disabled={saving || !config.canCreate(form as any)}>
                 {saving ? 'Saving…' : 'Add'}
               </Button>
             </div>
@@ -482,7 +486,7 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
                       <span className="pay-guides__chip pay-guides__chip--info">Public holiday</span>
                     )}
                   </div>
-                  {config.renderViewColumns(row).map((content, index) => (
+                  {config.renderViewColumns(row as any).map((content, index) => (
                     <div key={index}>{content}</div>
                   ))}
                   <div className="d-flex gap-2 justify-content-end">
@@ -498,7 +502,7 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
                       variant="secondary"
                       onClick={() => {
                         setEditId(row.id)
-                        setEdit(config.mapRowToForm(row))
+                        setEdit(config.mapRowToForm(row as any) as any)
                       }}
                     >
                       Edit
@@ -519,7 +523,7 @@ export function TimeFramesEditor<V extends Variant>({ payGuideId, variant }: Pro
                     onChange={event => updateEdit(prev => ({ ...prev, name: event.target.value }))}
                   />
                   {config
-                    .renderEditFields((edit ?? config.initialForm()) as FormState, updateEdit)
+                    .renderEditFields((edit ?? config.initialForm()) as any, updateEdit as any)
                     .map((field, index) => (
                       <React.Fragment key={index}>{field}</React.Fragment>
                     ))}

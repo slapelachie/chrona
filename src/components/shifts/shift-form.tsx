@@ -107,36 +107,6 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
   }, [bannerStatus, mode])
 
   // Fetch pay guides on component mount
-  useEffect(() => {
-    fetchUser()
-    fetchPayGuides()
-    if (mode === 'edit' && shiftId) {
-      fetchShiftData()
-    } else {
-      setInitialLoading(false)
-      setInitialBreakPeriods([])
-    }
-  }, [fetchPayGuides, fetchShiftData, fetchUser, mode, shiftId])
-
-  // Fetch pay preview when form data changes
-  useEffect(() => {
-    if (formData.payGuideId && formData.startTime && formData.endTime) {
-      const timeoutId = setTimeout(() => {
-        fetchPayPreview()
-      }, 500) // Debounce API calls
-
-      return () => clearTimeout(timeoutId)
-    } else {
-      setPayCalculation(null)
-    }
-  }, [
-    formData.payGuideId,
-    formData.startTime,
-    formData.endTime,
-    formData.breakPeriods,
-    fetchPayPreview,
-  ])
-
   const dismissBanner = () => {
     setBannerStatus(null)
     const entries = Array.from(searchParams.entries())
@@ -234,6 +204,17 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     }
   }, [shiftId])
 
+  useEffect(() => {
+    fetchUser()
+    fetchPayGuides()
+    if (mode === 'edit' && shiftId) {
+      fetchShiftData()
+    } else {
+      setInitialLoading(false)
+      setInitialBreakPeriods([])
+    }
+  }, [fetchPayGuides, fetchShiftData, fetchUser, mode, shiftId])
+
   const fetchPayPreview = useCallback(async () => {
     try {
       setPreviewLoading(true)
@@ -270,6 +251,25 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       setPreviewLoading(false)
     }
   }, [formData.breakPeriods, formData.endTime, formData.payGuideId, formData.startTime])
+
+  // Fetch pay preview when form data changes
+  useEffect(() => {
+    if (formData.payGuideId && formData.startTime && formData.endTime) {
+      const timeoutId = setTimeout(() => {
+        fetchPayPreview()
+      }, 500) // Debounce API calls
+
+      return () => clearTimeout(timeoutId)
+    } else {
+      setPayCalculation(null)
+    }
+  }, [
+    formData.payGuideId,
+    formData.startTime,
+    formData.endTime,
+    formData.breakPeriods,
+    fetchPayPreview,
+  ])
 
   const formatDateTimeLocal = (date: Date): string => {
     const year = date.getFullYear()
