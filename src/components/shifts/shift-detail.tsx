@@ -18,6 +18,7 @@ import { PayCalculationResult } from '@/types'
 import { PayBreakdown } from './pay-breakdown'
 import { StatusBadge } from '@/components/pay-periods/status-badge'
 import './shift-detail.scss'
+import { formatCurrencyValue } from '../utils/format'
 
 interface ShiftData {
   id: string
@@ -98,13 +99,6 @@ const getShiftStatus = (startTime: string, endTime: string): ShiftStatus => {
   return 'completed'
 }
 
-const formatCurrency = (value?: string | number | null) => {
-  if (value === undefined || value === null) return '—'
-  const parsed = typeof value === 'string' ? parseFloat(value) : value
-  if (Number.isNaN(parsed)) return '—'
-  return parsed.toFixed(2)
-}
-
 export const ShiftDetail: React.FC<ShiftDetailProps> = ({ shiftId }) => {
   const router = useRouter()
   const [shift, setShift] = useState<ShiftData | null>(null)
@@ -175,13 +169,13 @@ export const ShiftDetail: React.FC<ShiftDetailProps> = ({ shiftId }) => {
       entries.push({ label: 'Total hours', value: `${parseFloat(shift.totalHours).toFixed(2)}h` })
     }
     if (shift.basePay) {
-      entries.push({ label: 'Base pay', value: `$${formatCurrency(shift.basePay)}` })
+      entries.push({ label: 'Base pay', value: `$${formatCurrencyValue(shift.basePay)}` })
     }
     if (shift.overtimePay && parseFloat(shift.overtimePay) > 0) {
-      entries.push({ label: 'Overtime', value: `$${formatCurrency(shift.overtimePay)}` })
+      entries.push({ label: 'Overtime', value: `$${formatCurrencyValue(shift.overtimePay)}` })
     }
     if (shift.penaltyPay && parseFloat(shift.penaltyPay) > 0) {
-      entries.push({ label: 'Penalties', value: `$${formatCurrency(shift.penaltyPay)}` })
+      entries.push({ label: 'Penalties', value: `$${formatCurrencyValue(shift.penaltyPay)}` })
     }
     return entries
   }, [shift])
@@ -361,7 +355,7 @@ export const ShiftDetail: React.FC<ShiftDetailProps> = ({ shiftId }) => {
                 {shift.totalPay && (
                   <div className="shift-detail__pay-total">
                     <span>Total pay</span>
-                    <strong>${formatCurrency(shift.totalPay)}</strong>
+                    <strong>${formatCurrencyValue(shift.totalPay)}</strong>
                   </div>
                 )}
               </div>
@@ -401,7 +395,7 @@ export const ShiftDetail: React.FC<ShiftDetailProps> = ({ shiftId }) => {
                 </div>
                 <div>
                   <dt>Base rate</dt>
-                  <dd>${formatCurrency(shift.payGuide.baseRate)}/hr</dd>
+                  <dd>${formatCurrencyValue(shift.payGuide.baseRate)}/hr</dd>
                 </div>
                 <div>
                   <dt>Timezone</dt>

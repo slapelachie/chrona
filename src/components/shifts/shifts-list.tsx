@@ -26,6 +26,7 @@ import {
   PayGuideSummary,
 } from '@/types'
 import { formatPayPeriodDate } from '@/lib/date-utils'
+import { formatCurrencyAmount } from '../utils/format'
 import './shifts-list.scss'
 
 type ViewMode = 'list' | 'calendar'
@@ -350,15 +351,6 @@ export const ShiftsList: React.FC = () => {
   }, [])
 
   // Timeline helpers
-  const formatCurrencyValue = (amount?: string) => {
-    const numeric = Number(amount ?? 0)
-    if (Number.isNaN(numeric)) return '$0.00'
-    return numeric.toLocaleString('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-      minimumFractionDigits: 2,
-    })
-  }
 
   const formatHoursValue = (hours?: string) => {
     const numeric = Number(hours ?? 0)
@@ -545,24 +537,24 @@ export const ShiftsList: React.FC = () => {
                     : item.payPeriod.netPay
                     ? 'Net Pay'
                     : 'Total Pay'
-                  const primaryPay = formatCurrencyValue(resolvePrimaryPay(item.payPeriod))
+                  const primaryPay = formatCurrencyAmount(resolvePrimaryPay(item.payPeriod))
                   const hours = formatHoursValue(item.payPeriod.totalHours)
                   const isExpanded = !!expandedPeriods[item.payPeriod.id]
                   const panelId = `timeline-panel-${item.payPeriod.id}`
                   const secondaryPay = item.payPeriod.actualPay && item.payPeriod.netPay && item.payPeriod.actualPay !== item.payPeriod.netPay
                     ? {
                         label: 'Net Pay',
-                        value: formatCurrencyValue(item.payPeriod.netPay),
+                        value: formatCurrencyAmount(item.payPeriod.netPay),
                       }
                     : item.payPeriod.actualPay && item.payPeriod.totalPay && item.payPeriod.actualPay !== item.payPeriod.totalPay
                     ? {
                         label: 'Total Pay',
-                        value: formatCurrencyValue(item.payPeriod.totalPay),
+                        value: formatCurrencyAmount(item.payPeriod.totalPay),
                       }
                     : item.payPeriod.netPay && item.payPeriod.totalPay && item.payPeriod.netPay !== item.payPeriod.totalPay
                     ? {
                         label: 'Total Pay',
-                        value: formatCurrencyValue(item.payPeriod.totalPay),
+                        value: formatCurrencyAmount(item.payPeriod.totalPay),
                       }
                     : null
                   const displaySecondary = secondaryPay && secondaryPay.value !== primaryPay ? secondaryPay : null

@@ -4,6 +4,15 @@ import React from 'react'
 import { Card, CardBody } from '../ui'
 import { TrendingUp, Clock } from 'lucide-react'
 import { AppliedOvertime } from '@/types'
+import {
+  formatCurrencyValue,
+  formatDateContext,
+  formatDecimal,
+  formatHours,
+  formatTime,
+  sumNumeric,
+  toNumber,
+} from '../utils/format'
 
 interface OvertimeBreakdownProps {
   overtimes: AppliedOvertime[]
@@ -18,36 +27,6 @@ export const OvertimeBreakdown: React.FC<OvertimeBreakdownProps> = ({
     return null
   }
 
-  const asDate = (value: any): Date => (typeof value === 'string' ? new Date(value) : value)
-
-  const formatTime = (date: any) => {
-    const d = asDate(date)
-    return d.toLocaleTimeString('en-AU', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: false
-    })
-  }
-
-  const formatDate = (date: any) => {
-    const d = asDate(date)
-    return d.toLocaleDateString('en-AU', { 
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    })
-  }
-
-  const getDayContext = (startTime: any, endTime: any) => {
-    const startDate = formatDate(startTime)
-    const endDate = formatDate(endTime)
-    
-    if (startDate === endDate) {
-      return startDate
-    }
-    return `${startDate} - ${endDate}`
-  }
-
   const getOvertimeCategory = (multiplier: number) => {
     if (multiplier >= 2.0) {
       return { label: 'Double Time', color: 'var(--color-danger)' }
@@ -59,13 +38,8 @@ export const OvertimeBreakdown: React.FC<OvertimeBreakdownProps> = ({
     return { label: 'Standard Rate', color: 'var(--color-text-primary)' }
   }
 
-  const totalOvertimeHours = overtimes.reduce((sum, overtime) => 
-    sum + parseFloat(overtime.hours.toString()), 0
-  )
-
-  const totalOvertimePay = overtimes.reduce((sum, overtime) => 
-    sum + parseFloat(overtime.pay.toString()), 0
-  )
+  const totalOvertimeHours = sumNumeric(overtimes, overtime => overtime.hours)
+  const totalOvertimePay = sumNumeric(overtimes, overtime => overtime.pay)
 
   return (
     <Card variant="outlined" style={{ marginTop: '0.5rem' }}>
@@ -94,7 +68,8 @@ export const OvertimeBreakdown: React.FC<OvertimeBreakdownProps> = ({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {overtimes.map((overtime, index) => {
-            const category = getOvertimeCategory(parseFloat(overtime.multiplier.toString()))
+            const multiplierValue = toNumber(overtime.multiplier) ?? 0
+            const category = getOvertimeCategory(multiplierValue)
             
             return (
               <div 
@@ -149,7 +124,7 @@ export const OvertimeBreakdown: React.FC<OvertimeBreakdownProps> = ({
                       <Clock size={12} />
                       {formatTime(overtime.startTime)} - {formatTime(overtime.endTime)}
                       <span style={{ margin: '0 0.25rem' }}>•</span>
-                      {getDayContext(overtime.startTime, overtime.endTime)}
+                      {formatDateContext(overtime.startTime, overtime.endTime)}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -158,13 +133,13 @@ export const OvertimeBreakdown: React.FC<OvertimeBreakdownProps> = ({
                       fontWeight: '600',
                       color: category.color
                     }}>
-                      ${parseFloat(overtime.pay.toString()).toFixed(2)}
+                      ${formatCurrencyValue(overtime.pay)}
                     </div>
                     <div style={{ 
                       fontSize: '0.75rem', 
                       color: 'var(--color-text-secondary)'
                     }}>
-                      {parseFloat(overtime.hours.toString()).toFixed(2)}h
+                      {formatHours(overtime.hours)}h
                     </div>
                   </div>
                 </div>
@@ -179,19 +154,21 @@ export const OvertimeBreakdown: React.FC<OvertimeBreakdownProps> = ({
                   <div>
                     <span>Base Rate: </span>
                     <span style={{ color: 'var(--color-text-primary)' }}>
-                      ${typeof baseRate === 'string' ? parseFloat(baseRate).toFixed(2) : baseRate.toFixed(2)}/hr
+                      ${formatCurrencyValue(baseRate)}/hr
                     </span>
                   </div>
                   <div>
                     <span>Multiplier: </span>
                     <span style={{ color: 'var(--color-text-primary)' }}>
-                      {parseFloat(overtime.multiplier.toString()).toFixed(2)}x
+                      {formatDecimal(overtime.multiplier)}x
                     </span>
                   </div>
                   <div>
                     <span>Rate: </span>
                     <span style={{ color: category.color, fontWeight: '600' }}>
-                      ${(parseFloat(overtime.multiplier.toString()) * (typeof baseRate === 'string' ? parseFloat(baseRate) : baseRate)).toFixed(2)}/hr
+                      ${formatCurrencyValue(
+                        (toNumber(baseRate) ?? 0) * multiplierValue
+                      )}/hr
                     </span>
                   </div>
                 </div>
@@ -215,7 +192,7 @@ export const OvertimeBreakdown: React.FC<OvertimeBreakdownProps> = ({
               Total Overtime Pay
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-              {totalOvertimeHours.toFixed(2)} hours
+              {formatHours(totalOvertimeHours)} hours
             </div>
           </div>
           <div style={{ 
@@ -223,7 +200,7 @@ export const OvertimeBreakdown: React.FC<OvertimeBreakdownProps> = ({
             fontWeight: '700',
             color: 'var(--color-warning)'
           }}>
-            ${totalOvertimePay.toFixed(2)}
+            ${formatCurrencyValue(totalOvertimePay)}
           </div>
         </div>
       </CardBody>

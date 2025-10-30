@@ -4,6 +4,15 @@ import React from 'react'
 import { Card, CardBody } from '../ui'
 import { AlertTriangle, Clock } from 'lucide-react'
 import { AppliedPenalty } from '@/types'
+import {
+  formatCurrencyValue,
+  formatDateContext,
+  formatDecimal,
+  formatHours,
+  formatTime,
+  sumNumeric,
+  toNumber,
+} from '../utils/format'
 
 interface PenaltyBreakdownProps {
   penalties: AppliedPenalty[]
@@ -18,43 +27,8 @@ export const PenaltyBreakdown: React.FC<PenaltyBreakdownProps> = ({
     return null
   }
 
-  const asDate = (value: any): Date => (typeof value === 'string' ? new Date(value) : value)
-
-  const formatTime = (date: any) => {
-    const d = asDate(date)
-    return d.toLocaleTimeString('en-AU', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: false
-    })
-  }
-
-  const formatDate = (date: any) => {
-    const d = asDate(date)
-    return d.toLocaleDateString('en-AU', { 
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    })
-  }
-
-  const getDayContext = (startTime: any, endTime: any) => {
-    const startDate = formatDate(startTime)
-    const endDate = formatDate(endTime)
-    
-    if (startDate === endDate) {
-      return startDate
-    }
-    return `${startDate} - ${endDate}`
-  }
-
-  const totalPenaltyHours = penalties.reduce((sum, penalty) => 
-    sum + parseFloat(penalty.hours.toString()), 0
-  )
-
-  const totalPenaltyPay = penalties.reduce((sum, penalty) => 
-    sum + parseFloat(penalty.pay.toString()), 0
-  )
+  const totalPenaltyHours = sumNumeric(penalties, penalty => penalty.hours)
+  const totalPenaltyPay = sumNumeric(penalties, penalty => penalty.pay)
 
   return (
     <Card variant="outlined" style={{ marginTop: '0.5rem' }}>
@@ -119,7 +93,7 @@ export const PenaltyBreakdown: React.FC<PenaltyBreakdownProps> = ({
                     <Clock size={12} />
                     {formatTime(penalty.startTime)} - {formatTime(penalty.endTime)}
                     <span style={{ margin: '0 0.25rem' }}>•</span>
-                    {getDayContext(penalty.startTime, penalty.endTime)}
+                    {formatDateContext(penalty.startTime, penalty.endTime)}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -128,13 +102,13 @@ export const PenaltyBreakdown: React.FC<PenaltyBreakdownProps> = ({
                     fontWeight: '600',
                     color: 'var(--color-primary)'
                   }}>
-                    ${parseFloat(penalty.pay.toString()).toFixed(2)}
+                    ${formatCurrencyValue(penalty.pay)}
                   </div>
                   <div style={{ 
                     fontSize: '0.75rem', 
                     color: 'var(--color-text-secondary)'
                   }}>
-                    {parseFloat(penalty.hours.toString()).toFixed(2)}h
+                    {formatHours(penalty.hours)}h
                   </div>
                 </div>
               </div>
@@ -149,19 +123,21 @@ export const PenaltyBreakdown: React.FC<PenaltyBreakdownProps> = ({
                 <div>
                   <span>Base Rate: </span>
                   <span style={{ color: 'var(--color-text-primary)' }}>
-                    ${typeof baseRate === 'string' ? parseFloat(baseRate).toFixed(2) : baseRate.toFixed(2)}/hr
+                    ${formatCurrencyValue(baseRate)}/hr
                   </span>
                 </div>
                 <div>
                   <span>Multiplier: </span>
                   <span style={{ color: 'var(--color-text-primary)' }}>
-                    {parseFloat(penalty.multiplier.toString()).toFixed(2)}x
+                    {formatDecimal(penalty.multiplier)}x
                   </span>
                 </div>
                 <div>
                   <span>Rate: </span>
                   <span style={{ color: 'var(--color-primary)', fontWeight: '600' }}>
-                    ${(parseFloat(penalty.multiplier.toString()) * (typeof baseRate === 'string' ? parseFloat(baseRate) : baseRate)).toFixed(2)}/hr
+                    ${formatCurrencyValue(
+                      (toNumber(baseRate) ?? 0) * (toNumber(penalty.multiplier) ?? 0)
+                    )}/hr
                   </span>
                 </div>
               </div>
@@ -184,7 +160,7 @@ export const PenaltyBreakdown: React.FC<PenaltyBreakdownProps> = ({
               Total Penalty Pay
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-              {totalPenaltyHours.toFixed(2)} hours
+              {formatHours(totalPenaltyHours)} hours
             </div>
           </div>
           <div style={{ 
@@ -192,7 +168,7 @@ export const PenaltyBreakdown: React.FC<PenaltyBreakdownProps> = ({
             fontWeight: '700',
             color: 'var(--color-primary)'
           }}>
-            ${totalPenaltyPay.toFixed(2)}
+            ${formatCurrencyValue(totalPenaltyPay)}
           </div>
         </div>
       </CardBody>

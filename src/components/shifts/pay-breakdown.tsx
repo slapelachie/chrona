@@ -6,6 +6,7 @@ import { DollarSign, ChevronDown, ChevronRight } from 'lucide-react'
 import { PayCalculationResult } from '@/types'
 import { PenaltyBreakdown } from './penalty-breakdown'
 import { OvertimeBreakdown } from './overtime-breakdown'
+import { formatCurrencyValue, formatHours } from '../utils/format'
 
 interface PayBreakdownProps {
   calculation: PayCalculationResult
@@ -30,16 +31,6 @@ export const PayBreakdown: React.FC<PayBreakdownProps> = ({
   } = calculation
 
   const hasBreakdownDetails = penalties.length > 0 || overtimes.length > 0
-
-  const formatCurrency = (amount: any) => {
-    const value = typeof amount === 'string' ? parseFloat(amount) : amount
-    return value.toFixed(2)
-  }
-
-  const formatHours = (hours: any) => {
-    const value = typeof hours === 'string' ? parseFloat(hours) : hours
-    return value.toFixed(2)
-  }
 
   return (
     <Card variant="outlined">
@@ -79,10 +70,10 @@ export const PayBreakdown: React.FC<PayBreakdownProps> = ({
               Base Pay
             </div>
             <div style={{ fontSize: '1.1rem', color: 'var(--color-text-primary)', fontWeight: '600' }}>
-              ${formatCurrency(breakdown.basePay)}
+              ${formatCurrencyValue(breakdown.basePay)}
             </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
-              {formatHours(breakdown.baseHours)}h @ ${payGuide.baseRate}/hr
+              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+              {formatHours(breakdown.baseHours)}h @ ${formatCurrencyValue(payGuide.baseRate)}/hr
             </div>
           </div>
           
@@ -92,7 +83,7 @@ export const PayBreakdown: React.FC<PayBreakdownProps> = ({
                 Overtime
               </div>
               <div style={{ fontSize: '1.1rem', color: 'var(--color-warning)', fontWeight: '600' }}>
-                ${formatCurrency(breakdown.overtimePay)}
+              ${formatCurrencyValue(breakdown.overtimePay)}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
                 {formatHours(breakdown.overtimeHours)}h
@@ -106,7 +97,7 @@ export const PayBreakdown: React.FC<PayBreakdownProps> = ({
                 Penalties
               </div>
               <div style={{ fontSize: '1.1rem', color: 'var(--color-primary)', fontWeight: '600' }}>
-                ${formatCurrency(breakdown.penaltyPay)}
+              ${formatCurrencyValue(breakdown.penaltyPay)}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
                 {formatHours(breakdown.penaltyHours)}h
@@ -125,7 +116,7 @@ export const PayBreakdown: React.FC<PayBreakdownProps> = ({
               Total Pay
             </div>
             <div style={{ fontSize: '1.5rem', color: 'var(--color-success)', fontWeight: '700' }}>
-              ${formatCurrency(breakdown.totalPay)}
+              ${formatCurrencyValue(breakdown.totalPay)}
             </div>
           </div>
         </div>

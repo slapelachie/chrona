@@ -1,6 +1,1 @@
-import { redirect } from 'next/navigation'
-
-export default function PayPeriodsPage() {
-  redirect('/timeline')
-}
-
+export { default } from '../redirect-to-timeline'

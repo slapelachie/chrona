@@ -22,6 +22,7 @@ import { StatusBadge, statusAccentColor } from './status-badge'
 import { formatPayPeriodDate } from '@/lib/date-utils'
 import { ShiftCard } from '@/components/shifts/shift-card'
 import './pay-period-detail.scss'
+import { formatCurrencyValue } from '../utils/format'
 
 interface Props {
   payPeriodId: string
@@ -275,15 +276,6 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
 
     fetchPayGuides()
   }, [])
-
-  const formatCurrency = (amount?: string) => {
-    if (!amount) return '-'
-    const n = Number(amount)
-    return n.toLocaleString('en-AU', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
-  }
 
   const readinessInfo = useMemo<ReadinessDescriptor | null>(() => {
     if (!pp) return null
@@ -546,7 +538,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                         Gross Pay
                       </div>
                       <div style={{ fontWeight: 700, fontSize: '1.125rem' }}>
-                        ${formatCurrency(pp.totalPay)}
+                        ${formatCurrencyValue(pp.totalPay, { fallback: '-' })}
                       </div>
                     </div>
                     <div>
@@ -566,7 +558,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                             color: 'var(--color-success)',
                           }}
                         >
-                          ${formatCurrency(pp.actualPay || pp.netPay)}
+                          ${formatCurrencyValue(pp.actualPay || pp.netPay, { fallback: '-' })}
                         </div>
                         {pp.actualPay && (
                           <div
@@ -575,7 +567,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                               fontSize: '0.8rem',
                             }}
                           >
-                            Calculated net: ${formatCurrency(pp.netPay)}
+                            Calculated net: ${formatCurrencyValue(pp.netPay, { fallback: '-' })}
                           </div>
                         )}
                       </div>
@@ -621,7 +613,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                             style={{ fontWeight: 600, fontSize: '0.875rem' }}
                           >
                             $
-                            {formatCurrency(
+                            {formatCurrencyValue(
                               tax.data.breakdown.paygWithholding.toString()
                             )}
                           </div>
@@ -639,7 +631,9 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                             style={{ fontWeight: 600, fontSize: '0.875rem' }}
                           >
                             $
-                            {formatCurrency(tax.data.breakdown.stslAmount.toString())}
+                            {formatCurrencyValue(
+                              tax.data.breakdown.stslAmount.toString()
+                            )}
                           </div>
                         </div>
                         <div>
@@ -655,7 +649,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                             style={{ fontWeight: 700, fontSize: '0.875rem' }}
                           >
                             $
-                            {formatCurrency(
+                            {formatCurrencyValue(
                               tax.data.breakdown.totalWithholdings.toString()
                             )}
                           </div>
@@ -755,7 +749,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                             gap: 8,
                           }}
                         >
-                          <div>${formatCurrency(e.amount)}</div>
+                          <div>${formatCurrencyValue(e.amount, { fallback: '0.00' })}</div>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -999,7 +993,7 @@ export const PayPeriodDetail: React.FC<Props> = ({ payPeriodId }) => {
                           step="0.01"
                           value={actualPay}
                           onChange={(e) => setActualPay(e.target.value)}
-                          placeholder={`Expected: ${formatCurrency(pp.netPay)}`}
+                          placeholder={`Expected: ${formatCurrencyValue(pp.netPay, { fallback: '0.00' })}`}
                           className="pay-period-detail__actual-input"
                         />
                       </div>

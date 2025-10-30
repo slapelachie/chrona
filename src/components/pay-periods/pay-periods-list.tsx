@@ -7,6 +7,7 @@ import { Calendar, DollarSign, Loader2, RefreshCcw } from 'lucide-react'
 import { PayPeriodListItem, PayPeriodsListResponse } from '@/types'
 import { StatusBadge, statusAccentColor } from './status-badge'
 import { formatPayPeriodDate } from '@/lib/date-utils'
+import { formatCurrencyValue } from '../utils/format'
 
 type StatusFilter = 'all' | 'pending' | 'verified'
 
@@ -49,12 +50,6 @@ export const PayPeriodsList: React.FC = () => {
       return range.toLowerCase().includes(q) || (pp.totalPay || '').toString().includes(q)
     })
   }, [items, query])
-
-  const formatCurrency = (amount?: string) => {
-    if (!amount) return '-'
-    const n = Number(amount)
-    return n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  }
 
   // Removed local chip map in favor of shared StatusBadge
 
@@ -140,7 +135,7 @@ export const PayPeriodsList: React.FC = () => {
                     </div>
                     <div style={{ marginTop: 4, display: 'flex', gap: '0.75rem', alignItems: 'baseline' }}>
                       <div style={{ color: 'var(--color-text-primary)', fontWeight: 700, fontSize: '1.125rem' }}>
-                        ${formatCurrency(pp.actualPay || pp.netPay || pp.totalPay)}
+                        ${formatCurrencyValue(pp.actualPay || pp.netPay || pp.totalPay, { fallback: '-' })}
                       </div>
                       {typeof pp.shiftsCount === 'number' && (
                         <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8rem' }}>
