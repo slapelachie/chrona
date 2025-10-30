@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { findShiftConflicts } from '@/lib/shift-conflict-utils'
 import {
   ImportValidationError,
   ImportShiftsRequest,
@@ -138,8 +139,23 @@ export async function validateShiftsImport(
   }
 
   // Check for potential conflicts (overlapping shifts)
-  if (request.options.conflictResolution !== 'overwrite') {
-    await checkShiftConflicts(parsedShiftWindows, validator, context.userId)
+  if (
+    request.options.conflictResolution !== 'overwrite' &&
+    context.userId &&
+    parsedShiftWindows.length > 0
+  ) {
+    const conflicts = await findShiftConflicts(prisma, context.userId, parsedShiftWindows)
+    conflicts.forEach((overlaps, index) => {
+      overlaps.forEach((existing) => {
+        validator.addWarning(
+          'conflict',
+          'timeRange',
+          `Shift overlaps with existing shift from ${existing.startTime.toISOString()} to ${existing.endTime.toISOString()}`,
+          index,
+          existing.id
+        )
+      })
+    })
   }
 
   return validator
@@ -556,47 +572,6 @@ export async function validateTaxDataImport(request: ImportTaxDataRequest): Prom
   }
 
   return validator
-}
-
-async function checkShiftConflicts(
-  parsedShifts: Array<{ index: number; start: Date; end: Date }>,
-  validator: ImportValidator,
-  userId?: string
-) {
-  if (!userId || parsedShifts.length === 0) {
-    return
-  }
-
-  const minStart = new Date(Math.min(...parsedShifts.map(s => s.start.getTime())))
-  const maxEnd = new Date(Math.max(...parsedShifts.map(s => s.end.getTime())))
-
-  const existingShifts = await prisma.shift.findMany({
-    where: {
-      userId,
-      startTime: { lt: maxEnd },
-      endTime: { gt: minStart },
-    },
-    select: { id: true, startTime: true, endTime: true },
-  })
-
-  if (existingShifts.length === 0) {
-    return
-  }
-
-  for (const parsed of parsedShifts) {
-    for (const existing of existingShifts) {
-      const overlaps = parsed.start < existing.endTime && parsed.end > existing.startTime
-      if (!overlaps) continue
-
-      validator.addWarning(
-        'conflict',
-        'timeRange',
-        `Shift overlaps with existing shift from ${existing.startTime.toISOString()} to ${existing.endTime.toISOString()}`,
-        parsed.index,
-        existing.id
-      )
-    }
-  }
 }
 
 export function generateRenameSuggestion(baseName: string, existingNames: Set<string>): string {

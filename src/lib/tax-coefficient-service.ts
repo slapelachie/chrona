@@ -1,5 +1,5 @@
-import { Decimal } from 'decimal.js'
 import { TaxCoefficient, TaxRateConfig, StslRate } from '@/types'
+import { DEFAULT_TAX_COEFFICIENTS } from '@/lib/tax-defaults'
 
 /**
  * Service for loading tax coefficients, HECS thresholds, and tax configuration
@@ -185,30 +185,11 @@ export class TaxCoefficientService {
   }
 
   private static getFallbackCoefficients(scale?: string): TaxCoefficient[] {
-    // Hardcoded fallback coefficients for 2024-25 (Scale 2 - most common)
-    const scale2Coefficients: TaxCoefficient[] = [
-      { scale: 'scale2', earningsFrom: new Decimal(0), earningsTo: new Decimal(371), coefficientA: new Decimal(0), coefficientB: new Decimal(0) },
-      { scale: 'scale2', earningsFrom: new Decimal(371), earningsTo: new Decimal(515), coefficientA: new Decimal(0.19), coefficientB: new Decimal(70.5385) },
-      { scale: 'scale2', earningsFrom: new Decimal(515), earningsTo: new Decimal(721), coefficientA: new Decimal(0.2348), coefficientB: new Decimal(93.4615) },
-      { scale: 'scale2', earningsFrom: new Decimal(721), earningsTo: new Decimal(1282), coefficientA: new Decimal(0.219), coefficientB: new Decimal(82.1154) },
-      { scale: 'scale2', earningsFrom: new Decimal(1282), earningsTo: new Decimal(2307), coefficientA: new Decimal(0.3477), coefficientB: new Decimal(247.1154) },
-      { scale: 'scale2', earningsFrom: new Decimal(2307), earningsTo: null, coefficientA: new Decimal(0.45), coefficientB: new Decimal(482.6731) },
-    ]
+    if (!scale) {
+      return DEFAULT_TAX_COEFFICIENTS
+    }
 
-    const scale1Coefficients: TaxCoefficient[] = [
-      { scale: 'scale1', earningsFrom: new Decimal(0), earningsTo: new Decimal(88), coefficientA: new Decimal(0.19), coefficientB: new Decimal(0) },
-      { scale: 'scale1', earningsFrom: new Decimal(88), earningsTo: new Decimal(371), coefficientA: new Decimal(0.2348), coefficientB: new Decimal(12.7692) },
-      { scale: 'scale1', earningsFrom: new Decimal(371), earningsTo: new Decimal(515), coefficientA: new Decimal(0.219), coefficientB: new Decimal(6.5385) },
-      { scale: 'scale1', earningsFrom: new Decimal(515), earningsTo: new Decimal(721), coefficientA: new Decimal(0.3477), coefficientB: new Decimal(72.5385) },
-      { scale: 'scale1', earningsFrom: new Decimal(721), earningsTo: new Decimal(1282), coefficientA: new Decimal(0.45), coefficientB: new Decimal(146.0769) },
-      { scale: 'scale1', earningsFrom: new Decimal(1282), earningsTo: null, coefficientA: new Decimal(0.45), coefficientB: new Decimal(146.0769) },
-    ]
-
-    if (scale === 'scale1') return scale1Coefficients
-    if (scale === 'scale2') return scale2Coefficients
-    
-    // Return all scales if no specific scale requested
-    return [...scale1Coefficients, ...scale2Coefficients]
+    return DEFAULT_TAX_COEFFICIENTS.filter(coeff => coeff.scale === scale)
   }
 
   private static getFallbackTaxConfig(taxYear = '2024-25'): TaxRateConfig {

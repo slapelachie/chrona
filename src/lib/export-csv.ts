@@ -88,6 +88,10 @@ interface PayPeriodExtraExportRecord {
   taxable: boolean
 }
 
+function decimalToString(value: MaybeDecimal): string {
+  return value ? value.toString() : ''
+}
+
 interface TaxSettingsExport {
   claimedTaxFreeThreshold: boolean | null
   isForeignResident: boolean | null
@@ -131,19 +135,17 @@ export const buildShiftsCsv = (shifts: ShiftExportRecord[]): string => {
       .map(bp => `${bp.startTime.toISOString()}|${bp.endTime.toISOString()}`)
       .join(';')
 
-    const toStr = (value: MaybeDecimal): string => (value ? value.toString() : '')
-
     return [
       shift.payGuide.name,
       shift.startTime.toISOString(),
       shift.endTime.toISOString(),
       shift.notes ?? '',
       breakValue,
-      toStr(shift.totalHours),
-      toStr(shift.basePay),
-      toStr(shift.overtimePay),
-      toStr(shift.penaltyPay),
-      toStr(shift.totalPay)
+      decimalToString(shift.totalHours),
+      decimalToString(shift.basePay),
+      decimalToString(shift.overtimePay),
+      decimalToString(shift.penaltyPay),
+      decimalToString(shift.totalPay)
     ]
   })
 
@@ -379,8 +381,6 @@ export const buildStslTaxCsv = (stslRates: TaxCoefficientExport[]): string => {
 
   return serializeCsv([header, ...rows])
 }
-
-const decimalToString = (value: MaybeDecimal): string => (value ? value.toString() : '')
 
 export const buildPayPeriodsCsv = (payPeriods: PayPeriodExportRecord[]): string => {
   const header = [

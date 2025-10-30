@@ -57,7 +57,7 @@ describe('pay-guide-validation', () => {
     expect(validator.isValid()).toBe(false)
     const error = validator.getErrors()[0]
     expect(error.field).toBe('effectiveTo')
-    expect(error.message).toContain('after effective start date')
+    expect(error.message).toContain('must be after effectiveFrom')
   })
 
   it('validateDateRange permits open-ended ranges', () => {
@@ -68,4 +68,3 @@ describe('pay-guide-validation', () => {
     expect(validator.isValid()).toBe(true)
   })
 })
-

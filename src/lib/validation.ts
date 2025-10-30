@@ -221,28 +221,51 @@ export const validateDayOfWeek = (
 }
 
 export const validateDateRange = (
-  startDate: any, 
-  endDate: any, 
+  startDate: any,
+  endDate: any,
   validator: ValidationResult,
-  options?: { maxDurationHours?: number }
+  options?: {
+    maxDurationHours?: number
+    startField?: string
+    endField?: string
+    allowEqual?: boolean
+    allowOpenEnd?: boolean
+    maxDurationMessage?: string
+  }
 ) => {
-  if (!validateDate(startDate, 'startTime', validator)) return false
-  if (!validateDate(endDate, 'endTime', validator)) return false
+  const startField = options?.startField ?? 'startTime'
+  const endField = options?.endField ?? 'endTime'
+
+  if (!validateDate(startDate, startField, validator)) return false
+
+  if (endDate === undefined || endDate === null) {
+    if (options?.allowOpenEnd) {
+      return true
+    }
+    validator.addError(endField, `${endField} is required`)
+    return false
+  }
+
+  if (!validateDate(endDate, endField, validator)) return false
 
   const start = new Date(startDate)
   const end = new Date(endDate)
+  const allowEqual = options?.allowEqual ?? false
 
-  if (end <= start) {
-    validator.addError('endTime', 'End time must be after start time')
+  if (allowEqual ? end < start : end <= start) {
+    validator.addError(endField, `${endField} must be after ${startField}`)
     return false
   }
 
   if (options?.maxDurationHours) {
     const durationMs = end.getTime() - start.getTime()
     const durationHours = durationMs / (1000 * 60 * 60)
-    
+
     if (durationHours > options.maxDurationHours) {
-      validator.addError('endTime', `Shift duration cannot exceed ${options.maxDurationHours} hours`)
+      validator.addError(
+        endField,
+        options.maxDurationMessage ?? `Shift duration cannot exceed ${options.maxDurationHours} hours`
+      )
       return false
     }
   }

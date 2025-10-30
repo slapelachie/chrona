@@ -7,6 +7,7 @@ import { findOrCreatePayPeriod } from '@/lib/pay-period-utils'
 import { PayPeriodSyncService } from '@/lib/pay-period-sync-service'
 import { parseShiftsCsv } from '@/lib/import-csv'
 import { detectMissingPayPeriods } from '@/lib/import-pay-period-warning'
+import { hasShiftConflict } from '@/lib/shift-conflict-utils'
 
 export async function POST(request: NextRequest) {
   try {
@@ -123,27 +124,12 @@ export async function POST(request: NextRequest) {
 
         // Check for conflicts if not overwriting
         if (body.options.conflictResolution === 'skip') {
-          const overlappingShifts = await prisma.shift.findMany({
-            where: {
-              userId: user.id,
-              OR: [
-                {
-                  startTime: { lte: startTime },
-                  endTime: { gte: startTime }
-                },
-                {
-                  startTime: { lte: endTime },
-                  endTime: { gte: endTime }
-                },
-                {
-                  startTime: { gte: startTime },
-                  endTime: { lte: endTime }
-                }
-              ]
-            }
+          const hasConflict = await hasShiftConflict(prisma, user.id, {
+            start: startTime,
+            end: endTime,
           })
 
-          if (overlappingShifts.length > 0) {
+          if (hasConflict) {
             result.skipped.push(`Shift ${i + 1}: overlaps with existing shift`)
             result.summary.skipped++
             continue

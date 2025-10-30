@@ -5,6 +5,7 @@ import {
   validateDecimal,
   validateDate,
   validateNumber,
+  validateDateRange as validateDateRangeHelper,
 } from '@/lib/validation'
 import { CreatePayGuideRequest, UpdatePayGuideRequest, PayGuideResponse } from '@/types'
 
@@ -71,6 +72,14 @@ export const validatePayGuideFields = (
   // Effective to validation (optional for both)
   if (data.effectiveTo !== undefined) {
     validateDate(data.effectiveTo, 'effectiveTo', validator)
+
+    if (validator.isValid()) {
+      validateDateRangeHelper(data.effectiveFrom, data.effectiveTo, validator, {
+        startField: 'effectiveFrom',
+        endField: 'effectiveTo',
+        allowOpenEnd: true,
+      })
+    }
   }
 
   // Description validation (optional for both)
@@ -119,14 +128,11 @@ export const validateDateRange = (
   effectiveTo: string | Date | null | undefined,
   validator: ValidationResult
 ): void => {
-  if (effectiveTo !== undefined && effectiveTo !== null) {
-    const fromDate = new Date(effectiveFrom)
-    const toDate = new Date(effectiveTo)
-    
-    if (toDate <= fromDate) {
-      validator.addError('effectiveTo', 'Effective end date must be after effective start date')
-    }
-  }
+  validateDateRangeHelper(effectiveFrom, effectiveTo, validator, {
+    startField: 'effectiveFrom',
+    endField: 'effectiveTo',
+    allowOpenEnd: true,
+  })
 }
 
 export const transformPayGuideToResponse = (payGuide: any): PayGuideResponse => {
