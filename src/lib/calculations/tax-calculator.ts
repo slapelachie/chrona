@@ -137,47 +137,6 @@ export class TaxCalculator {
     }
   }
 
-  async calculatePayPeriodTaxAsync(
-    payPeriodId: string,
-    grossPay: Decimal,
-    payPeriodType: PayPeriodType,
-    yearToDateTax: YearToDateTax
-  ): Promise<TaxCalculationResult> {
-    const weeklyGrossPay = this.convertToWeeklyPay(grossPay, payPeriodType)
-    const taxScale = this.determineTaxScale()
-    const weeklyPaygWithholding = this.calculatePaygWithholding(weeklyGrossPay, taxScale)
-    const paygWithholdingRaw = this.convertFromWeeklyPay(weeklyPaygWithholding, payPeriodType)
-    const stslAmountRaw = this.calculateStsl(grossPay, payPeriodType)
-
-    const paygWithholding = TimeCalculations.roundToNearestDollar(paygWithholdingRaw)
-    const stslAmount = TimeCalculations.roundToNearestDollar(stslAmountRaw)
-    const totalWithholdings = paygWithholding.plus(stslAmount)
-    const netPay = grossPay.minus(totalWithholdings)
-
-    const updatedYtd = this.updateYearToDate(
-      yearToDateTax,
-      grossPay,
-      paygWithholding,
-      stslAmount
-    )
-
-    return {
-      payPeriod: { id: payPeriodId, grossPay, payPeriodType },
-      breakdown: {
-        grossPay: TimeCalculations.roundToCents(grossPay),
-        paygWithholding,
-        stslAmount,
-        totalWithholdings,
-        netPay: TimeCalculations.roundToCents(netPay),
-      },
-      taxScale,
-      yearToDate: {
-        grossIncome: updatedYtd.grossIncome,
-        totalWithholdings: updatedYtd.totalWithholdings,
-      },
-    }
-  }
-
   /**
    * Calculate PAYG withholding using ATO coefficients
    * Formula: Withholding = (a × weekly earnings) - b
@@ -332,22 +291,6 @@ export class TaxCalculator {
         return weeklyAmount.times(2)
       case 'MONTHLY':
         return weeklyAmount.times(52.18).div(12) // More precise weekly-to-monthly conversion
-      default:
-        throw new Error(`Unsupported pay period type: ${payPeriodType}`)
-    }
-  }
-
-  /**
-   * Get number of pay periods per year
-   */
-  private getPeriodsPerYear(payPeriodType: PayPeriodType): Decimal {
-    switch (payPeriodType) {
-      case 'WEEKLY':
-        return new Decimal(52.18)
-      case 'FORTNIGHTLY':
-        return new Decimal(26.09)
-      case 'MONTHLY':
-        return new Decimal(12)
       default:
         throw new Error(`Unsupported pay period type: ${payPeriodType}`)
     }

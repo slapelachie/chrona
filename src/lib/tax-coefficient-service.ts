@@ -5,12 +5,16 @@ import { TaxCoefficient, TaxRateConfig, StslRate } from '@/types'
  * Service for loading tax coefficients, HECS thresholds, and tax configuration
  * from the database with caching for performance
  */
+type CacheEntry<T> = {
+  value: T
+  expiresAt: number
+}
+
 export class TaxCoefficientService {
-  private static coefficientsCache = new Map<string, TaxCoefficient[]>()
-  private static taxConfigCache = new Map<string, TaxRateConfig>()
-  private static stslRatesCache = new Map<string, StslRate[]>()
-  private static cacheExpiry = new Map<string, number>()
-  
+  private static coefficientsCache = new Map<string, CacheEntry<TaxCoefficient[]>>()
+  private static taxConfigCache = new Map<string, CacheEntry<TaxRateConfig>>()
+  private static stslRatesCache = new Map<string, CacheEntry<StslRate[]>>()
+
   // Cache TTL: 1 hour (tax rates don't change frequently)
   private static readonly CACHE_TTL = 60 * 60 * 1000
 
@@ -20,12 +24,9 @@ export class TaxCoefficientService {
   static async getTaxCoefficients(taxYear: string, scale?: string): Promise<TaxCoefficient[]> {
     const cacheKey = `coefficients:${taxYear}:${scale || 'all'}`
     
-    // Check cache first
-    if (this.isCacheValid(cacheKey)) {
-      const cached = this.coefficientsCache.get(cacheKey)
-      if (cached) {
-        return cached
-      }
+    const cachedEntry = this.coefficientsCache.get(cacheKey)
+    if (cachedEntry && this.isCacheValid(cachedEntry)) {
+      return cachedEntry.value
     }
 
     try {
@@ -58,8 +59,10 @@ export class TaxCoefficientService {
       }))
 
       // Cache the result
-      this.coefficientsCache.set(cacheKey, coefficients)
-      this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+      this.coefficientsCache.set(cacheKey, {
+        value: coefficients,
+        expiresAt: this.getExpiryTimestamp(),
+      })
 
       return coefficients
     } catch (error) {
@@ -77,12 +80,9 @@ export class TaxCoefficientService {
   static async getTaxRateConfig(taxYear: string): Promise<TaxRateConfig> {
     const cacheKey = `config:${taxYear}`
     
-    // Check cache first
-    if (this.isCacheValid(cacheKey)) {
-      const cached = this.taxConfigCache.get(cacheKey)
-      if (cached) {
-        return cached
-      }
+    const cachedEntry = this.taxConfigCache.get(cacheKey)
+    if (cachedEntry && this.isCacheValid(cachedEntry)) {
+      return cachedEntry.value
     }
 
     try {
@@ -101,8 +101,10 @@ export class TaxCoefficientService {
           stslRates,
           coefficients,
         }
-        this.taxConfigCache.set(cacheKey, config)
-        this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+        this.taxConfigCache.set(cacheKey, {
+          value: config,
+          expiresAt: this.getExpiryTimestamp(),
+        })
         return config
       }
 
@@ -123,23 +125,29 @@ export class TaxCoefficientService {
           stslRates,
           coefficients,
         }
-        this.taxConfigCache.set(cacheKey, config)
-        this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+        this.taxConfigCache.set(cacheKey, {
+          value: config,
+          expiresAt: this.getExpiryTimestamp(),
+        })
         return config
       }
 
       // Truly missing: nothing for this year, fall back to canned configuration so import flows continue
       console.warn(`No tax configuration found for tax year ${taxYear}. Using fallback configuration.`)
       const fallback = this.getFallbackTaxConfig(taxYear)
-      this.taxConfigCache.set(cacheKey, fallback)
-      this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+      this.taxConfigCache.set(cacheKey, {
+        value: fallback,
+        expiresAt: this.getExpiryTimestamp(),
+      })
       return fallback
     } catch (error: any) {
       console.error('Error loading tax configuration from database:', error)
       console.warn('Falling back to hardcoded tax configuration')
       const fallback = this.getFallbackTaxConfig(taxYear)
-      this.taxConfigCache.set(cacheKey, fallback)
-      this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+      this.taxConfigCache.set(cacheKey, {
+        value: fallback,
+        expiresAt: this.getExpiryTimestamp(),
+      })
       return fallback
     }
   }
@@ -151,32 +159,29 @@ export class TaxCoefficientService {
     this.coefficientsCache.clear()
     this.taxConfigCache.clear()
     this.stslRatesCache.clear()
-    this.cacheExpiry.clear()
   }
 
   /**
    * Clear cache for a specific tax year
    */
   static clearCacheForTaxYear(taxYear: string): void {
-    const keysToDelete: string[] = []
-    
-    for (const key of this.cacheExpiry.keys()) {
-      if (key.includes(taxYear)) {
-        keysToDelete.push(key)
-      }
+    for (const key of Array.from(this.coefficientsCache.keys())) {
+      if (key.includes(taxYear)) this.coefficientsCache.delete(key)
     }
-
-    keysToDelete.forEach(key => {
-      this.coefficientsCache.delete(key)
-      this.taxConfigCache.delete(key)
-      this.stslRatesCache.delete(key)
-      this.cacheExpiry.delete(key)
-    })
+    for (const key of Array.from(this.taxConfigCache.keys())) {
+      if (key.includes(taxYear)) this.taxConfigCache.delete(key)
+    }
+    for (const key of Array.from(this.stslRatesCache.keys())) {
+      if (key.includes(taxYear)) this.stslRatesCache.delete(key)
+    }
   }
 
-  private static isCacheValid(cacheKey: string): boolean {
-    const expiry = this.cacheExpiry.get(cacheKey)
-    return expiry ? Date.now() < expiry : false
+  private static isCacheValid<T>(entry: CacheEntry<T>): boolean {
+    return Date.now() < entry.expiresAt
+  }
+
+  private static getExpiryTimestamp(): number {
+    return Date.now() + this.CACHE_TTL
   }
 
   private static getFallbackCoefficients(scale?: string): TaxCoefficient[] {
@@ -217,9 +222,9 @@ export class TaxCoefficientService {
   // STSL component rates per Schedule 8
   static async getStslRates(taxYear: string): Promise<StslRate[]> {
     const cacheKey = `stsl:${taxYear}`
-    if (this.isCacheValid(cacheKey)) {
-      const cached = this.stslRatesCache.get(cacheKey)
-      if (cached) return cached
+    const cachedEntry = this.stslRatesCache.get(cacheKey)
+    if (cachedEntry && this.isCacheValid(cachedEntry)) {
+      return cachedEntry.value
     }
 
     try {
@@ -236,8 +241,10 @@ export class TaxCoefficientService {
         coefficientB: r.coefficientB,
         description: r.description || undefined,
       }))
-      this.stslRatesCache.set(cacheKey, result)
-      this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_TTL)
+      this.stslRatesCache.set(cacheKey, {
+        value: result,
+        expiresAt: this.getExpiryTimestamp(),
+      })
       return result
     } catch (error) {
       console.error('Error loading STSL rates from database:', error)
