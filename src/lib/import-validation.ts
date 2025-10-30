@@ -47,7 +47,10 @@ export class ImportValidator {
   }
 }
 
-export async function validateShiftsImport(request: ImportShiftsRequest): Promise<ImportValidator> {
+export async function validateShiftsImport(
+  request: ImportShiftsRequest,
+  context: { userId?: string } = {}
+): Promise<ImportValidator> {
   const validator = new ImportValidator()
   
   if (!Array.isArray(request.shifts)) {
@@ -65,6 +68,8 @@ export async function validateShiftsImport(request: ImportShiftsRequest): Promis
     select: { name: true, isActive: true }
   })
   const payGuideNames = new Set(existingPayGuides.map(pg => pg.name))
+
+  const parsedShiftWindows: Array<{ index: number; start: Date; end: Date }> = []
 
   // Validate each shift
   for (let i = 0; i < request.shifts.length; i++) {
@@ -85,10 +90,19 @@ export async function validateShiftsImport(request: ImportShiftsRequest): Promis
       })
     }
 
-    if (!fieldValidator.isValid()) {
+    const isValid = fieldValidator.isValid()
+
+    if (!isValid) {
       fieldValidator.getErrors().forEach(error => {
         validator.addError('validation', error.field, error.message, i)
       })
+    } else {
+      const start = new Date(shift.startTime)
+      const end = new Date(shift.endTime)
+
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+        parsedShiftWindows.push({ index: i, start, end })
+      }
     }
 
     // Check if pay guide exists
@@ -125,7 +139,7 @@ export async function validateShiftsImport(request: ImportShiftsRequest): Promis
 
   // Check for potential conflicts (overlapping shifts)
   if (request.options.conflictResolution !== 'overwrite') {
-    await checkShiftConflicts(request.shifts, validator)
+    await checkShiftConflicts(parsedShiftWindows, validator, context.userId)
   }
 
   return validator
@@ -240,7 +254,10 @@ export async function validatePayGuidesImport(request: ImportPayGuidesRequest): 
   return validator
 }
 
-export async function validatePayPeriodsImport(request: ImportPayPeriodsRequest): Promise<ImportValidator> {
+export async function validatePayPeriodsImport(
+  request: ImportPayPeriodsRequest,
+  context: { userId?: string } = {}
+): Promise<ImportValidator> {
   const validator = new ImportValidator()
 
   if (!Array.isArray(request.payPeriods)) {
@@ -253,10 +270,30 @@ export async function validatePayPeriodsImport(request: ImportPayPeriodsRequest)
     return validator
   }
 
-  const existingPeriods = await prisma.payPeriod.findMany({
-    select: { startDate: true }
+  const candidateStartDates = new Set<string>()
+  request.payPeriods.forEach(period => {
+    if (typeof period.startDate !== 'string') return
+    const parsed = new Date(period.startDate)
+    if (!Number.isNaN(parsed.getTime())) {
+      candidateStartDates.add(parsed.toISOString())
+    }
   })
-  const existingStartDates = new Set(existingPeriods.map(period => period.startDate.toISOString()))
+
+  let existingStartDates = new Set<string>()
+  if (context.userId && candidateStartDates.size > 0) {
+    const scopedExisting = await prisma.payPeriod.findMany({
+      where: {
+        userId: context.userId,
+        startDate: {
+          in: Array.from(candidateStartDates).map(dateIso => new Date(dateIso)),
+        },
+      },
+      select: { startDate: true },
+    })
+    existingStartDates = new Set(
+      scopedExisting.map(period => period.startDate.toISOString())
+    )
+  }
   const importStartDates = new Set<string>()
 
   for (let i = 0; i < request.payPeriods.length; i++) {
@@ -521,43 +558,43 @@ export async function validateTaxDataImport(request: ImportTaxDataRequest): Prom
   return validator
 }
 
-async function checkShiftConflicts(shifts: ImportShiftsRequest['shifts'], validator: ImportValidator) {
-  // Check for conflicts with existing shifts
-  for (let i = 0; i < shifts.length; i++) {
-    const shift = shifts[i]
-    const startTime = new Date(shift.startTime)
-    const endTime = new Date(shift.endTime)
+async function checkShiftConflicts(
+  parsedShifts: Array<{ index: number; start: Date; end: Date }>,
+  validator: ImportValidator,
+  userId?: string
+) {
+  if (!userId || parsedShifts.length === 0) {
+    return
+  }
 
-    const overlappingShifts = await prisma.shift.findMany({
-      where: {
-        OR: [
-          {
-            startTime: { lte: startTime },
-            endTime: { gte: startTime }
-          },
-          {
-            startTime: { lte: endTime },
-            endTime: { gte: endTime }
-          },
-          {
-            startTime: { gte: startTime },
-            endTime: { lte: endTime }
-          }
-        ]
-      },
-      select: { id: true, startTime: true, endTime: true }
-    })
+  const minStart = new Date(Math.min(...parsedShifts.map(s => s.start.getTime())))
+  const maxEnd = new Date(Math.max(...parsedShifts.map(s => s.end.getTime())))
 
-    if (overlappingShifts.length > 0) {
-      overlappingShifts.forEach(existing => {
-        validator.addWarning(
-          'conflict',
-          'timeRange',
-          `Shift overlaps with existing shift from ${existing.startTime.toISOString()} to ${existing.endTime.toISOString()}`,
-          i,
-          existing.id
-        )
-      })
+  const existingShifts = await prisma.shift.findMany({
+    where: {
+      userId,
+      startTime: { lt: maxEnd },
+      endTime: { gt: minStart },
+    },
+    select: { id: true, startTime: true, endTime: true },
+  })
+
+  if (existingShifts.length === 0) {
+    return
+  }
+
+  for (const parsed of parsedShifts) {
+    for (const existing of existingShifts) {
+      const overlaps = parsed.start < existing.endTime && parsed.end > existing.startTime
+      if (!overlaps) continue
+
+      validator.addWarning(
+        'conflict',
+        'timeRange',
+        `Shift overlaps with existing shift from ${existing.startTime.toISOString()} to ${existing.endTime.toISOString()}`,
+        parsed.index,
+        existing.id
+      )
     }
   }
 }

@@ -19,8 +19,19 @@ export async function POST(request: NextRequest) {
           validatePayGuides: url.searchParams.get('validatePayGuides')
         })
 
+    // Get the default user (single user app)
+    const user = await prisma.user.findFirst({
+      select: { id: true, payPeriodType: true }
+    })
+    if (!user) {
+      return NextResponse.json(
+        { error: 'No user found. Please seed the database first.' },
+        { status: 400 }
+      )
+    }
+
     // Validate the import request
-    const validator = await validateShiftsImport(body)
+    const validator = await validateShiftsImport(body, { userId: user.id })
     
     if (validator.hasErrors()) {
       return NextResponse.json(
@@ -33,17 +44,6 @@ export async function POST(request: NextRequest) {
           updated: [],
           skipped: []
         } as ImportResult,
-        { status: 400 }
-      )
-    }
-
-    // Get the default user (single user app)
-    const user = await prisma.user.findFirst({
-      select: { id: true, payPeriodType: true }
-    })
-    if (!user) {
-      return NextResponse.json(
-        { error: 'No user found. Please seed the database first.' },
         { status: 400 }
       )
     }

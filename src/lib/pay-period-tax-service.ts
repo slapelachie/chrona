@@ -63,33 +63,46 @@ export class PayPeriodTaxService {
       { taxYear }
     )
 
-    // Update pay period with tax calculations
-    await prisma.payPeriod.update({
-      where: { id: payPeriodId },
-      data: {
-        paygWithholding: taxCalculation.breakdown.paygWithholding,
-        stslAmount: taxCalculation.breakdown.stslAmount,
-        totalWithholdings: taxCalculation.breakdown.totalWithholdings,
-        netPay: taxCalculation.breakdown.netPay,
-      }
+    const updatedYearToDate = await prisma.$transaction(async (tx) => {
+      await tx.payPeriod.update({
+        where: { id: payPeriodId },
+        data: {
+          paygWithholding: taxCalculation.breakdown.paygWithholding,
+          stslAmount: taxCalculation.breakdown.stslAmount,
+          totalWithholdings: taxCalculation.breakdown.totalWithholdings,
+          netPay: taxCalculation.breakdown.netPay,
+        },
+      })
+
+      return await tx.yearToDateTax.update({
+        where: {
+          userId_taxYear: {
+            userId: payPeriod.userId,
+            taxYear,
+          },
+        },
+        data: {
+          grossIncome: {
+            increment: taxCalculation.breakdown.grossPay,
+          },
+          payGWithholding: {
+            increment: taxCalculation.breakdown.paygWithholding,
+          },
+          stslAmount: {
+            increment: taxCalculation.breakdown.stslAmount,
+          },
+          totalWithholdings: {
+            increment: taxCalculation.breakdown.totalWithholdings,
+          },
+          lastUpdated: new Date(),
+        },
+      })
     })
 
-    // Update year-to-date tax tracking
-    await prisma.yearToDateTax.update({
-      where: { 
-        userId_taxYear: {
-          userId: payPeriod.userId,
-          taxYear: taxYear
-        }
-      },
-      data: {
-        grossIncome: taxCalculation.yearToDate.grossIncome,
-        payGWithholding: yearToDateTax.payGWithholding.plus(taxCalculation.breakdown.paygWithholding),
-        stslAmount: yearToDateTax.stslAmount.plus(taxCalculation.breakdown.stslAmount),
-        totalWithholdings: taxCalculation.yearToDate.totalWithholdings,
-        lastUpdated: new Date(),
-      }
-    })
+    taxCalculation.yearToDate = {
+      grossIncome: updatedYearToDate.grossIncome,
+      totalWithholdings: updatedYearToDate.totalWithholdings,
+    }
 
     return taxCalculation
   }
@@ -196,22 +209,15 @@ export class PayPeriodTaxService {
    * Get or create year-to-date tax tracking
    */
   private static async getOrCreateYearToDateTax(userId: string, taxYear: string): Promise<YearToDateTax> {
-    const existingYtd = await prisma.yearToDateTax.findUnique({
-      where: { 
+    return (await prisma.yearToDateTax.upsert({
+      where: {
         userId_taxYear: {
           userId,
-          taxYear
-        }
-      }
-    })
-
-    if (existingYtd) {
-      return existingYtd as YearToDateTax
-    }
-
-    // Create new year-to-date tracking
-    return await prisma.yearToDateTax.create({
-      data: {
+          taxYear,
+        },
+      },
+      update: {},
+      create: {
         userId,
         taxYear,
         grossIncome: new Decimal(0),
@@ -219,8 +225,8 @@ export class PayPeriodTaxService {
         stslAmount: new Decimal(0),
         totalWithholdings: new Decimal(0),
         lastUpdated: new Date(),
-      }
-    })
+      },
+    })) as YearToDateTax
   }
 
   /**

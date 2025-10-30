@@ -366,7 +366,9 @@ export async function POST(request: NextRequest) {
           },
         }
 
-        const validator = await validatePayPeriodsImport(payPeriodsRequest)
+        const validator = await validatePayPeriodsImport(payPeriodsRequest, {
+          userId: user.id,
+        })
         if (validator.hasErrors()) {
           result.errors.push(...validator.getErrors())
           result.summary.failed += payPeriodsRequest.payPeriods.length
@@ -525,7 +527,9 @@ export async function POST(request: NextRequest) {
           },
         }
 
-        const validator = await validateShiftsImport(shiftsRequest)
+        const validator = await validateShiftsImport(shiftsRequest, {
+          userId: user.id,
+        })
         if (validator.hasErrors()) {
           result.errors.push(...validator.getErrors())
           result.summary.failed += shiftsRequest.shifts.length

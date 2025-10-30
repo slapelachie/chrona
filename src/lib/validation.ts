@@ -190,8 +190,13 @@ export const validateTimeString = (
 ): boolean => {
   if (!validateString(time, field, validator)) return false
 
+  const value = (time as string).trim()
+  if (value === '24:00') {
+    return true
+  }
+
   const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-  if (!timeRegex.test(time)) {
+  if (!timeRegex.test(value)) {
     validator.addError(field, `${field} must be in HH:MM format (24-hour)`)
     return false
   }
