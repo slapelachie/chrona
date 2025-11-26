@@ -6,6 +6,7 @@ import {
   FileText,
   Gift,
   Clock3,
+  CalendarDays,
   Settings,
   Table,
   User2,
@@ -134,6 +135,15 @@ export const SETTINGS_CARD_ITEMS: SettingsCardConfig[] = [
     description: 'Add, edit, deactivate, or delete pay guides',
     category: 'Administration',
     icon: Settings,
+    tone: 'admin',
+  },
+  {
+    key: 'public-holidays-manage',
+    href: '/settings/public-holidays',
+    title: 'Public Holidays (Manage)',
+    description: 'View, add, edit, or retire public holiday dates',
+    category: 'Administration',
+    icon: CalendarDays,
     tone: 'admin',
   },
   {
