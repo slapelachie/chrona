@@ -64,7 +64,6 @@ const palette = {
   warning: '#FFC107',
   danger: '#F44336',
   accent: '#6E59F7',
-  contrast: '#00ACC1',
 }
 
 const tooltipStyle: React.CSSProperties = {
@@ -321,11 +320,6 @@ export const StatisticsView: React.FC = () => {
   const totalDeductionsValue = currency.format(totalDeductionsNumber)
   const paygValue = currency.format(toNumber(totals?.payg))
   const stslValue = currency.format(toNumber(totals?.stsl))
-  const otherWithholdings = Math.max(
-    0,
-    toNumber(totals?.withholdings) - (toNumber(totals?.payg) + toNumber(totals?.stsl))
-  )
-  const otherWithholdingsValue = currency.format(otherWithholdings)
   const varianceNumber = toNumber(totals?.variance)
   const varianceValue = currency.format(varianceNumber)
   const varianceTone = varianceNumber > 0 ? 'positive' : varianceNumber < 0 ? 'negative' : 'neutral'
@@ -445,7 +439,6 @@ export const StatisticsView: React.FC = () => {
           items: [
             { label: 'PAYG', value: paygValue },
             { label: 'STSL', value: stslValue },
-            ...(otherWithholdings > 0 ? [{ label: 'Other', value: otherWithholdingsValue }] : []),
           ],
         },
         ...(deductionsComparisonItems.length > 0
@@ -702,7 +695,7 @@ export const StatisticsView: React.FC = () => {
           <CardBody>
             <div className="statistics__card-header">
               <h3>Withholdings Breakdown</h3>
-              <span className="statistics__subtle">Stacked comparison of PAYG, STSL and other deductions</span>
+              <span className="statistics__subtle">Stacked comparison of PAYG and STSL deductions</span>
             </div>
             <div className="statistics__chart">
               <ResponsiveContainer width="100%" height={320}>
@@ -715,10 +708,6 @@ export const StatisticsView: React.FC = () => {
                     <linearGradient id="colorStsl" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={palette.accent} stopOpacity={0.8} />
                       <stop offset="95%" stopColor={palette.accent} stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorOther" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={palette.contrast} stopOpacity={0.8} />
-                      <stop offset="95%" stopColor={palette.contrast} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
@@ -744,7 +733,6 @@ export const StatisticsView: React.FC = () => {
                   <Legend wrapperStyle={legendStyle} iconType="circle" />
                   <Area type="monotone" dataKey="payg" stackId="1" stroke={palette.danger} fill="url(#colorPayg)" name="PAYG" />
                   <Area type="monotone" dataKey="stsl" stackId="1" stroke={palette.accent} fill="url(#colorStsl)" name="STSL" />
-                  <Area type="monotone" dataKey="otherWithholdings" stackId="1" stroke={palette.contrast} fill="url(#colorOther)" name="Other" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

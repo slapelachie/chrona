@@ -45,7 +45,7 @@ describe('statistics utils', () => {
     expect(toNumber('foo')).toBe(0)
   })
 
-  it('builds chart data with derived otherWithholdings', () => {
+  it('builds chart data with PAYG/STSL totals', () => {
     const chart = buildChartData([stubPeriod()])
     expect(chart).toHaveLength(1)
     expect(chart[0]).toMatchObject({
@@ -53,7 +53,6 @@ describe('statistics utils', () => {
       net: 1200.25,
       payg: 250,
       stsl: 25,
-      otherWithholdings: 25.25,
     })
   })
 
@@ -71,7 +70,6 @@ describe('statistics utils', () => {
     const share = buildWithholdingShare({ withholdings: '100.00', payg: '60.00', stsl: '0.00' })
     expect(share).toEqual([
       { name: 'PAYG', value: 60, color: '#F44336' },
-      { name: 'Other', value: 40, color: '#0097A7' },
     ])
   })
 })

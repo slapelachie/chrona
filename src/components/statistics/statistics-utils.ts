@@ -12,7 +12,6 @@ export function buildChartData(periods: FinancialYearPayPeriodStat[]) {
       month: 'short',
       day: 'numeric',
     })
-    const withholdings = toNumber(period.totals.withholdings)
     const payg = toNumber(period.totals.payg)
     const stsl = toNumber(period.totals.stsl)
     return {
@@ -21,10 +20,8 @@ export function buildChartData(periods: FinancialYearPayPeriodStat[]) {
       gross: toNumber(period.totals.gross),
       net: toNumber(period.totals.net),
       actual: toNumber(period.totals.actual),
-      withholdings,
       payg,
       stsl,
-      otherWithholdings: Math.max(0, withholdings - (payg + stsl)),
       status: period.status,
     }
   })
@@ -50,11 +47,8 @@ export function buildMonthlyBuckets(periods: FinancialYearPayPeriodStat[]) {
 export function buildWithholdingShare(totals: { withholdings: string; payg: string; stsl: string }) {
   const payg = toNumber(totals.payg)
   const stsl = toNumber(totals.stsl)
-  const totalWithholdings = toNumber(totals.withholdings)
-  const other = Math.max(totalWithholdings - (payg + stsl), 0)
   return [
     { name: 'PAYG', value: payg, color: '#F44336' },
     { name: 'STSL', value: stsl, color: '#6E59F7' },
-    { name: 'Other', value: other, color: '#0097A7' },
   ].filter((entry) => entry.value > 0)
 }
