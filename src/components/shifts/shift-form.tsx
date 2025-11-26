@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Card, CardBody, Button, Input } from '../ui'
+import { Card, CardBody, Button, Input, Toggle } from '../ui'
 import {
   Calendar,
   Clock,
@@ -42,6 +42,11 @@ interface ShiftData {
   breakPeriods: BreakPeriodInput[]
 }
 
+interface HolidayFormData {
+  name: string
+  date: string
+}
+
 const LAST_SHIFT_START_KEY = 'shift-form:last-start-time'
 const LAST_SHIFT_END_KEY = 'shift-form:last-end-time'
 const LAST_SHIFT_PAY_GUIDE_KEY = 'shift-form:last-pay-guide-id'
@@ -55,6 +60,18 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     notes: '',
     breakPeriods: [],
   })
+  const [showHolidayForm, setShowHolidayForm] = useState(false)
+  const [holidayForm, setHolidayForm] = useState<HolidayFormData>({
+    name: '',
+    date: '',
+  })
+  const [holidayFormErrors, setHolidayFormErrors] = useState<
+    Partial<Record<keyof HolidayFormData, string>>
+  >({})
+  const [holidayFeedback, setHolidayFeedback] = useState<
+    { status: 'success' | 'error'; message: string } | null
+  >(null)
+  const [holidaySubmitting, setHolidaySubmitting] = useState(false)
 
   const [payGuides, setPayGuides] = useState<PayGuide[]>([])
   const [payCalculation, setPayCalculation] =
@@ -67,6 +84,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     useState<BreakPeriodInput[]>([])
   const bannerRef = useRef<HTMLDivElement | null>(null)
   const lastDurationMsRef = useRef<number | null>(null)
+  const holidayDateEditedRef = useRef(false)
   const fallbackShiftDurationMinutes = Math.min(
     Math.max(prefs?.defaultShiftLengthMinutes ?? 180, 15),
     24 * 60,
@@ -168,6 +186,20 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       }
     }
   }, [formData.payGuideId, payGuides])
+
+  useEffect(() => {
+    if (formData.payGuideId || !showHolidayForm) return
+    setShowHolidayForm(false)
+  }, [formData.payGuideId, showHolidayForm])
+
+  useEffect(() => {
+    if (showHolidayForm) return
+    setHolidayForm({ name: '', date: '' })
+    setHolidayFormErrors({})
+    setHolidayFeedback(null)
+    setHolidaySubmitting(false)
+    holidayDateEditedRef.current = false
+  }, [showHolidayForm])
 
   const fetchShiftData = useCallback(async () => {
     if (!shiftId) return
@@ -280,6 +312,25 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     return `${year}-${month}-${day}T${hours}:${minutes}`
   }
 
+  const formatLocalDateString = useCallback((date: Date): string => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }, [])
+
+  useEffect(() => {
+    if (!showHolidayForm) return
+    if (holidayDateEditedRef.current) return
+    if (!formData.startTime) return
+    const start = new Date(formData.startTime)
+    if (Number.isNaN(start.getTime())) return
+    const isoDate = formatLocalDateString(start)
+    setHolidayForm((prev) =>
+      prev.date === isoDate ? prev : { ...prev, date: isoDate },
+    )
+  }, [showHolidayForm, formData.startTime, formatLocalDateString])
+
   const handleStartTimeChange = (value: string) => {
     // Always set start time
     // Adjust end time depending on whether we already have one
@@ -336,12 +387,27 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     }
   }, [fallbackShiftDurationMs])
 
-  const formatDisplayDate = (date: Date) =>
-    new Intl.DateTimeFormat(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    }).format(date)
+  const formatDisplayDate = useCallback(
+    (date: Date) =>
+      new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }).format(date),
+    [],
+  )
+
+  useEffect(() => {
+    if (!showHolidayForm) return
+    if (holidayForm.name.trim()) return
+    if (!formData.startTime) return
+    const start = new Date(formData.startTime)
+    if (Number.isNaN(start.getTime())) return
+    setHolidayForm((prev) => ({
+      ...prev,
+      name: `Public holiday - ${formatDisplayDate(start)}`,
+    }))
+  }, [showHolidayForm, holidayForm.name, formData.startTime, formatDisplayDate])
 
   useEffect(() => {
     if (mode !== 'create') return
@@ -488,6 +554,123 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
     }
   }
 
+  const handleHolidayFieldChange = (
+    field: keyof HolidayFormData,
+    value: string,
+  ) => {
+    setHolidayForm((prev) => ({ ...prev, [field]: value }))
+    setHolidayFormErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+    setHolidayFeedback(null)
+    if (field === 'date') {
+      holidayDateEditedRef.current = true
+    }
+  }
+
+  const handleHolidayToggle = (checked: boolean) => {
+    if (!formData.payGuideId) return
+    setShowHolidayForm(checked)
+    if (!checked) {
+      setHolidayFeedback(null)
+    }
+  }
+
+  const handleCreatePublicHoliday = async () => {
+    if (!formData.payGuideId) {
+      setHolidayFeedback({
+        status: 'error',
+        message: 'Select a pay guide before adding a public holiday.',
+      })
+      return
+    }
+
+    const trimmedName = holidayForm.name.trim()
+    const newErrors: Partial<Record<keyof HolidayFormData, string>> = {}
+    if (!trimmedName) {
+      newErrors.name = 'Holiday name is required'
+    }
+    if (!holidayForm.date) {
+      newErrors.date = 'Holiday date is required'
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setHolidayFormErrors(newErrors)
+      return
+    }
+
+    const isoDateString = `${holidayForm.date}T00:00:00.000Z`
+    const dateValue = new Date(isoDateString)
+    if (Number.isNaN(dateValue.getTime())) {
+      setHolidayFormErrors((prev) => ({
+        ...prev,
+        date: 'Holiday date must be valid',
+      }))
+      return
+    }
+
+    try {
+      setHolidaySubmitting(true)
+      setHolidayFeedback(null)
+      const response = await fetch(
+        `/api/pay-rates/${formData.payGuideId}/public-holidays`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: trimmedName,
+            date: isoDateString,
+            isActive: true,
+          }),
+        },
+      )
+
+      let data: any = null
+      try {
+        data = await response.json()
+      } catch (error) {
+        data = null
+      }
+
+      if (!response.ok) {
+        if (data?.errors && Array.isArray(data.errors)) {
+          const apiErrors: Partial<Record<keyof HolidayFormData, string>> = {}
+          data.errors.forEach((err: any) => {
+            if (err?.field === 'name' || err?.field === 'date') {
+              apiErrors[err.field as keyof HolidayFormData] = err.message
+            }
+          })
+          if (Object.keys(apiErrors).length > 0) {
+            setHolidayFormErrors(apiErrors)
+          }
+        }
+
+        throw new Error(
+          data?.message || 'Failed to create public holiday. Please try again.',
+        )
+      }
+
+      setHolidayFormErrors({})
+      setHolidayFeedback({
+        status: 'success',
+        message: `${trimmedName} saved for ${formatDisplayDate(dateValue)}.`,
+      })
+      setHolidayForm((prev) => ({ ...prev, name: '' }))
+      holidayDateEditedRef.current = true
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to create public holiday. Please try again.'
+      setHolidayFeedback({ status: 'error', message })
+    } finally {
+      setHolidaySubmitting(false)
+    }
+  }
+
   const createBreakPeriods = async (
     shiftId: string,
     breakPeriods: BreakPeriodInput[],
@@ -624,8 +807,14 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
       breakPeriods: [],
     })
     setErrors({})
-      setPayCalculation(null)
+    setPayCalculation(null)
     setPreviewLoading(false)
+    setShowHolidayForm(false)
+    setHolidayForm({ name: '', date: '' })
+    setHolidayFormErrors({})
+    setHolidayFeedback(null)
+    setHolidaySubmitting(false)
+    holidayDateEditedRef.current = false
   }
 
   const bannerCopy = bannerStatus === 'success'
@@ -888,6 +1077,124 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ mode, shiftId }) => {
                   }}
                 >
                   {errors.payGuideId}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                border: '1px solid var(--color-border)',
+                borderRadius: '10px',
+                padding: '1rem',
+                backgroundColor: 'var(--color-surface-secondary)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+              }}
+            >
+              <Toggle
+                label="Add this date as a public holiday"
+                description="Keep your pay guide up to date without leaving the shift form."
+                checked={showHolidayForm}
+                onChange={(e) => handleHolidayToggle(e.target.checked)}
+                disabled={!formData.payGuideId}
+              />
+              {!formData.payGuideId && (
+                <span
+                  style={{
+                    fontSize: '0.85rem',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  Select a pay guide above to enable public holiday creation.
+                </span>
+              )}
+
+              {showHolidayForm && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <Input
+                      label="Holiday name"
+                      value={holidayForm.name}
+                      onChange={(e) =>
+                        handleHolidayFieldChange('name', e.target.value)
+                      }
+                      placeholder="e.g. Boxing Day"
+                      error={holidayFormErrors.name}
+                      maxLength={100}
+                    />
+                    <Input
+                      type="date"
+                      label="Holiday date"
+                      value={holidayForm.date}
+                      onChange={(e) =>
+                        handleHolidayFieldChange('date', e.target.value)
+                      }
+                      error={holidayFormErrors.date}
+                    />
+                  </div>
+                  {holidayFeedback && (
+                    <div
+                      role="status"
+                      style={{
+                        borderRadius: '8px',
+                        padding: '0.75rem 1rem',
+                        fontSize: '0.9rem',
+                        backgroundColor:
+                          holidayFeedback.status === 'success'
+                            ? 'var(--color-success-bg, rgba(0, 188, 212, 0.12))'
+                            : 'var(--color-danger-bg, rgba(244, 67, 54, 0.12))',
+                        color:
+                          holidayFeedback.status === 'success'
+                            ? 'var(--color-success)'
+                            : 'var(--color-danger)',
+                        border:
+                          holidayFeedback.status === 'success'
+                            ? '1px solid var(--color-success)'
+                            : '1px solid var(--color-danger)',
+                      }}
+                    >
+                      {holidayFeedback.message}
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '0.75rem',
+                      justifyContent: 'flex-start',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleCreatePublicHoliday}
+                      isLoading={holidaySubmitting}
+                      disabled={holidaySubmitting}
+                    >
+                      Save Public Holiday
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => handleHolidayToggle(false)}
+                      disabled={holidaySubmitting}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
